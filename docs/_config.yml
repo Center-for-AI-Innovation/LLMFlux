@@ -2,7 +2,7 @@ title: AI-Flux Documentation
 description: Documentation for AI-Flux - LLM Batch Processing Pipeline for HPC Systems
 url: https://aiflux.ncsa.ai
 baseurl: ""
-remote_theme: pages-themes/minimal@v0.4.3
+remote_theme: pages-themes/minimal
 github:
   repository_url: https://github.com/UIUC-Chatbot/ai-flux
   is_project_page: true
