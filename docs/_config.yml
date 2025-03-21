@@ -2,9 +2,8 @@ title: AI-Flux Documentation
 description: Documentation for AI-Flux - LLM Batch Processing Pipeline for HPC Systems
 url: https://aiflux.ncsa.ai
 baseurl: ""
-remote_theme: just-the-docs/just-the-docs
+theme: jekyll-theme-minimal
 plugins:
-  - jekyll-remote-theme
   - jekyll-relative-links
 relative_links:
   enabled: true
