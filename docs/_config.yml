@@ -1,0 +1,15 @@
+title: AI-Flux Documentation
+description: Documentation for AI-Flux - LLM Batch Processing Pipeline for HPC Systems
+remote_theme: pages-themes/cayman@v0.2.0
+plugins:
+  - jekyll-remote-theme
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true
+markdown: kramdown
+kramdown:
+  input: GFM
+  auto_ids: true
+  hard_wrap: false
+  syntax_highlighter: rouge 
