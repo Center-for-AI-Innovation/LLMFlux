@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Union
 import tempfile
 import json
+from .batch_scripts import create_ollama_batch_script
 
 from ..core.config import Config, SlurmConfig
 from ..core.config_manager import ConfigManager
@@ -96,7 +97,7 @@ class SlurmRunner:
         # Variables are categorized into:
         # - Host-only vars: Used by bash script on host (not passed to container)
         # - APPTAINERENV_ vars: Automatically passed to container with --cleanenv
-        
+
         # HOST-ONLY variables (used by bash script, NOT passed to container)
         host_vars = {
             'DATA_INPUT_DIR': str(self.data_input_dir),
@@ -113,7 +114,7 @@ class SlurmRunner:
             'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),  # Used for mkdir
             'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
         }
-        
+
         # CONTAINER variables (automatically injected with --cleanenv via APPTAINERENV_ prefix)
         # The prefix is removed inside the container, so APPTAINERENV_FOO becomes FOO
         container_vars = {
@@ -136,7 +137,7 @@ class SlurmRunner:
         none_values = {k: v for k, v in all_vars.items() if v is None}
         if none_values:
             logger.warning(f"The following environment variables are None and will be skipped: {list(none_values.keys())}")
-        
+
         # Add all variables, filtering out None values
         env.update({k: v for k, v in host_vars.items() if v is not None})
         env.update({k: v for k, v in container_vars.items() if v is not None})
@@ -250,7 +251,7 @@ class SlurmRunner:
         env['OLLAMA_MODEL_NAME'] = str(model_name)
         # Container variable (used in Python inside container)
         env['APPTAINERENV_MODEL_NAME'] = str(model_name)
-        
+
         # Get batch size using config manager priority system
         batch_size = self.config_manager.get_parameter(
             param_name="batch_size",
@@ -305,157 +306,30 @@ class SlurmRunner:
         # Move scripts to engine/ollama, engine/vllm
         
         # Create SLURM job script
-        job_script = [
-            "#!/bin/bash",
-            f"#SBATCH --job-name=llm_processor",
-            f"#SBATCH --account={self.slurm_config.account}",
-            f"#SBATCH --partition={self.slurm_config.partition}",
-            f"#SBATCH --nodes={self.slurm_config.nodes}",
-            f"#SBATCH --gpus-per-node={self.slurm_config.gpus_per_node}",
-            f"#SBATCH --time={self.slurm_config.time}",
-            f"#SBATCH --mem={self.slurm_config.memory}",
-            f"#SBATCH --cpus-per-task={self.slurm_config.cpus_per_task}",
-            f"#SBATCH --output={self.logs_dir}/%j.out",
-            f"#SBATCH --error={self.logs_dir}/%j.err",
-        ]
-        
-        # Add extra SBATCH directives if provided
-        if self.slurm_config.extra_sbatch_args:
-            for key, value in self.slurm_config.extra_sbatch_args.items():
-                job_script.append(f"#SBATCH --{key}={value}")
-        
-        job_script.extend([
-            "",
-            "# Create all necessary directories",
-            "mkdir -p $DATA_INPUT_DIR $DATA_OUTPUT_DIR $MODELS_DIR $LOGS_DIR $CONTAINERS_DIR $APPTAINER_TMPDIR $APPTAINER_CACHEDIR",
-            "",
-            "# Start Ollama server",
-            "mkdir -p $OLLAMA_HOME $OLLAMA_MODELS",
-            "",
-            "# Build container if needed (or if forced)",
-            "if [ \"$AIFLUX_FORCE_REBUILD\" = \"1\" ] || [ ! -f \"$CONTAINERS_DIR/llm_processor.sif\" ]; then",
-            "    apptainer build --force $CONTAINERS_DIR/llm_processor.sif $CONTAINER_DEF",
-            "fi",
-            "",
-            "# Start server with clean environment",
-            "# All APPTAINERENV_* variables are automatically passed in (prefix removed)",
-            "OLLAMA_DEBUG=1 apptainer exec --nv --cleanenv \\",
-            "    --bind $DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$OLLAMA_HOME:$OLLAMA_HOME \\",
-            "    $CONTAINERS_DIR/llm_processor.sif \\",
-            "    ollama serve &",
-            "",
-            "OLLAMA_PID=$!",
-            "",
-            "# Wait for server",
-            "for i in {1..60}; do",
-            "    if curl -s \"http://localhost:$OLLAMA_PORT/api/version\" &>/dev/null; then",
-            "        echo \"Ollama server started\"",
-            "        break",
-            "    fi",
-            "    if ! ps -p $OLLAMA_PID > /dev/null; then",
-            "        echo \"Ollama server died\"",
-            "        exit 1",
-            "    fi",
-            "    echo \"Waiting... ($i/60)\"",
-            "    sleep 1",
-            "done",
-            "",
-            "# Pull model if needed",
-            "MODEL_NAME=\"${OLLAMA_MODEL_NAME:-llama3.2:3b}\"",
-            "echo \"Checking if model ${MODEL_NAME} exists...\"",
-            "",
-            # "# Extract base model name for Ollama (e.g. llama3.2:3b -> llama3.2)",
-            # "if [[ \"$MODEL_NAME\" == *\":\"* ]]; then",
-            # "    BASE_MODEL=$(echo \"$MODEL_NAME\" | cut -d':' -f1)",
-            # "    echo \"Using base model name for Ollama: $BASE_MODEL\"",
-            # "else",
-            # "    BASE_MODEL=\"$MODEL_NAME\"",
-            # "fi",
-            "",
-            "# Check if model exists, try to pull if it doesn't",
-            "if ! curl -s \"http://localhost:$OLLAMA_PORT/api/tags\" | grep -q \"\\\"name\\\":\\\"$MODEL_NAME\\\"\"; then",
-            "    echo \"Model not found, pulling base model ${MODEL_NAME}...\"",
-            "    curl -X POST \"http://localhost:$OLLAMA_PORT/api/pull\" -d '{\"name\": \"'\"$MODEL_NAME\"'\"}' -H \"Content-Type: application/json\"",
-            "    if [ $? -ne 0 ]; then",
-            "        echo \"Failed to pull model ${MODEL_NAME}\"",
-            "        echo \"Available models:\"",
-            "        curl -s \"http://localhost:$OLLAMA_PORT/api/tags\" | grep -o '\"name\":\"[^\"]*\"' || echo \"None found\"",
-            "        exit 1",
-            "    else",
-            "        echo \"Successfully pulled model ${MODEL_NAME}\"",
-            "    fi",
-            "else",
-            "    echo \"Model ${MODEL_NAME} already exists\"",
-            "fi",
-            "",
-            "# Run processor",
-            f"python3 -c \"",
-            "import sys",
-            "import os",
-            "sys.path.append('$PROJECT_ROOT')",
-            "from aiflux.core.config import Config",
-            "from aiflux.processors import BatchProcessor",
-            "",
-            "# Ensure OLLAMA environment variables are available in Python",
-            "ollama_port = os.environ.get('OLLAMA_PORT')",
-            "if ollama_port:",
-            "    os.environ['OLLAMA_HOST'] = f'http://localhost:{ollama_port}'",
-            "",
-            "# Load model configuration",
-            "config = Config()",
-            "model_name = os.environ.get('MODEL_NAME', 'llama3.2:3b')",
-            "model_type = model_name.split(':')[0] if ':' in model_name else model_name",
-            "model_size = model_name.split(':')[1] if ':' in model_name else '3b'",
-            "",
-            "try:",
-            "    model_config = config.load_model_config(model_type, model_size)",
-            "except Exception as e:",
-            "    print(f'Error loading model config for {model_type}:{model_size}: {e}')",
-            "    # Fallback to default model",
-            "    model_config = config.load_model_config('qwen2.5', '7b')",
-            "",
-            "# Create batch processor with JSONL input",
-            "batch_processor = BatchProcessor(",
-            "    model_config=model_config,",
-            "    batch_size=int(os.environ.get('BATCH_SIZE', '4')),",
-            "    save_frequency=int(os.environ.get('SAVE_FREQUENCY', '50')),",
-            "    max_retries=int(os.environ.get('MAX_RETRIES', '3')),",
-            "    retry_delay=float(os.environ.get('RETRY_DELAY', '1.0'))",
-            ")",
-            "",
-            "# Prepare run kwargs",
-            "run_kwargs = {}",
-            "",
-            "# Add any other kwargs from environment variables",
-            "for key in ['max_tokens', 'temperature', 'top_p', 'top_k']:",
-            "    if key.upper() in os.environ:",
-            "        run_kwargs[key] = os.environ[key.upper()]",
-            "",
-            f"batch_processor.run('{input_file}', '{output_file}', **run_kwargs)",
-            "\"",
-            "",
-            "# Cleanup",
-            "pkill -f \"ollama serve\" || true",
-            "# Only remove temporary directories that we created",
-            "if [ -d \"$APPTAINER_TMPDIR\" ] && [ -w \"$APPTAINER_TMPDIR\" ]; then",
-            "    rm -rf \"$APPTAINER_TMPDIR\"",
-            "fi",
-            "if [ -d \"$APPTAINER_CACHEDIR\" ] && [ -w \"$APPTAINER_CACHEDIR\" ]; then",
-            "    rm -rf \"$APPTAINER_CACHEDIR\"",
-            "fi"
-        ])
+        job_script = create_ollama_batch_script(
+            self.slurm_config.account,
+            self.slurm_config.partition,
+            self.slurm_config.nodes,
+            self.slurm_config.gpus_per_node,
+            self.slurm_config.time,
+            self.slurm_config.memory,
+            self.slurm_config.cpus_per_task,
+            self.logs_dir,
+            input_file,
+            output_file,
+        )
         
         # Write job script
         job_script_path = self.workspace / "job.sh"
         debug_mode = kwargs.get('debug', False)
-        
+
         try:
             with open(job_script_path, 'w') as f:
                 f.write('\n'.join(job_script))
             
             if debug_mode:
                 logger.info(f"Debug mode: job script saved to {job_script_path}")
-            
+
             # Submit job
             try:
                 result = subprocess.run(

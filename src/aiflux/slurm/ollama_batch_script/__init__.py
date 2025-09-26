@@ -1,1 +1,0 @@
-## batch script specific to ollama (original)
