@@ -1,3 +1,4 @@
+from pathlib import Path
 # TODO currently this is just the ollama script. The inuputs may be the same, but
 #   we will need a different command, at least
 
@@ -9,9 +10,9 @@ def create_vllm_batch_script(
         time: str,
         memory: str,
         cpus_per_task: str,
-        logs_dir:str,
-        input_file: str,
-        output_file: str,
+        logs_dir: Path,
+        input_file: Path,
+        output_file: Path,
 ):
     # Create SLURM job script
     job_script = [

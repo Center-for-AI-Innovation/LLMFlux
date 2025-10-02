@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Union
 import tempfile
 import json
+
+from . import create_vllm_batch_script
 from .batch_scripts import create_ollama_batch_script
 
 from ..core.config import Config, SlurmConfig
@@ -306,18 +308,35 @@ class SlurmRunner:
         # Move scripts to engine/ollama, engine/vllm
         
         # Create SLURM job script
-        job_script = create_ollama_batch_script(
-            self.slurm_config.account,
-            self.slurm_config.partition,
-            self.slurm_config.nodes,
-            self.slurm_config.gpus_per_node,
-            self.slurm_config.time,
-            self.slurm_config.memory,
-            self.slurm_config.cpus_per_task,
-            self.logs_dir,
-            input_file,
-            output_file,
-        )
+        if self.slurm_config.engine == "ollama":
+            job_script = create_ollama_batch_script(
+                self.slurm_config.account,
+                self.slurm_config.partition,
+                str(self.slurm_config.nodes),
+                str(self.slurm_config.gpus_per_node),
+                self.slurm_config.time,
+                self.slurm_config.memory,
+                str(self.slurm_config.cpus_per_task),
+                self.logs_dir,
+                input_file,
+                output_file,
+            )
+        elif self.slurm_config.engine == "vllm":
+            job_script = create_vllm_batch_script(
+                self.slurm_config.account,
+                self.slurm_config.partition,
+                str(self.slurm_config.nodes),
+                str(self.slurm_config.gpus_per_node),
+                self.slurm_config.time,
+                self.slurm_config.memory,
+                str(self.slurm_config.cpus_per_task),
+                self.logs_dir,
+                input_file,
+                output_file,
+            )
+        else:
+            logger.error("Unknown engine choice: {}".format(self.slurm_config.engine))
+            raise NotImplementedError
         
         # Write job script
         job_script_path = self.workspace / "job.sh"

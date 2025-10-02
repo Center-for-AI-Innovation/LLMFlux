@@ -17,16 +17,16 @@ from .benchmark_utils import generate_synthetic_prompts, save_prompts_to_jsonl
 
 def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[str, str]]:
     """Parse --sbatch-arg arguments into a dictionary.
-    
+
     Args:
         sbatch_arg_list: List of "key=value" strings from CLI
-        
+
     Returns:
         Dictionary of extra SBATCH arguments or None
     """
     if not sbatch_arg_list:
         return None
-    
+
     result = {}
     for arg in sbatch_arg_list:
         if '=' not in arg:
@@ -34,7 +34,7 @@ def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[st
             continue
         key, value = arg.split('=', 1)
         result[key.strip()] = value.strip()
-    
+
     return result if result else None
 
 
@@ -85,12 +85,12 @@ def _benchmark_command(args: argparse.Namespace) -> int:
             "cpus_per_task": args.cpus_per_task,
         }.items() if value is not None
     }
-    
+
     # Parse and add extra SBATCH args if provided
     extra_args = _parse_sbatch_args(getattr(args, 'sbatch_arg', None))
     if extra_args:
         slurm_overrides['extra_sbatch_args'] = extra_args
-    
+
     # Merge CLI overrides with config from .env
     slurm_config = config.get_slurm_config(slurm_overrides)
     runner = SlurmRunner(config=slurm_config)
@@ -181,14 +181,15 @@ def _run_command(args: argparse.Namespace) -> int:
             "time": args.time,
             "mem": args.mem,
             "cpus_per_task": args.cpus_per_task,
+            "engine": args.engine,
         }.items() if value is not None
     }
-    
+
     # Parse and add extra SBATCH args if provided
     extra_args = _parse_sbatch_args(getattr(args, 'sbatch_arg', None))
     if extra_args:
         slurm_config['extra_sbatch_args'] = extra_args
-    
+
     # Update Slurm config with args
     slurm_config = config.get_slurm_config(slurm_config)
     # SLURM mode
@@ -251,6 +252,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--time", type=str)
     run_parser.add_argument("--mem", type=str)
     run_parser.add_argument("--cpus-per-task", type=int)
+    run_parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"])
     run_parser.add_argument(
         "--sbatch-arg",
         action="append",
@@ -276,10 +278,6 @@ def build_parser() -> argparse.ArgumentParser:
     # Local execution toggle
     # Add support for this in the future - Can be directly used on the compute node
     # run_parser.add_argument("--local", action="store_true", help="Run locally without SLURM")
-
-    # LLM Engine
-    # Todo add vllm, ollama is default
-    run_parser.add_argument("--engine", type=str)
 
     run_parser.set_defaults(func=_run_command)
     
@@ -310,7 +308,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KEY=VALUE",
         help="Additional SBATCH directive (e.g., --sbatch-arg reservation=my_res). Can be used multiple times."
     )
-    
+
     # Container rebuild control
     benchmark_parser.add_argument(
         "--rebuild",

@@ -1,3 +1,4 @@
+from pathlib import Path
 # This function generates an ollama batch script for running aiflux
 
 def create_ollama_batch_script(
@@ -8,9 +9,9 @@ def create_ollama_batch_script(
     time: str,
     memory: str,
     cpus_per_task: str,
-    logs_dir:str,
-    input_file: str,
-    output_file: str,
+    logs_dir: Path,
+    input_file: Path,
+    output_file: Path,
 ) -> list[str]:
     # Create SLURM job script
     job_script = [
