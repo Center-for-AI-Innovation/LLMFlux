@@ -11,7 +11,7 @@ import tempfile
 import json
 
 from . import create_vllm_batch_script
-from .batch_scripts import create_ollama_batch_script
+from .engine import create_ollama_batch_script
 
 from ..core.config import Config, SlurmConfig
 from ..core.config_manager import ConfigManager
@@ -337,7 +337,8 @@ class SlurmRunner:
         else:
             logger.error("Unknown engine choice: {}".format(self.slurm_config.engine))
             raise NotImplementedError
-        
+
+        logger.info(f"Job script:\n{job_script}")
         # Write job script
         job_script_path = self.workspace / "job.sh"
         debug_mode = kwargs.get('debug', False)
