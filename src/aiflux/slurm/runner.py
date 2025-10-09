@@ -89,13 +89,15 @@ class SlurmRunner:
         # Calculate GPU configuration values
         cuda_visible_devices = '0'  # Default to single GPU
         ollama_sched_spread = '0'   # Default to no spread
-        
+        vllm_sched_spread = '0'
+
         # Update values if multiple GPUs are requested
         if self.slurm_config.gpus_per_node > 1:
             # Generate comma-separated list of GPU indices (0,1,2,...)
             cuda_visible_devices = ','.join(str(i) for i in range(self.slurm_config.gpus_per_node))
             ollama_sched_spread = '1'
-        
+            vllm_sched_spread = '1'
+
         # Use config manager to get environment with proper precedence
         # Variables are categorized into:
         # - Host-only vars: Used by bash script on host (not passed to container)
@@ -131,7 +133,7 @@ class SlurmRunner:
             'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
             'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
         }
-        
+
         # Get base environment
         env = dict(os.environ)
         
@@ -238,7 +240,7 @@ class SlurmRunner:
             rebuild_requested = False
         # Host-only variable (used in bash script if condition)
         env["AIFLUX_FORCE_REBUILD"] = "1" if rebuild_requested or os.getenv("AIFLUX_FORCE_REBUILD") == "1" else "0"
-        
+
         # Add processor configuration to environment following the established priority system
         # Use ConfigManager for consistent parameter prioritization
         
