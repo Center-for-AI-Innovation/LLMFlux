@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, Union
 import tempfile
 import json
 
-from . import create_vllm_batch_script
+from .engine import create_vllm_batch_script
 from .engine import create_ollama_batch_script
 
 from ..core.config import Config, SlurmConfig
