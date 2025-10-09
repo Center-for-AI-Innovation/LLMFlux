@@ -47,6 +47,7 @@ class SlurmRunner:
         
         # Get paths from config if available
         config = self.config_manager.get_config()
+        self.engine = config.engine
         
         # Get paths using config manager (following precedence rules)
         self.data_dir = Path(config.data_dir) if hasattr(config, 'data_dir') else (self.workspace / "data")
@@ -304,11 +305,8 @@ class SlurmRunner:
         env['APPTAINERENV_OLLAMA_HOST'] = f"0.0.0.0:{port}"
 
         # Get LLM Engine
-        # Todo add vllm, ollama is default
-        # Move scripts to engine/ollama, engine/vllm
-        
         # Create SLURM job script
-        if self.slurm_config.engine == "ollama":
+        if self.engine == "ollama":
             job_script = create_ollama_batch_script(
                 self.slurm_config.account,
                 self.slurm_config.partition,
@@ -321,7 +319,7 @@ class SlurmRunner:
                 input_file,
                 output_file,
             )
-        elif self.slurm_config.engine == "vllm":
+        elif self.engine == "vllm":
             job_script = create_vllm_batch_script(
                 self.slurm_config.account,
                 self.slurm_config.partition,
@@ -335,7 +333,7 @@ class SlurmRunner:
                 output_file,
             )
         else:
-            logger.error("Unknown engine choice: {}".format(self.slurm_config.engine))
+            logger.error("Unknown engine choice: {}".format(self.engine))
             raise NotImplementedError
 
         logger.info(f"Job script:\n{job_script}")
