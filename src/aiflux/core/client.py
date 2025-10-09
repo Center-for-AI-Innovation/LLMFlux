@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """OpenAI-compatible client for LLM services."""
     
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
+    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, engine: Optional[str] = 'ollama'):
         """Initialize LLM client.
         
         Args:
@@ -43,8 +43,12 @@ class LLMClient:
                 host = 'localhost'
                 
             if port is None:
-                # Check if OLLAMA_PORT is set as an environment variable
-                port_str = os.getenv('OLLAMA_PORT', '11434')
+                if engine == 'ollama':
+                    # Check if OLLAMA_PORT is set as an environment variable
+                    port_str = os.getenv('OLLAMA_PORT', '11434')
+                else:
+                    # Check if VLLM_PORT is set as an environment variable
+                    port_str = os.getenv('VLLM_PORT', '11434')
                 try:
                     port = int(port_str)
                 except ValueError:
