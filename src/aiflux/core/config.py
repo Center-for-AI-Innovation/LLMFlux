@@ -82,24 +82,24 @@ class ModelConfig(BaseModel):
 
 def _parse_extra_sbatch_args() -> Optional[Dict[str, str]]:
     """Parse SLURM_EXTRA_ARGS from environment variable.
-    
+
     Supports JSON format: {"reservation": "my_res", "qos": "high"}
     Or key=value format: "reservation=my_res,qos=high"
-    
+
     Returns:
         Dictionary of extra SBATCH arguments or None
     """
     extra_args_str = os.getenv('SLURM_EXTRA_ARGS')
     if not extra_args_str:
         return None
-    
+
     # Try JSON format first
     if extra_args_str.strip().startswith('{'):
         try:
             return json.loads(extra_args_str)
         except json.JSONDecodeError:
             pass
-    
+
     # Try key=value format
     result = {}
     for pair in extra_args_str.split(','):
@@ -107,7 +107,7 @@ def _parse_extra_sbatch_args() -> Optional[Dict[str, str]]:
         if '=' in pair:
             key, value = pair.split('=', 1)
             result[key.strip()] = value.strip()
-    
+
     return result if result else None
 
 class SlurmConfig(BaseModel):
@@ -140,6 +140,9 @@ class SlurmConfig(BaseModel):
     ntasks_per_node: int = Field(
         default_factory=lambda: int(os.getenv('SLURM_NTASKS_PER_NODE', '1'))
     )
+    engine: str = Field(
+        default_factory=lambda: os.getenv('SLURM_ENGINE', 'ollama')
+    )
     extra_sbatch_args: Optional[Dict[str, str]] = Field(
         default_factory=_parse_extra_sbatch_args
     )
@@ -161,7 +164,7 @@ class Config:
                  containers_dir: Optional[str] = None,
                  slurm: Optional[SlurmConfig] = None,
                  models: Optional[List[ModelConfig]] = None,
-                 engine: Optional[EngineConfig] = None):
+                 engine: Optional[str] = None):
         """Initialize configuration.
         
         Args:
@@ -171,6 +174,7 @@ class Config:
             containers_dir: Optional path to containers directory
             slurm: Optional SLURM configuration
             models: Optional list of model configurations
+            engine: Optional string for which engine to use
         """
         self.package_dir = Path(__file__).parent.parent
         self.templates_dir = self.package_dir / 'templates'
@@ -194,8 +198,11 @@ class Config:
         self.models = models or []
         
         # Set engine configuration
-        self.engine = engine or EngineConfig(engine="ollama")
-        
+        if engine == "vllm":
+            self.engine = EngineConfig(engine="vllm")
+        else:
+            self.engine = EngineConfig(engine="ollama")
+
         # Define default paths
         self.default_paths = {
             'DATA_INPUT_DIR': Path(self.data_dir) / "input",

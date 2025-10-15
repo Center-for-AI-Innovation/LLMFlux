@@ -11,6 +11,7 @@ from typing import Optional, Dict, List
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
+from .core.config import Config, SlurmConfig, EngineConfig
 from .core.config import Config, SlurmConfig
 from .benchmark_utils import generate_synthetic_prompts, save_prompts_to_jsonl
 
@@ -40,10 +41,10 @@ def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[st
 
 def _benchmark_command(args: argparse.Namespace) -> int:
     """Handle the `benchmark` subcommand.
-    
+
     Args:
         args: Parsed CLI arguments
-        
+
     Returns:
         Process exit code
     """
@@ -55,15 +56,15 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         name = args.name or f"benchmark_{args.model.replace(':', '_')}"
         output_dir = Path("data/benchmarks")
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         num_prompts = getattr(args, "num_prompts", 50)
         prompts = generate_synthetic_prompts(num_prompts=num_prompts, model=args.model)
-        
+
         dataset_path = output_dir / f"{name}_prompts.jsonl"
         save_prompts_to_jsonl(prompts, dataset_path)
         print(f"Generated {num_prompts} prompts: {dataset_path}")
         input_path = dataset_path
-    
+
     # Set output path
     if args.output:
         output_path = args.output
@@ -71,7 +72,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         name = args.name or f"benchmark_{args.model.replace(':', '_')}"
         output_path = f"results/benchmarks/{name}_results.json"
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Collect SLURM config from CLI args (filter out None values)
     config = Config()
     slurm_overrides = {
