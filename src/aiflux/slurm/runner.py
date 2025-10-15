@@ -31,13 +31,15 @@ class SlurmRunner:
     def __init__(
         self,
         config: Optional[SlurmConfig] = None,
-        workspace: Optional[str] = None
+        workspace: Optional[str] = None,
+        engine_config: Optional['EngineConfig'] = None
     ):
         """Initialize SLURM runner.
         
         Args:
             config: SLURM configuration
             workspace: Path to workspace directory
+            engine_config: Engine configuration
         """
         # Initialize config
         self.config_manager = ConfigManager()
@@ -48,7 +50,8 @@ class SlurmRunner:
         
         # Get paths from config if available
         config = self.config_manager.get_config()
-        self.engine = config.engine
+        # Use provided engine config or fall back to config
+        self.engine = engine_config or config.engine
         
         # Get paths using config manager (following precedence rules)
         self.data_dir = Path(config.data_dir) if hasattr(config, 'data_dir') else (self.workspace / "data")

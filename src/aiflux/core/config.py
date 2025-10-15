@@ -10,6 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 class EngineConfig(BaseModel):
     """Model engine configuration."""
     engine: str = Field(..., pattern=r"^ollama|vllm$")
+    origins: str = Field(default="*")
+    insecure: str = Field(default="true")
+    home: Optional[str] = None
 
 class ResourceConfig(BaseModel):
     """Model resource configuration."""
@@ -197,11 +200,18 @@ class Config:
         # Set model configurations
         self.models = models or []
         
-        # Set engine configuration
-        if engine == "vllm":
-            self.engine = EngineConfig(engine="vllm")
+        # Set engine configuration from environment variable
+        engine_value = os.getenv('SLURM_ENGINE', 'ollama')
+        if engine_value == "vllm":
+            self.engine = EngineConfig(
+                engine="vllm",
+                home=str(self.workspace / ".vllm")
+            )
         else:
-            self.engine = EngineConfig(engine="ollama")
+            self.engine = EngineConfig(
+                engine="ollama",
+                home=str(self.workspace / ".ollama")
+            )
 
         # Define default paths
         self.default_paths = {

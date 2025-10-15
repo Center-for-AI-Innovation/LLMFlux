@@ -5,6 +5,7 @@ Provides the `aiflux` executable with subcommands.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -95,12 +96,12 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     # Merge CLI overrides with config from .env
     slurm_config = config.get_slurm_config(slurm_overrides)
     runner = SlurmRunner(config=slurm_config)
-    
+
     kwargs = {
         "model": args.model,
         "batch_size": getattr(args, "batch_size", 4),
     }
-    
+
     if getattr(args, "temperature", None) is not None:
         kwargs["temperature"] = args.temperature
     if getattr(args, "max_tokens", None) is not None:
@@ -109,12 +110,12 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         kwargs["rebuild"] = True
     if getattr(args, "debug", False):
         kwargs["debug"] = True
-    
+
     print(f"Submitting benchmark job...")
     print(f"  Model: {args.model}")
     print(f"  Input: {input_path}")
     print(f"  Output: {output_path}")
-    
+
     job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
     return 0
@@ -171,8 +172,24 @@ def _run_command(args: argparse.Namespace) -> int:
         processor.run(input_path=input_path, output_path=output_path or str(Path("results") / "output.json"), **run_kwargs)
         return 0
 
+    # Initialize config - engine will be automatically detected from SLURM_ENGINE env var
     config = Config()
-    # Collect Slurm config from args
+
+    # Override engine if provided via CLI
+    if args.engine:
+        engine_value = args.engine
+        if engine_value == "vllm":
+            config.engine = EngineConfig(
+                engine="vllm",
+                home=str(config.workspace / ".vllm")
+            )
+        else:
+            config.engine = EngineConfig(
+                engine="ollama",
+                home=str(config.workspace / ".ollama")
+            )
+
+    # Collect Slurm config from args (excluding engine)
     slurm_config = {
         key: value for key, value in {
             "account": args.account,
@@ -182,7 +199,6 @@ def _run_command(args: argparse.Namespace) -> int:
             "time": args.time,
             "mem": args.mem,
             "cpus_per_task": args.cpus_per_task,
-            "engine": args.engine,
         }.items() if value is not None
     }
 
@@ -194,7 +210,7 @@ def _run_command(args: argparse.Namespace) -> int:
     # Update Slurm config with args
     slurm_config = config.get_slurm_config(slurm_config)
     # SLURM mode
-    runner = SlurmRunner(config=slurm_config)
+    runner = SlurmRunner(config=slurm_config, engine_config=config.engine)
     # Collect kwargs accepted by SlurmRunner.run to set env for the job script
     kwargs = {
         "model": model,
@@ -215,7 +231,7 @@ def _run_command(args: argparse.Namespace) -> int:
     # Pass rebuild flag through to runner
     if getattr(args, "rebuild", False):
         kwargs["rebuild"] = True
-    
+
     # Pass debug flag through to runner
     if getattr(args, "debug", False):
         kwargs["debug"] = True
@@ -253,6 +269,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--time", type=str)
     run_parser.add_argument("--mem", type=str)
     run_parser.add_argument("--cpus-per-task", type=int)
+    run_parser.add_argument("--engine", type=str, default=None, choices=["ollama", "vllm"])
     run_parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"])
     run_parser.add_argument(
         "--sbatch-arg",
@@ -267,7 +284,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force rebuild of the Apptainer/Singularity image before running",
     )
-    
+
     # Debug mode
     run_parser.add_argument(
         "--debug",
@@ -281,7 +298,7 @@ def build_parser() -> argparse.ArgumentParser:
     # run_parser.add_argument("--local", action="store_true", help="Run locally without SLURM")
 
     run_parser.set_defaults(func=_run_command)
-    
+
     # benchmark subcommand
     benchmark_parser = subparsers.add_parser("benchmark", help="Run a benchmark job")
     benchmark_parser.add_argument("--model", required=True, help="Model name, e.g., llama3.2:3b")
@@ -289,12 +306,12 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--num-prompts", type=int, default=50, help="Number of prompts to generate (default: 50)")
     benchmark_parser.add_argument("--input", type=str, help="Use existing prompts file instead of generating")
     benchmark_parser.add_argument("--output", type=str, help="Path to output JSON file")
-    
+
     # Common tuning options
     benchmark_parser.add_argument("--batch-size", type=int, default=4)
     benchmark_parser.add_argument("--max-tokens", type=int)
     benchmark_parser.add_argument("--temperature", type=float)
-    
+
     # SLURM configuration
     benchmark_parser.add_argument("--account", type=str)
     benchmark_parser.add_argument("--partition", type=str)
@@ -316,14 +333,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force rebuild of the Apptainer/Singularity image before running",
     )
-    
+
     # Debug mode
     benchmark_parser.add_argument(
         "--debug",
         action="store_true",
         help="Preserve generated SLURM job script (job.sh) for debugging",
     )
-    
+
     benchmark_parser.set_defaults(func=_benchmark_command)
     return parser
 
