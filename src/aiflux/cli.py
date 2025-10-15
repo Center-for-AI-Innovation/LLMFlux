@@ -8,6 +8,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+import logging
 from typing import Optional, Dict, List
 
 from .slurm.runner import SlurmRunner
@@ -190,6 +191,8 @@ def _run_command(args: argparse.Namespace) -> int:
             )
 
     # Collect Slurm config from args (excluding engine)
+    logging.info(f"Engine set as = {config.engine}")
+    # Collect Slurm config from args
     slurm_config = {
         key: value for key, value in {
             "account": args.account,
