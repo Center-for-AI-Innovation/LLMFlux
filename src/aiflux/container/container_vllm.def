@@ -55,16 +55,16 @@ From: ollama/ollama:latest
     exec vllm serve
 
 %labels
-    Author Rohan Marwaha, Darren Adams
+    Author Rohan Marwaha, Darren Adams, Joshua Allen
     Version v1.1
     Description LLM Batch Processing Container
-    LastModified 2025-09-25
-    ModifiedBy Darren Adams
+    LastModified 2025-10-20
+    ModifiedBy Joshua Allen
 
 %startscript
     # Ensure proper permissions for runtime directories
-    mkdir -p "${VLLM_HOME:-/root/.ollama}"
-    chmod -R 777 "${VLLM_HOME:-/root/.ollama}"
+    mkdir -p "${VLLM_HOME:-/root/.vllm}"
+    chmod -R 777 "${VLLM_HOME:-/root/.vllm}"
     # Activate venv for runtime shell
     . /app/vllmenv/bin/activate || true
     exec vllm serve
