@@ -353,7 +353,7 @@ class SlurmRunner:
         try:
             with open(job_script_path, 'w') as f:
                 f.write('\n'.join(job_script))
-            
+
             if debug_mode:
                 logger.info(f"Debug mode: job script saved to {job_script_path}")
 

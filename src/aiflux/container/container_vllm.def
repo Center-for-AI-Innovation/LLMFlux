@@ -1,5 +1,5 @@
 Bootstrap: docker
-From: ollama/ollama:latest
+From: vllm/vllm-openai:v0.9.0
 
 %post
     # Prevent interactive prompts
@@ -23,16 +23,40 @@ From: ollama/ollama:latest
     # Create application structure with proper permissions
     mkdir -p /app/{models,data,logs}
     chmod -R 777 /app
-    mkdir -p /var/log/vllm
-    chmod -R 777 /var/log/vllm
+    mkdir -p /var/log/ollama
+    chmod -R 777 /var/log/ollama
 
+    # Create virtual environment
+    python3 -m venv /app/venv
+    # POSIX-compliant activation under /bin/sh
+    . /app/venv/bin/activate
+
+    echo "Checking NVIDIA GPU"
+    # nvidia-smi
+
+    # Upgrade pip and install Python dependencies compatible with CUDA 12.x and Ollama
     python -m pip install --upgrade pip
+
+    # Core Python dependencies (latest versions)
+    pip install --no-cache-dir \
+        numpy \
+        pandas \
+        pyyaml \
+        requests \
+        tqdm \
+        psutil
+
+    # Install PyTorch with latest CUDA 12.9 wheels
+    pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu129 \
+        torch \
+        torchvision \
+        torchaudio
 
     # Install vLLM for high-performance LLM inference
     pip install uv
     uv venv --python 3.12 --seed vllmenv
     source .vllmenv/bin/activate
-    uv pip install --no-cache-dir vllm --torch-backend=auto
+    pip install --no-cache-dir vllm
 
 %environment
     export LC_ALL=C
@@ -51,20 +75,20 @@ From: ollama/ollama:latest
     export OLLAMA_ORIGINS=${OLLAMA_ORIGINS:-"*"}
 
 %runscript
-    # Start VLLM server with provided configuration
-    exec vllm serve
+    # Start Ollama server with provided configuration
+    exec ollama serve
 
 %labels
-    Author Rohan Marwaha, Darren Adams, Joshua Allen
+    Author Rohan Marwaha, Darren Adams
     Version v1.1
     Description LLM Batch Processing Container
-    LastModified 2025-10-20
-    ModifiedBy Joshua Allen
+    LastModified 2025-09-25
+    ModifiedBy Darren Adams
 
 %startscript
     # Ensure proper permissions for runtime directories
     mkdir -p "${VLLM_HOME:-/root/.vllm}"
     chmod -R 777 "${VLLM_HOME:-/root/.vllm}"
     # Activate venv for runtime shell
-    . /app/vllmenv/bin/activate || true
-    exec vllm serve
+    . /app/venv/bin/activate || true
+    exec ollama serve
