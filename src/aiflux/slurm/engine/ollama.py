@@ -54,6 +54,7 @@ def create_ollama_batch_script(
         "",
         "# Build container if needed (or if forced)",
         "if [ \"$AIFLUX_FORCE_REBUILD\" = \"1\" ] || [ ! -f \"$CONTAINERS_DIR/llm_processor.sif\" ]; then",
+        "    echo \"Building Container in ${CONTAINERS_DIR}\""
         "    APPTAINER_DEBUG=1 apptainer build --force $CONTAINERS_DIR/llm_processor.sif $CONTAINER_DEF",
         "fi",
         "",
