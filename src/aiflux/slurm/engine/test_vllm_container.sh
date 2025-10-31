@@ -42,7 +42,7 @@ if torch.cuda.is_available():
 echo ""
 
 # Start vLLM server
-
+echo "[2/4] Starting vLLM server..."
 echo "      Model: $MODEL (downloading on first run)"
 apptainer exec --nv "$CONTAINER" \
     python3 -m vllm.entrypoints.openai.api_server \
