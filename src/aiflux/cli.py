@@ -7,11 +7,35 @@ Provides the `aiflux` executable with subcommands.
 import argparse
 import sys
 from pathlib import Path
+from typing import Optional, Dict, List
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
 from .core.config import Config, SlurmConfig
 from .benchmark_utils import generate_synthetic_prompts, save_prompts_to_jsonl
+
+
+def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[str, str]]:
+    """Parse --sbatch-arg arguments into a dictionary.
+    
+    Args:
+        sbatch_arg_list: List of "key=value" strings from CLI
+        
+    Returns:
+        Dictionary of extra SBATCH arguments or None
+    """
+    if not sbatch_arg_list:
+        return None
+    
+    result = {}
+    for arg in sbatch_arg_list:
+        if '=' not in arg:
+            print(f"Warning: Ignoring invalid --sbatch-arg format: {arg} (expected KEY=VALUE)")
+            continue
+        key, value = arg.split('=', 1)
+        result[key.strip()] = value.strip()
+    
+    return result if result else None
 
 
 def _benchmark_command(args: argparse.Namespace) -> int:
@@ -61,6 +85,12 @@ def _benchmark_command(args: argparse.Namespace) -> int:
             "cpus_per_task": args.cpus_per_task,
         }.items() if value is not None
     }
+    
+    # Parse and add extra SBATCH args if provided
+    extra_args = _parse_sbatch_args(getattr(args, 'sbatch_arg', None))
+    if extra_args:
+        slurm_overrides['extra_sbatch_args'] = extra_args
+    
     # Merge CLI overrides with config from .env
     slurm_config = config.get_slurm_config(slurm_overrides)
     runner = SlurmRunner(config=slurm_config)
@@ -153,6 +183,12 @@ def _run_command(args: argparse.Namespace) -> int:
             "cpus_per_task": args.cpus_per_task,
         }.items() if value is not None
     }
+    
+    # Parse and add extra SBATCH args if provided
+    extra_args = _parse_sbatch_args(getattr(args, 'sbatch_arg', None))
+    if extra_args:
+        slurm_config['extra_sbatch_args'] = extra_args
+    
     # Update Slurm config with args
     slurm_config = config.get_slurm_config(slurm_config)
     # SLURM mode
@@ -215,6 +251,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--time", type=str)
     run_parser.add_argument("--mem", type=str)
     run_parser.add_argument("--cpus-per-task", type=int)
+    run_parser.add_argument(
+        "--sbatch-arg",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Additional SBATCH directive (e.g., --sbatch-arg reservation=my_res). Can be used multiple times."
+    )
 
     # Container rebuild control
     run_parser.add_argument(
@@ -262,6 +304,12 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--time", type=str)
     benchmark_parser.add_argument("--mem", type=str)
     benchmark_parser.add_argument("--cpus-per-task", type=int)
+    benchmark_parser.add_argument(
+        "--sbatch-arg",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Additional SBATCH directive (e.g., --sbatch-arg reservation=my_res). Can be used multiple times."
+    )
     
     # Container rebuild control
     benchmark_parser.add_argument(

@@ -311,6 +311,14 @@ class SlurmRunner:
             f"#SBATCH --cpus-per-task={self.slurm_config.cpus_per_task}",
             f"#SBATCH --output={self.logs_dir}/%j.out",
             f"#SBATCH --error={self.logs_dir}/%j.err",
+        ]
+        
+        # Add extra SBATCH directives if provided
+        if self.slurm_config.extra_sbatch_args:
+            for key, value in self.slurm_config.extra_sbatch_args.items():
+                job_script.append(f"#SBATCH --{key}={value}")
+        
+        job_script.extend([
             "",
             "# Load required modules",
             "module purge",
@@ -456,7 +464,7 @@ class SlurmRunner:
             "if [ -d \"$APPTAINER_CACHEDIR\" ] && [ -w \"$APPTAINER_CACHEDIR\" ]; then",
             "    rm -rf \"$APPTAINER_CACHEDIR\"",
             "fi"
-        ]
+        ])
         
         # Write job script
         job_script_path = self.workspace / "job.sh"
