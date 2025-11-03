@@ -46,46 +46,29 @@ From: ollama/ollama:latest
         tqdm \
         psutil
 
-    # Install PyTorch with latest CUDA 12.9 wheels
+    # Install PyTorch 2.8.0 with CUDA 12.9 wheels (pinned to match vLLM requirements)
     pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu129 \
-        torch \
-        torchvision \
-        torchaudio
+        torch==2.8.0 \
+        torchvision==0.23.0 \
+        torchaudio==2.8.0
     
     # Install vLLM for high-performance LLM inference
-    pip install --no-cache-dir vllm
+    # Pinned versions ensure PyTorch 2.8.0+cu129 is not overwritten
+    pip install --no-cache-dir vllm==0.11.0
 
 %environment
+    # Locale
     export LC_ALL=C
+    
+    # Python virtual environment and CUDA paths
     export PATH=/app/venv/bin:/usr/local/cuda/bin:$PATH
     export VIRTUAL_ENV=/app/venv
     export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-    # NVIDIA driver configuration
-    export NVIDIA_VISIBLE_DEVICES=all
-    export NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    export NVIDIA_REQUIRE_CUDA="cuda>=12.0"
-    export CUDA_VISIBLE_DEVICES=0
-    # Ollama optimization settings - using environment variables
-    export OLLAMA_GPU_LAYERS=${GPU_LAYERS:-35}
-    export OLLAMA_COMMIT_INTERVAL=${OLLAMA_COMMIT_INTERVAL:-100}
-    export OLLAMA_KEEP_ALIVE=${OLLAMA_KEEP_ALIVE:-5m}
-    export OLLAMA_ORIGINS=${OLLAMA_ORIGINS:-"*"}
-
-%runscript
-    # Start Ollama server with provided configuration
-    exec ollama serve
 
 %labels
     Author Rohan Marwaha, Darren Adams
-    Version v1.1
-    Description LLM Batch Processing Container
-    LastModified 2025-09-25
+    Version v2.0
+    Description LLM Batch Processing Container - Simplified for SLURM
+    LastModified 2025-10-24
     ModifiedBy Darren Adams
-
-%startscript
-    # Ensure proper permissions for runtime directories
-    mkdir -p "${OLLAMA_HOME:-/root/.ollama}"
-    chmod -R 777 "${OLLAMA_HOME:-/root/.ollama}"
-    # Activate venv for runtime shell
-    . /app/venv/bin/activate || true
-    exec ollama serve 
+    Note Runtime configuration handled by SLURM job script 
