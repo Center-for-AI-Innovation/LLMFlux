@@ -1,21 +1,16 @@
 #!/usr/bin/env python3
-import pdb
 import logging
 import os
 import subprocess
 import socket
 import shutil
-import sys
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional, Union
 import tempfile
 import json
 
-from .engine import create_vllm_batch_script
-from .engine import create_ollama_batch_script
-
-from ..core.config import SlurmConfig, EngineConfig
+from ..core.config import Config, SlurmConfig
 from ..core.config_manager import ConfigManager
 from ..core.processor import BaseProcessor
 
@@ -32,15 +27,13 @@ class SlurmRunner:
     def __init__(
         self,
         config: Optional[SlurmConfig] = None,
-        workspace: Optional[str] = None,
-        engine_config: Optional['EngineConfig'] = None
+        workspace: Optional[str] = None
     ):
         """Initialize SLURM runner.
         
         Args:
             config: SLURM configuration
             workspace: Path to workspace directory
-            engine_config: Engine configuration
         """
         # Initialize config
         self.config_manager = ConfigManager()
@@ -51,8 +44,6 @@ class SlurmRunner:
         
         # Get paths from config if available
         config = self.config_manager.get_config()
-        # Use provided engine config or fall back to config
-        self.engine = engine_config or config.engine
         
         # Get paths using config manager (following precedence rules)
         self.data_dir = Path(config.data_dir) if hasattr(config, 'data_dir') else (self.workspace / "data")
@@ -94,14 +85,12 @@ class SlurmRunner:
         # Calculate GPU configuration values
         cuda_visible_devices = '0'  # Default to single GPU
         ollama_sched_spread = '0'   # Default to no spread
-        vllm_sched_spread = '0'
         
         # Update values if multiple GPUs are requested
         if self.slurm_config.gpus_per_node > 1:
             # Generate comma-separated list of GPU indices (0,1,2,...)
             cuda_visible_devices = ','.join(str(i) for i in range(self.slurm_config.gpus_per_node))
             ollama_sched_spread = '1'
-            vllm_sched_spread = '1'
         
         # Use config manager to get environment with proper precedence
         # Map slurm_config fields to their corresponding environment variables
@@ -114,7 +103,7 @@ class SlurmRunner:
             'SLURM_TIME': self.slurm_config.time,
             'SLURM_MEM': self.slurm_config.memory,
             'SLURM_CPUS_PER_TASK': str(self.slurm_config.cpus_per_task),
-
+            
             # Add workspace paths
             'PROJECT_ROOT': str(workspace_path),
             'DATA_INPUT_DIR': str(self.data_input_dir),
@@ -123,45 +112,28 @@ class SlurmRunner:
             'LOGS_DIR': str(self.logs_dir),
             'CONTAINERS_DIR': str(self.containers_dir),
             'CONTAINER_DEF': str(container_def),
-
+            
             # Add AIFLUX_ prefixed variables for tests
             'AIFLUX_DATA_DIR': str(self.data_dir),
             'AIFLUX_MODELS_DIR': str(self.models_dir),
             'AIFLUX_LOGS_DIR': str(self.logs_dir),
             'AIFLUX_CONTAINERS_DIR': str(self.containers_dir),
             'AIFLUX_WORKSPACE': str(workspace_path),
-
+            
             # Set Apptainer paths explicitly
             'APPTAINER_TMPDIR': str(workspace_path / "tmp"),
             'APPTAINER_CACHEDIR': str(workspace_path / "tmp" / "cache"),
             'SINGULARITY_TMPDIR': str(workspace_path / "tmp"),
             'SINGULARITY_CACHEDIR': str(workspace_path / "tmp" / "cache"),
-
+            
+            # Add Ollama paths
+            'OLLAMA_HOME': str(self.workspace / ".ollama"),
+            'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),
+            
             # Add pre-calculated GPU configuration
             'CUDA_VISIBLE_DEVICES': cuda_visible_devices,
+            'OLLAMA_SCHED_SPREAD': ollama_sched_spread,
         }
-        if self.engine.engine == "ollama":
-            overrides.update(
-                {
-                    # Add Ollama paths
-                    'OLLAMA_HOME': str(self.workspace / ".ollama"),
-                    'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),
-
-                    # Add pre-calculated GPU configuration
-                    'OLLAMA_SCHED_SPREAD': ollama_sched_spread,
-                }
-            )
-        elif self.engine.engine == "vllm":
-            overrides.update(
-                {
-                    # Add VLLM paths
-                    'VLLM_HOME': str(self.workspace / ".vllm"),
-                    'VLLM_MODELS': str(self.workspace / '.vllm' / 'models'),
-
-                    # Add pre-calculated GPU configuration
-                    'VLLM_SCHED_SPREAD': vllm_sched_spread,
-                }
-            )
         
         # Get base environment
         env = dict(os.environ)
@@ -214,7 +186,6 @@ class SlurmRunner:
         # 1. For input:
         # If input_path is a file path, use it directly
         input_file = Path(input_path)
-
         if not input_file.exists():
             # If it doesn't exist, check if it's relative to the data input directory
             config = self.config_manager.get_config()
@@ -276,7 +247,6 @@ class SlurmRunner:
         )
         env['MODEL_NAME'] = str(model_name)
         env['OLLAMA_MODEL_NAME'] = str(model_name)
-        env['VLLM_MODEL_NAME'] = str(model_name)
         
         # Get batch size using config manager priority system
         batch_size = self.config_manager.get_parameter(
@@ -321,14 +291,13 @@ class SlurmRunner:
         
         # Find available port
         port = self._find_available_port()
-        if self.engine.engine == 'ollama':
-            env['OLLAMA_PORT'] = str(port)
-            env['OLLAMA_HOST'] = f"0.0.0.0:{port}"
-        else:
-            env['VLLM_PORT'] = str(port)
-            env['VLLM_HOST'] = f"0.0.0.0:{port}"
+        env['OLLAMA_PORT'] = str(port)
+        env['OLLAMA_HOST'] = f"0.0.0.0:{port}"
 
         # Get LLM Engine
+        # Todo add vllm, ollama is default
+        # Move scripts to engine/ollama, engine/vllm
+        
         # Create SLURM job script
         job_script = [
             "#!/bin/bash",
@@ -498,8 +467,6 @@ class SlurmRunner:
         ])
         
         # Write job script
-        job_script_text = "\n".join(job_script)
-        logger.info(f'Job script: {job_script_text}')
         job_script_path = self.workspace / "job.sh"
         debug_mode = kwargs.get('debug', False)
         

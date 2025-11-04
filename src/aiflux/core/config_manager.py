@@ -2,7 +2,7 @@
 """Configuration Manager for AI-Flux."""
 
 from typing import Optional, Dict, Any, List
-from .config import Config, ModelConfig, SlurmConfig, EngineConfig
+from .config import Config, ModelConfig, SlurmConfig
 import os
 
 # Singleton instance
@@ -84,8 +84,7 @@ class ConfigManager:
                      logs_dir: Optional[str] = None,
                      containers_dir: Optional[str] = None,
                      slurm: Optional[SlurmConfig] = None,
-                     models: Optional[List[ModelConfig]] = None,
-                     engine: Optional[EngineConfig] = None) -> Config:
+                     models: Optional[List[ModelConfig]] = None) -> Config:
         """Reset the singleton Config instance with new values.
         
         Args:
@@ -95,7 +94,6 @@ class ConfigManager:
             containers_dir: Optional path to containers directory
             slurm: Optional SLURM configuration
             models: Optional list of model configurations
-            engine: Whether to use VLLM or OLLAMA
             
         Returns:
             Config: The new singleton Config instance
@@ -107,8 +105,7 @@ class ConfigManager:
             logs_dir=logs_dir,
             containers_dir=containers_dir,
             slurm=slurm,
-            models=models,
-            engine=engine,
+            models=models
         )
         return _config_instance
     
@@ -118,8 +115,7 @@ class ConfigManager:
                       logs_dir: Optional[str] = None,
                       containers_dir: Optional[str] = None,
                       slurm: Optional[SlurmConfig] = None,
-                      models: Optional[List[ModelConfig]] = None,
-                      engine: Optional[EngineConfig] = None) -> Config:
+                      models: Optional[List[ModelConfig]] = None) -> Config:
         """Update the singleton Config instance with new values.
         
         Only updates the provided values, keeping the rest unchanged.
@@ -131,7 +127,6 @@ class ConfigManager:
             containers_dir: Optional path to containers directory
             slurm: Optional SLURM configuration
             models: Optional list of model configurations
-            engine: Optional, either VLLM or OLLAMA
             
         Returns:
             Config: The updated singleton Config instance
@@ -151,8 +146,6 @@ class ConfigManager:
             config.slurm = slurm
         if models:
             config.models = models
-        if engine:
-            config.engine = engine
         
         # Update the derived paths
         config.default_paths.update({

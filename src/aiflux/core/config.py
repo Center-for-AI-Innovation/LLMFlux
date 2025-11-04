@@ -5,15 +5,11 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 import yaml
-import logging
 from pydantic import BaseModel, Field, field_validator
 
 class EngineConfig(BaseModel):
     """Model engine configuration."""
     engine: str = Field(..., pattern=r"^ollama|vllm$")
-    origins: str = Field(default="*")
-    insecure: str = Field(default="true")
-    home: Optional[str] = None
 
 class ResourceConfig(BaseModel):
     """Model resource configuration."""
@@ -164,7 +160,8 @@ class Config:
                  logs_dir: Optional[str] = None,
                  containers_dir: Optional[str] = None,
                  slurm: Optional[SlurmConfig] = None,
-                 models: Optional[List[ModelConfig]] = None):
+                 models: Optional[List[ModelConfig]] = None,
+                 engine: Optional[EngineConfig] = None):
         """Initialize configuration.
         
         Args:
@@ -195,20 +192,10 @@ class Config:
         
         # Set model configurations
         self.models = models or []
-
-        # Set engine configuration from environment variable
-        engine_value = os.getenv('SLURM_ENGINE', 'ollama')
-        if engine_value == "vllm":
-            self.engine = EngineConfig(
-                engine="vllm",
-                home=str(self.workspace / ".vllm")
-            )
-        else:
-            self.engine = EngineConfig(
-                engine="ollama",
-                home=str(self.workspace / ".ollama")
-            )
-
+        
+        # Set engine configuration
+        self.engine = engine or EngineConfig(engine="ollama")
+        
         # Define default paths
         self.default_paths = {
             'DATA_INPUT_DIR': Path(self.data_dir) / "input",

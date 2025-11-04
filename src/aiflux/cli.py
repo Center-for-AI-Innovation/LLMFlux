@@ -191,24 +191,8 @@ def _run_command(args: argparse.Namespace) -> int:
         processor.run(input_path=input_path, output_path=output_path or str(Path("results") / "output.json"), **run_kwargs)
         return 0
 
-    # Initialize config - engine will be automatically detected from SLURM_ENGINE env var
     config = Config()
 
-    # Override engine if provided via CLI
-    if args.engine:
-        engine_value = args.engine
-        if engine_value == "vllm":
-            config.engine = EngineConfig(
-                engine="vllm",
-                home=str(config.workspace / ".vllm")
-            )
-        else:
-            config.engine = EngineConfig(
-                engine="ollama",
-                home=str(config.workspace / ".ollama")
-            )
-    # Collect Slurm config from args (excluding engine)
-    logging.info(f"Engine set as = {config.engine}")
     # Collect Slurm config from args
     slurm_config = {
         key: value for key, value in {

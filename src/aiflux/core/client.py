@@ -43,6 +43,7 @@ class LLMClient:
                 host = 'localhost'
                 
             if port is None:
+                # Check if OLLAMA_PORT is set as an environment variable
                 port_str = os.getenv('OLLAMA_PORT', '11434')
                 try:
                     port = int(port_str)
