@@ -14,7 +14,6 @@ import subprocess
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
-from .core.config import Config, SlurmConfig, EngineConfig
 from .core.config import Config, SlurmConfig
 from .benchmark_utils import generate_synthetic_prompts, save_prompts_to_jsonl, create_test_prompts_file
 
@@ -49,10 +48,8 @@ def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout
 
 def _benchmark_command(args: argparse.Namespace) -> int:
     """Handle the `benchmark` subcommand.
-
     Args:
         args: Parsed CLI arguments
-
     Returns:
         Process exit code
     """
@@ -82,7 +79,6 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         output_path = f"results/benchmarks/{name}_results.json"
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-
     # Collect SLURM config from CLI args (filter out None values)
     config = Config()
     slurm_overrides = {
@@ -105,8 +101,6 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         "batch_size": getattr(args, "batch_size", 4),
     }
 
-    kwargs["temperature"] = temperature
-    kwargs["max_tokens"] = max_tokens
     if getattr(args, "rebuild", False):
         kwargs["rebuild"] = True
     if getattr(args, "debug", False):
@@ -192,7 +186,6 @@ def _run_command(args: argparse.Namespace) -> int:
         return 0
 
     config = Config()
-
     # Collect Slurm config from args
     slurm_config = {
         key: value for key, value in {
@@ -208,7 +201,7 @@ def _run_command(args: argparse.Namespace) -> int:
     # Update Slurm config with args
     slurm_config = config.get_slurm_config(slurm_config)
     # SLURM mode
-    runner = SlurmRunner(config=slurm_config, engine_config=config.engine)
+    runner = SlurmRunner(config=slurm_config)
     # Collect kwargs accepted by SlurmRunner.run to set env for the job script
     kwargs = {
         "model": model,
@@ -267,7 +260,6 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--time", type=str)
     run_parser.add_argument("--mem", type=str)
     run_parser.add_argument("--cpus-per-task", type=int)
-    run_parser.add_argument("--engine", type=str, default=None, choices=["ollama", "vllm"])
 
     # Container rebuild control
     run_parser.add_argument(
