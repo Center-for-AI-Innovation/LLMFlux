@@ -111,6 +111,7 @@ class SlurmRunner:
             'SINGULARITY_CACHEDIR': str(workspace_path / "tmp" / "cache"),
             'OLLAMA_HOME': str(self.workspace / ".ollama"),  # Used for mkdir and --bind
             'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),  # Used for mkdir
+            'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
         }
         
         # CONTAINER variables (automatically injected with --cleanenv via APPTAINERENV_ prefix)
