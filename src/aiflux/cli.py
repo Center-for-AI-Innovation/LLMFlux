@@ -9,13 +9,43 @@ import os
 import sys
 from pathlib import Path
 import logging
+import time
+import subprocess
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
 from .core.config import Config, SlurmConfig, EngineConfig
 from .core.config import Config, SlurmConfig
-from .benchmark_utils import generate_synthetic_prompts, save_prompts_to_jsonl
+from .benchmark_utils import generate_synthetic_prompts, save_prompts_to_jsonl, create_test_prompts_file
 
+
+def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout_seconds: int = 6 * 3600) -> int | None:
+    """Return elapsed runtime (seconds) once SLURM job completes; None when unavailable."""
+    start = time.monotonic()
+    while time.monotonic() - start < timeout_seconds:
+        result = subprocess.run(
+            [
+                "sacct",
+                "-n",
+                "-P",
+                "-j",
+                f"{job_id}.batch",
+                "--format=State,Elapsed"
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            rows = [row for row in result.stdout.splitlines() if row.strip()]
+            if rows:
+                state, elapsed = rows[0].split("|", 1)
+                state = state.upper()
+                if state in {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"}:
+                    return str(elapsed)
+        print(f"Job {job_id} is still running... Waiting for {poll_seconds} seconds")
+        time.sleep(poll_seconds)
+    return None
 
 def _benchmark_command(args: argparse.Namespace) -> int:
     """Handle the `benchmark` subcommand.
@@ -36,20 +66,22 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         num_prompts = getattr(args, "num_prompts", 50)
-        prompts = generate_synthetic_prompts(num_prompts=num_prompts, model=args.model)
+        print(f"Number of prompts: {num_prompts}")
+        temperature = 0.7 if args.temperature is None else args.temperature
+        print(f"Temperature: {temperature}")
+        max_tokens = max_tokens = 500 if args.max_tokens is None else args.max_tokens
+        print(f"Max tokens: {max_tokens}")
 
-        dataset_path = output_dir / f"{name}_prompts.jsonl"
-        save_prompts_to_jsonl(prompts, dataset_path)
-        print(f"Generated {num_prompts} prompts: {dataset_path}")
-        input_path = dataset_path
-
-    # Set output path
+        input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens)
+        
+          # Set output path
     if args.output:
         output_path = args.output
     else:
         name = args.name or f"benchmark_{args.model.replace(':', '_')}"
         output_path = f"results/benchmarks/{name}_results.json"
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+
 
     # Collect SLURM config from CLI args (filter out None values)
     config = Config()
@@ -73,10 +105,8 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         "batch_size": getattr(args, "batch_size", 4),
     }
 
-    if getattr(args, "temperature", None) is not None:
-        kwargs["temperature"] = args.temperature
-    if getattr(args, "max_tokens", None) is not None:
-        kwargs["max_tokens"] = args.max_tokens
+    kwargs["temperature"] = temperature
+    kwargs["max_tokens"] = max_tokens
     if getattr(args, "rebuild", False):
         kwargs["rebuild"] = True
     if getattr(args, "debug", False):
@@ -89,6 +119,24 @@ def _benchmark_command(args: argparse.Namespace) -> int:
 
     job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
+
+    # Create a metrics file that log the time taken to run the batch inference and the number of prompts processed
+    elapsed_seconds = _wait_for_slurm_elapsed_seconds(job_id)
+    try:
+        if elapsed_seconds is None:
+            print("Job finished but elapsed runtime could not be retrieved from sacct.")
+            return 0
+
+        metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(
+            f"Time taken to run the batch inference: {elapsed_seconds} seconds\n"
+            f"Number of prompts processed: {num_prompts}\n"
+        )
+    except Exception as e:
+        print(f"Error writing metrics file: {e}")
+        return 0
+
     return 0
 
 
