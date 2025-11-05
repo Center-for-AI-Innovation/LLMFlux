@@ -95,7 +95,7 @@ def extract_prompts_from_jsonl(
 
     return prompts[:num_prompts]
 
-def create_test_prompts_file(num_prompts: int = 120, temperature: float = 0.7, max_tokens: int = 500) -> List[Dict[str, Any]]:
+def create_test_prompts_file(num_prompts: int = 120, temperature: float = 0.7, max_tokens: int = 500) -> str:
     """Get test prompts for a given model from 6 LiveBench categories: data_analysis, language, math, reasoning, instruction_following, coding.
         num_prompts is the total number of prompts to generate.
     Args:
@@ -139,8 +139,16 @@ def download_prompts_data() -> None:
     Download prompts data from the LiveBench HuggingFace dataset.
     Categories:  "coding", "data_analysis", "instruction_following","math","reasoning","language"
     """
-    from datasets import load_dataset
-    import pandas as pd
+
+    try:
+        from datasets import load_dataset
+        import pandas as pd
+    except ImportError as exc:
+        raise ImportError(
+            "download_prompts_data requires the optional dependencies 'datasets' and 'pandas'. "
+            "Install them to enable downloading prompts."
+        ) from exc
+
     # LiveBench categories
     CATEGORIES = [
         "coding",
@@ -195,7 +203,7 @@ def download_prompts_data() -> None:
         prompts = []
         # Convert to OpenAI batch format
         for index, row in df.iterrows():
-            openai_row = create_openai_batch_row(row, system_prompt, temperature=0.7, max_tokens=500)
+            openai_row = create_openai_batch_row(row, system_prompt, temperature=temperature, max_tokens=max_tokens)
             prompts.append(openai_row)
         
         # Save OpenAI batch format to JSONL file

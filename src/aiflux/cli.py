@@ -5,20 +5,18 @@ Provides the `aiflux` executable with subcommands.
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
-import logging
 import time
 import subprocess
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
 from .core.config import Config, SlurmConfig
-from .benchmark_utils import generate_synthetic_prompts, save_prompts_to_jsonl, create_test_prompts_file
+from .benchmark_utils import create_test_prompts_file
 
 
-def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout_seconds: int = 6 * 3600) -> int | None:
+def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout_seconds: int = 6 * 3600) -> str | None:
     """Return elapsed runtime (seconds) once SLURM job completes; None when unavailable."""
     start = time.monotonic()
     while time.monotonic() - start < timeout_seconds:
@@ -63,15 +61,12 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         num_prompts = getattr(args, "num_prompts", 50)
-        print(f"Number of prompts: {num_prompts}")
         temperature = 0.7 if args.temperature is None else args.temperature
-        print(f"Temperature: {temperature}")
-        max_tokens = max_tokens = 500 if args.max_tokens is None else args.max_tokens
-        print(f"Max tokens: {max_tokens}")
+        max_tokens = 500 if args.max_tokens is None else args.max_tokens
 
         input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens)
         
-          # Set output path
+    # Set output path
     if args.output:
         output_path = args.output
     else:
@@ -124,7 +119,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         metrics_path.write_text(
-            f"Time taken to run the batch inference: {elapsed_seconds} seconds\n"
+            f"Time taken to run the batch inference: {elapsed_seconds}\n"
             f"Number of prompts processed: {num_prompts}\n"
         )
     except Exception as e:
