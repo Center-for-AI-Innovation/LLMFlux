@@ -5,7 +5,15 @@ import json
 import random
 from pathlib import Path
 from typing import List, Dict, Any
-import os
+
+
+BENCHMARK_DATA_DIR = Path(__file__).resolve().parent / "benchmark_data"
+
+
+def ensure_benchmark_data_dir() -> Path:
+    """Create the benchmark data directory if it does not exist."""
+    BENCHMARK_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return BENCHMARK_DATA_DIR
 
 
 def generate_synthetic_prompts(
@@ -103,21 +111,22 @@ def create_test_prompts_file(num_prompts: int = 120, temperature: float = 0.7, m
     """
     file_names = ["data_analysis", "language", "math", "reasoning", "instruction_following", "coding"]
     # Check if all the files exist else download the prompts data
-    if not all(os.path.exists("benchmark_data/" + file_name + ".jsonl") for file_name in file_names):
+    benchmark_dir = ensure_benchmark_data_dir()
+    if not all((benchmark_dir / f"{file_name}.jsonl").exists() for file_name in file_names):
         print("Downloading prompts data from the LiveBench HuggingFace dataset...")
         download_prompts_data()
         print("Prompts data downloaded successfully")
     
     all_prompts = []
-    prompts_file = "benchmark_data/benchmark_prompts.jsonl"
+    prompts_file = benchmark_dir / "benchmark_prompts.jsonl"
     for i in range(len(file_names)):
-        file_name = "benchmark_data/" + file_names[i] + ".jsonl"
+        file_name = benchmark_dir / f"{file_names[i]}.jsonl"
         prompts = extract_prompts_from_jsonl(file_name, num_prompts=num_prompts//len(file_names))
         for prompt in prompts:
             all_prompts.append({"custom_id":"request1","method":"POST","url":"/v1/chat/completions","body":{"messages":prompt,"temperature":temperature,"max_tokens":max_tokens}})
     save_prompts_to_jsonl(all_prompts, prompts_file)
 
-    return prompts_file
+    return str(prompts_file)
 
 
 
@@ -129,8 +138,8 @@ def save_prompts_to_jsonl(prompts: List[Dict[str, Any]], filepath: Path) -> None
         filepath: Output file path
     """
 
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
-    with open(filepath, 'w') as f:
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    with filepath.open('w', encoding='utf-8') as f:
         for prompt in prompts:
             f.write(json.dumps(prompt) + '\n')
 
@@ -183,11 +192,10 @@ def download_prompts_data() -> None:
         system_prompt = SYSTEM_PROMPTS[category]
 
         # Create output directories
-        benchmark_dir = "benchmark_data/"
-        os.makedirs(benchmark_dir, exist_ok=True)
+        benchmark_dir = ensure_benchmark_data_dir()
 
         # Function to convert to OpenAI batch format
-        def create_openai_batch_row(row: pd.Series, system_prompt: str, temperature=0.7, max_tokens=500) -> Dict[str, Any]:
+        def create_openai_batch_row(row: pd.Series, system_prompt: str) -> Dict[str, Any]:
             """
             Create an OpenAI batch row from a LiveBench row.
             """
@@ -203,11 +211,11 @@ def download_prompts_data() -> None:
         prompts = []
         # Convert to OpenAI batch format
         for index, row in df.iterrows():
-            openai_row = create_openai_batch_row(row, system_prompt, temperature=temperature, max_tokens=max_tokens)
+            openai_row = create_openai_batch_row(row, system_prompt)
             prompts.append(openai_row)
         
         # Save OpenAI batch format to JSONL file
-        openai_path = os.path.join(benchmark_dir, f"{category}.jsonl")
+        openai_path = benchmark_dir / f"{category}.jsonl"
         save_prompts_to_jsonl(prompts, openai_path)
         print(f"Saved {category} prompts to {openai_path}")
         return None
