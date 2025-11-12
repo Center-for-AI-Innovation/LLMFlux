@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 import time
 import subprocess
+from typing import Optional, List, Dict
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
