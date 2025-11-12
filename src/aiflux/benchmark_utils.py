@@ -104,10 +104,13 @@ def extract_prompts_from_jsonl(
     return prompts[:num_prompts]
 
 def create_test_prompts_file(num_prompts: int = 120, temperature: float = 0.7, max_tokens: int = 500) -> str:
-    """Get test prompts for a given model from 6 LiveBench categories: data_analysis, language, math, reasoning, instruction_following, coding.
-        num_prompts is the total number of prompts to generate.
+    """Get test prompts for a given model from 6 LiveBench categories: data_analysis, language, math, reasoning, instruction_following, and coding.
     Args:
-        num_prompts: Total number of prompts to generate
+        num_prompts: Total number of prompts to generate.
+        temperature: Sampling temperature for the prompts.
+        max_tokens: Maximum number of tokens for each prompt.
+    Returns:
+        Path to the created prompts file.
     """
     file_names = ["data_analysis", "language", "math", "reasoning", "instruction_following", "coding"]
     # Check if all the files exist else download the prompts data
@@ -199,7 +202,7 @@ def download_prompts_data() -> None:
             """
             Create an OpenAI batch row from a LiveBench row.
             """
-            messages = [ {"role": "system", "content": system_prompt}]
+            messages = [{"role": "system", "content": system_prompt}]
             for turn in row["turns"]:
                 messages.append({
                 "role": "user",
