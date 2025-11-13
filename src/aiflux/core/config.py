@@ -424,7 +424,7 @@ class Config:
     def load_model_config(
         self,
         model_type: str,
-        model_size: str,
+        model_size: str = None,
         custom_config_path: Optional[str] = None
     ) -> ModelConfig:
         """Load and validate model configuration.
