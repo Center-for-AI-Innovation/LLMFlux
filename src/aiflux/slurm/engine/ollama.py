@@ -1,4 +1,8 @@
 from pathlib import Path
+
+from src.aiflux import SlurmConfig
+
+
 # This function generates an ollama batch script for running aiflux
 
 def create_ollama_batch_script(
@@ -12,6 +16,7 @@ def create_ollama_batch_script(
     logs_dir: Path,
     input_file: Path,
     output_file: Path,
+    slurm_config: SlurmConfig,
 ) -> list[str]:
     # Create SLURM job script
     job_script = [
@@ -26,6 +31,14 @@ def create_ollama_batch_script(
         f"#SBATCH --cpus-per-task={cpus_per_task}",
         f"#SBATCH --output={logs_dir}/%j.out",
         f"#SBATCH --error={logs_dir}/%j.err",
+    ]
+
+    # Add extra SBATCH directives if provided
+    if slurm_config.extra_sbatch_args:
+        for key, value in slurm_config.extra_sbatch_args.items():
+            job_script.append(f"#SBATCH --{key}={value}")
+
+    job_script.extend([
         "",
         "# Load required modules",
         "module purge",
@@ -174,5 +187,5 @@ def create_ollama_batch_script(
         "if [ -d \"$APPTAINER_CACHEDIR\" ] && [ -w \"$APPTAINER_CACHEDIR\" ]; then",
         "    rm -rf \"$APPTAINER_CACHEDIR\"",
         "fi"
-    ]
+    ])
     return job_script

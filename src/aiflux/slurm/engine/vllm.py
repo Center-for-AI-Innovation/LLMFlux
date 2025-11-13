@@ -1,5 +1,8 @@
 from pathlib import Path
 
+from src.aiflux import SlurmConfig
+
+
 def create_vllm_batch_script(
         account: str,
         partition: str,
@@ -11,6 +14,7 @@ def create_vllm_batch_script(
         logs_dir: Path,
         input_file: Path,
         output_file: Path,
+        slurm_config: SlurmConfig,
 ):
     # Create SLURM job script
     job_script = [
@@ -25,6 +29,14 @@ def create_vllm_batch_script(
         f"#SBATCH --cpus-per-task={cpus_per_task}",
         f"#SBATCH --output={logs_dir}/%j.out",
         f"#SBATCH --error={logs_dir}/%j.err",
+    ]
+
+    # Add extra SBATCH directives if provided
+    if slurm_config.extra_sbatch_args:
+        for key, value in slurm_config.extra_sbatch_args.items():
+            job_script.append(f"#SBATCH --{key}={value}")
+
+    job_script.extend([
         "# Load required modules",
         "module purge",
         "# Try loading GCC",
@@ -200,5 +212,5 @@ def create_vllm_batch_script(
         "sleep 2",
         "kill -9 $VLLM_PID 2>/dev/null || true",
         ""
-    ]
+    ])
     return job_script

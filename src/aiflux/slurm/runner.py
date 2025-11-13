@@ -326,6 +326,7 @@ class SlurmRunner:
                 self.logs_dir,
                 input_file,
                 output_file,
+                self.slurm_config,
             )
         elif self.engine.engine == "vllm":
             job_script = create_vllm_batch_script(
@@ -339,6 +340,7 @@ class SlurmRunner:
                 self.logs_dir,
                 input_file,
                 output_file,
+                self.slurm_config
             )
         else:
             logger.error("Unknown engine choice: {}".format(self.engine))
