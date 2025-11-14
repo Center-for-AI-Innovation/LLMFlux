@@ -1,5 +1,6 @@
 # Qwen 7B Configuration
 name: "qwen2.5:7b"
+hf_name: "Qwen/Qwen2.5-7B-Instruct"
 
 resources:
   gpu_layers: 35

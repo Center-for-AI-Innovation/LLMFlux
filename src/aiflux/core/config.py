@@ -425,15 +425,14 @@ class Config:
         self,
         model_type: str,
         model_size: str = None,
-        custom_config_path: Optional[str] = None
+        custom_config_path: Optional[str] = None,
     ) -> ModelConfig:
         """Load and validate model configuration.
         
         Args:
-            model_type: Type of model (e.g., 'qwen', 'llama')
+            model_type: Type of model (e.g., 'qwen', 'llama') or the huggingface name (e.g., 'Qwen/Qwen2.5-7B-Instruct')
             model_size: Size of model (e.g., '7b', '70b')
             custom_config_path: Optional path to custom config
-            
         Returns:
             Validated ModelConfig
             
@@ -448,10 +447,13 @@ class Config:
         try:
             with open(config_path, 'r') as f:
                 config_data = yaml.safe_load(f)
-            
+
+
+
             # Create basic model config
             model_config = ModelConfig(
                 name=f"{model_type}:{model_size}",
+                hf_name=config_data.get("hf_name"),
                 type=model_type,
                 size=model_size,
                 parameters=ModelParameters(
@@ -469,6 +471,7 @@ class Config:
             # Return default config if file not found
             model_config = ModelConfig(
                 name=f"{model_type}:{model_size}",
+                hf_name=f"{model_type}",
                 type=model_type,
                 size=model_size
             )

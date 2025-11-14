@@ -121,6 +121,8 @@ class SlurmRunner:
             'SINGULARITY_CACHEDIR': str(workspace_path / "tmp" / "cache"),
             'OLLAMA_HOME': str(self.workspace / ".ollama"),  # Used for mkdir and --bind
             'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),  # Used for mkdir
+            'VLLM_HOME': str(self.workspace / ".vllm"),
+            'VLLM_MODELS': str(self.workspace / ".vllm" / "models"),
             'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
         }
 
@@ -130,6 +132,8 @@ class SlurmRunner:
             'APPTAINERENV_PROJECT_ROOT': str(workspace_path),
             'APPTAINERENV_OLLAMA_HOME': str(self.workspace / ".ollama"),
             'APPTAINERENV_OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),
+            'APPTAINERENV_VLLM_HOME': str(self.workspace / ".vllm"),
+            'APPTAINERENV_VLLM_MODELS': str(self.workspace / ".vllm" / "models"),
             'APPTAINERENV_OLLAMA_ORIGINS': '*',
             'APPTAINERENV_OLLAMA_INSECURE': 'true',
             'APPTAINERENV_CUDA_VISIBLE_DEVICES': cuda_visible_devices,
@@ -259,6 +263,7 @@ class SlurmRunner:
         )
         # Host-only (used in bash script for model pull)
         env['OLLAMA_MODEL_NAME'] = str(model_name)
+        env["VLLM_MODEL_NAME"] = str(model_name)
         # Container variable (used in Python inside container)
         env['APPTAINERENV_MODEL_NAME'] = str(model_name)
 
@@ -307,9 +312,13 @@ class SlurmRunner:
         port = self._find_available_port()
         # Host variable (used in bash curl commands)
         env['OLLAMA_PORT'] = str(port)
+        env['VLLM_PORT'] = str(port)
         # Container variables (used in Python inside container and ollama server)
         env['APPTAINERENV_OLLAMA_PORT'] = str(port)
         env['APPTAINERENV_OLLAMA_HOST'] = f"0.0.0.0:{port}"
+
+        env['APPTAINERENV_VLLM_PORT'] = str(port)
+        env['APPTAINERENV_VLLM_HOST'] = f"0.0.0.0"
 
         # Get LLM Engine
         # Create SLURM job script

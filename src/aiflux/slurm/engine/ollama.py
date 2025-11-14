@@ -1,8 +1,5 @@
 from pathlib import Path
 
-from src.aiflux import SlurmConfig
-
-
 # This function generates an ollama batch script for running aiflux
 
 def create_ollama_batch_script(
@@ -16,7 +13,7 @@ def create_ollama_batch_script(
     logs_dir: Path,
     input_file: Path,
     output_file: Path,
-    slurm_config: SlurmConfig,
+    slurm_config,
 ) -> list[str]:
     # Create SLURM job script
     job_script = [
