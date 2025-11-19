@@ -141,6 +141,11 @@ class SlurmRunner:
             'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
             'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
         }
+        
+        # Add HuggingFace token if available (for accessing gated models)
+        hf_token = os.getenv('HUGGINGFACE_TOKEN')
+        if hf_token:
+            container_vars['APPTAINERENV_HF_TOKEN'] = hf_token
 
         # Get base environment
         env = dict(os.environ)
@@ -263,9 +268,22 @@ class SlurmRunner:
         )
         # Host-only (used in bash script for model pull)
         env['OLLAMA_MODEL_NAME'] = str(model_name)
-        env["VLLM_MODEL_NAME"] = str(model_name)
         # Container variable (used in Python inside container)
         env['APPTAINERENV_MODEL_NAME'] = str(model_name)
+        
+        # Get HuggingFace model name using config manager priority system
+        # vLLM uses HuggingFace model names (e.g., meta-llama/Llama-3.2-3B-Instruct)
+        model_hf_name = self.config_manager.get_parameter(
+            param_name="model_config.hf_name",
+            code_value=kwargs.get('hf_name'),
+            obj=processor,
+            env_var="HF_MODEL_NAME",
+            default="meta-llama/Llama-3.2-3B-Instruct"  # Default model from templates
+        )
+        # Host-only (used in bash script)
+        env['VLLM_MODEL_NAME'] = str(model_hf_name)
+        # Container variable (used in Python inside container)
+        env['APPTAINERENV_VLLM_MODEL_NAME'] = str(model_hf_name)
 
         # Get batch size using config manager priority system
         batch_size = self.config_manager.get_parameter(

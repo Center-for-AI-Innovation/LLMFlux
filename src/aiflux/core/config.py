@@ -73,6 +73,7 @@ class RequirementsConfig(BaseModel):
 class ModelConfig(BaseModel):
     """Complete model configuration."""
     name: str = Field(..., pattern=r"^[a-zA-Z0-9.-]+([-][a-zA-Z0-9.]+)*:((8x)?\d+b|mini|medium|small|vision|large|tiny|instruct)$")
+    hf_name: Optional[str] = Field(None, description="HuggingFace model identifier")
     type: str = Field("ollama")
     size: str = Field("7b")
     parameters: ModelParameters = Field(default_factory=ModelParameters)
