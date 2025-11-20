@@ -272,7 +272,6 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--time", type=str)
     run_parser.add_argument("--mem", type=str)
     run_parser.add_argument("--cpus-per-task", type=int)
-    run_parser.add_argument("--engine", type=str, default=None, choices=["ollama", "vllm"])
     run_parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"])
     run_parser.add_argument(
         "--sbatch-arg",
