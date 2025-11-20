@@ -93,53 +93,53 @@ class SlurmRunner:
             ollama_sched_spread = '1'
         
         # Use config manager to get environment with proper precedence
-        # Map slurm_config fields to their corresponding environment variables
-        overrides = {
-            # Map SlurmConfig fields to SLURM_* environment variables
-            'SLURM_ACCOUNT': self.slurm_config.account,
-            'SLURM_PARTITION': self.slurm_config.partition,
-            'SLURM_NODES': str(self.slurm_config.nodes),
-            'SLURM_GPUS_PER_NODE': str(self.slurm_config.gpus_per_node),
-            'SLURM_TIME': self.slurm_config.time,
-            'SLURM_MEM': self.slurm_config.memory,
-            'SLURM_CPUS_PER_TASK': str(self.slurm_config.cpus_per_task),
-            
-            # Add workspace paths
-            'PROJECT_ROOT': str(workspace_path),
+        # Variables are categorized into:
+        # - Host-only vars: Used by bash script on host (not passed to container)
+        # - APPTAINERENV_ vars: Automatically passed to container with --cleanenv
+        
+        # HOST-ONLY variables (used by bash script, NOT passed to container)
+        host_vars = {
             'DATA_INPUT_DIR': str(self.data_input_dir),
             'DATA_OUTPUT_DIR': str(self.data_output_dir),
             'MODELS_DIR': str(self.models_dir),
             'LOGS_DIR': str(self.logs_dir),
             'CONTAINERS_DIR': str(self.containers_dir),
             'CONTAINER_DEF': str(container_def),
-            
-            # Add AIFLUX_ prefixed variables for tests
-            'AIFLUX_DATA_DIR': str(self.data_dir),
-            'AIFLUX_MODELS_DIR': str(self.models_dir),
-            'AIFLUX_LOGS_DIR': str(self.logs_dir),
-            'AIFLUX_CONTAINERS_DIR': str(self.containers_dir),
-            'AIFLUX_WORKSPACE': str(workspace_path),
-            
-            # Set Apptainer paths explicitly
             'APPTAINER_TMPDIR': str(workspace_path / "tmp"),
             'APPTAINER_CACHEDIR': str(workspace_path / "tmp" / "cache"),
             'SINGULARITY_TMPDIR': str(workspace_path / "tmp"),
             'SINGULARITY_CACHEDIR': str(workspace_path / "tmp" / "cache"),
-            
-            # Add Ollama paths
-            'OLLAMA_HOME': str(self.workspace / ".ollama"),
-            'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),
-            
-            # Add pre-calculated GPU configuration
-            'CUDA_VISIBLE_DEVICES': cuda_visible_devices,
-            'OLLAMA_SCHED_SPREAD': ollama_sched_spread,
+            'OLLAMA_HOME': str(self.workspace / ".ollama"),  # Used for mkdir and --bind
+            'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),  # Used for mkdir
+            'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
+        }
+        
+        # CONTAINER variables (automatically injected with --cleanenv via APPTAINERENV_ prefix)
+        # The prefix is removed inside the container, so APPTAINERENV_FOO becomes FOO
+        container_vars = {
+            'APPTAINERENV_PROJECT_ROOT': str(workspace_path),
+            'APPTAINERENV_OLLAMA_HOME': str(self.workspace / ".ollama"),
+            'APPTAINERENV_OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),
+            'APPTAINERENV_OLLAMA_ORIGINS': '*',
+            'APPTAINERENV_OLLAMA_INSECURE': 'true',
+            'APPTAINERENV_CUDA_VISIBLE_DEVICES': cuda_visible_devices,
+            'APPTAINERENV_OLLAMA_SCHED_SPREAD': ollama_sched_spread,
+            'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
+            'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
         }
         
         # Get base environment
         env = dict(os.environ)
         
-        # Add all overrides
-        env.update(overrides)
+        # Check for None values and log them
+        all_vars = {**host_vars, **container_vars}
+        none_values = {k: v for k, v in all_vars.items() if v is None}
+        if none_values:
+            logger.warning(f"The following environment variables are None and will be skipped: {list(none_values.keys())}")
+        
+        # Add all variables, filtering out None values
+        env.update({k: v for k, v in host_vars.items() if v is not None})
+        env.update({k: v for k, v in container_vars.items() if v is not None})
         
         return env
     
@@ -232,6 +232,7 @@ class SlurmRunner:
             rebuild_requested = bool(kwargs.get("rebuild", False))
         except Exception:
             rebuild_requested = False
+        # Host-only variable (used in bash script if condition)
         env["AIFLUX_FORCE_REBUILD"] = "1" if rebuild_requested or os.getenv("AIFLUX_FORCE_REBUILD") == "1" else "0"
         
         # Add processor configuration to environment following the established priority system
@@ -245,8 +246,10 @@ class SlurmRunner:
             env_var="MODEL_NAME",
             default="llama3.2:3b"  # Default model from templates
         )
-        env['MODEL_NAME'] = str(model_name)
+        # Host-only (used in bash script for model pull)
         env['OLLAMA_MODEL_NAME'] = str(model_name)
+        # Container variable (used in Python inside container)
+        env['APPTAINERENV_MODEL_NAME'] = str(model_name)
         
         # Get batch size using config manager priority system
         batch_size = self.config_manager.get_parameter(
@@ -256,7 +259,7 @@ class SlurmRunner:
             env_var="BATCH_SIZE",
             default="4"
         )
-        env['BATCH_SIZE'] = str(batch_size)
+        env['APPTAINERENV_BATCH_SIZE'] = str(batch_size)
         
         # Get save_frequency using config manager priority system
         save_frequency = self.config_manager.get_parameter(
@@ -266,7 +269,7 @@ class SlurmRunner:
             env_var="SAVE_FREQUENCY",
             default="50"
         )
-        env['SAVE_FREQUENCY'] = str(save_frequency)
+        env['APPTAINERENV_SAVE_FREQUENCY'] = str(save_frequency)
         
         # Add additional parameters from kwargs through config manager
         for key, value in kwargs.items():
@@ -285,14 +288,17 @@ class SlurmRunner:
             
             if param_value is not None:
                 if isinstance(param_value, (str, int, float, bool)):
-                    env[key.upper()] = str(param_value)
+                    env[f'APPTAINERENV_{key.upper()}'] = str(param_value)
                 elif isinstance(param_value, (dict, list)):
-                    env[key.upper()] = json.dumps(param_value)
+                    env[f'APPTAINERENV_{key.upper()}'] = json.dumps(param_value)
         
         # Find available port
         port = self._find_available_port()
+        # Host variable (used in bash curl commands)
         env['OLLAMA_PORT'] = str(port)
-        env['OLLAMA_HOST'] = f"0.0.0.0:{port}"
+        # Container variables (used in Python inside container and ollama server)
+        env['APPTAINERENV_OLLAMA_PORT'] = str(port)
+        env['APPTAINERENV_OLLAMA_HOST'] = f"0.0.0.0:{port}"
 
         # Get LLM Engine
         # Todo add vllm, ollama is default
@@ -320,25 +326,6 @@ class SlurmRunner:
         
         job_script.extend([
             "",
-            "# Load required modules",
-            "module purge",
-            "",
-            "# Try loading GCC",
-            "for gcc_version in '11.4.0' '11.3.0'; do",
-            "    if module load gcc/$gcc_version &>/dev/null; then",
-            "        echo \"Loaded gcc/$gcc_version\"",
-            "        break",
-            "    fi",
-            "done",
-            "",
-            "# Try loading CUDA",
-            "for cuda_version in '12.2.1' '11.7.0'; do",
-            "    if module load cuda/$cuda_version &>/dev/null; then",
-            "        echo \"Loaded cuda/$cuda_version\"",
-            "        break",
-            "    fi",
-            "done",
-            "",
             "# Create all necessary directories",
             "mkdir -p $DATA_INPUT_DIR $DATA_OUTPUT_DIR $MODELS_DIR $LOGS_DIR $CONTAINERS_DIR $APPTAINER_TMPDIR $APPTAINER_CACHEDIR",
             "",
@@ -347,20 +334,12 @@ class SlurmRunner:
             "",
             "# Build container if needed (or if forced)",
             "if [ \"$AIFLUX_FORCE_REBUILD\" = \"1\" ] || [ ! -f \"$CONTAINERS_DIR/llm_processor.sif\" ]; then",
-            "    APPTAINER_DEBUG=1 apptainer build --force $CONTAINERS_DIR/llm_processor.sif $CONTAINER_DEF",
+            "    apptainer build --force $CONTAINERS_DIR/llm_processor.sif $CONTAINER_DEF",
             "fi",
             "",
-            "# Start server",
-            "OLLAMA_DEBUG=1 apptainer exec --nv \\",
-            "    --env OLLAMA_HOST=$OLLAMA_HOST \\",
-            "    --env OLLAMA_ORIGINS=* \\",
-            "    --env OLLAMA_MODELS=$OLLAMA_MODELS \\",
-            "    --env OLLAMA_HOME=$OLLAMA_HOME \\",
-            "    --env OLLAMA_INSECURE=true \\",
-            "    --env CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES \\",
-            "    --env OLLAMA_SCHED_SPREAD=$OLLAMA_SCHED_SPREAD \\",
-            "    --env CURL_CA_BUNDLE= \\",
-            "    --env SSL_CERT_FILE= \\",
+            "# Start server with clean environment",
+            "# All APPTAINERENV_* variables are automatically passed in (prefix removed)",
+            "OLLAMA_DEBUG=1 apptainer exec --nv --cleanenv \\",
             "    --bind $DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$OLLAMA_HOME:$OLLAMA_HOME \\",
             "    $CONTAINERS_DIR/llm_processor.sif \\",
             "    ollama serve &",
