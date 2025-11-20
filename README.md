@@ -25,6 +25,7 @@ AI-Flux processes JSONL files in a standardized OpenAI-compatible batch API form
 - [Configuration Guide](docs/CONFIGURATION.md) - How to configure AI-Flux
 - [Models Guide](docs/MODELS.md) - Supported models and requirements
 - [Repository Structure](docs/REPOSITORY_STRUCTURE.md) - Codebase organization
+- [Testing Guide](TESTING.md) - How to run tests
 
 ## Installation
 
@@ -93,6 +94,14 @@ AI-Flux includes a command-line interface for submitting batch processing jobs:
 ```bash
 # Process JSONL file directly (core functionality)
 aiflux run --model llama3.2:3b --input data/prompts.jsonl --output results/output.json
+
+# With SLURM account and partition
+aiflux run \
+  --account your-account \
+  --partition gpu \
+  --model llama3.2:3b \
+  --input data/prompts.jsonl \
+  --output results/output.json
 ```
 
 For detailed command options:

@@ -17,6 +17,19 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pydantic>=2.11.7"
 ]
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-xdist>=3.0.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-xdist>=3.0.0",
+]
 
 [project.scripts]
 aiflux = "aiflux.cli:main"
