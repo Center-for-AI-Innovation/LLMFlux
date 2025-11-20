@@ -89,6 +89,7 @@ def create_vllm_batch_script(
         "fi",
         "# Check if model exists, try to pull if it doesn't",
         "echo Running curl command",
+        "curl -s \"http://localhost:$VLLM_PORT/api/tags\"",
         "if ! curl -s \"http://localhost:$VLLM_PORT/api/tags\" | grep -q \"\\\"name\\\":\\\"$VLLM_MODEL_NAME\\\"\"; then",
         "    echo \"Model not found, pulling base model ${VLLM_MODEL_NAME}...\"",
         "    curl -X POST \"http://localhost:$VLLM_PORT/api/pull\" -d '{\"name\": \"'\"$VLLM_MODEL_NAME\"'\"}' -H \"Content-Type: application/json\"",

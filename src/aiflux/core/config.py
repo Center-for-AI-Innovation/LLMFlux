@@ -442,7 +442,7 @@ class Config:
         if custom_config_path:
             config_path = Path(custom_config_path)
         else:
-            config_path = self.templates_dir / model_type / f"{model_size}.yaml"
+            config_path = self.templates_dir / "qwen2.5" / "7b.yaml"
         
         try:
             with open(config_path, 'r') as f:
