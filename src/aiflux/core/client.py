@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """OpenAI-compatible client for LLM services."""
     
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
+    def __init__(self, engine: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None):
         """Initialize LLM client.
         
         Args:
@@ -32,9 +32,12 @@ class LLMClient:
         """
         # Use OLLAMA_HOST env var if set, otherwise use provided host or default
         if host is None:
-            host = os.getenv('OLLAMA_HOST', None)
+            if engine.lower() == "ollama":
+                host = os.getenv('OLLAMA_HOST', None)
+            else:
+                host = os.getenv('VLLM_HOST', None)
             
-        # If OLLAMA_HOST contains a full URL, use it directly
+        # If <ENGINE>_HOST contains a full URL, use it directly
         if host and (host.startswith('http://') or host.startswith('https://')):
             self.base_url = host
         else:
@@ -43,16 +46,19 @@ class LLMClient:
                 host = 'localhost'
                 
             if port is None:
-                port_str = os.getenv('OLLAMA_PORT', '11434')
+                if engine.lower() == "ollama":
+                    port_str = os.getenv('OLLAMA_PORT', '11434')
+                else:
+                    port_str = os.getenv('VLLM_PORT', '11434')
                 try:
                     port = int(port_str)
                 except ValueError:
-                    logger.warning(f"Invalid OLLAMA_PORT value: {port_str}, using default 11434")
+                    logger.warning(f"Invalid <ENGINE>_PORT value: {port_str}, using default 11434")
                     port = 11434
             
             self.base_url = f"http://{host}:{port}"
         
-        logger.info(f"Connecting to Ollama at: {self.base_url}")
+        logger.info(f"Connecting to LLM engine at: {self.base_url}")
         self.session = requests.Session()
     
     def list_models(self) -> List[str]:
@@ -174,6 +180,7 @@ class LLMClient:
     def chat(
         self,
         model: str,
+        engine: str,
         messages: List[Dict[str, Any]],
         **kwargs
     ) -> str:
@@ -182,6 +189,7 @@ class LLMClient:
         Args:
             model: Name of the model to use
             messages: Array of messages in OpenAI format
+            engine: Either 'ollama' or 'vllm'
             **kwargs: Additional model parameters:
                 - temperature: float
                 - top_p: float
@@ -195,11 +203,12 @@ class LLMClient:
             requests.exceptions.RequestException: If API call fails
             ValueError: If model is not available
         """
-        # Ensure model is available
-        if not self.ensure_model_available(model):
-            error_msg = f"Model {model} is not available and could not be pulled"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+        # Ensure model is available for ollama (not necessary for vllm)
+        if engine == 'ollama':
+            if not self.ensure_model_available(model):
+                error_msg = f"Model {model} is not available and could not be pulled"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
         
         url = f"{self.base_url}/v1/chat/completions"
         
