@@ -192,3 +192,6 @@ results/*
 # Data
 data/*
 
+# Benchmark data
+src/aiflux/benchmark_data/*
+
