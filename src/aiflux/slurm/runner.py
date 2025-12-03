@@ -261,8 +261,16 @@ class SlurmRunner:
         # Load the full model configuration from the user's input
         model_identifier = kwargs.get('model', 'llama3.2:3b')
         custom_config_path = kwargs.get('custom_config_path')
+        
+        try:
+            model_type, model_size = model_identifier.split(':', 1)
+        except ValueError:
+            logger.error(f"Invalid model format: '{model_identifier}'. Expected format 'type:size'.")
+            return "1"
+
         model_config = self.config_manager.get_config().load_model_config(
-            model_identifier,
+            model_type,
+            model_size,
             custom_config_path=custom_config_path
         )
 
