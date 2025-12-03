@@ -258,31 +258,29 @@ class SlurmRunner:
         # Add processor configuration to environment following the established priority system
         # Use ConfigManager for consistent parameter prioritization
         
-        # Set model name using proper configuration priority system
-        model_name = self.config_manager.get_parameter(
-            param_name="model_config.name",
-            code_value=kwargs.get('model'),
-            obj=processor,
-            env_var="MODEL_NAME",
-            default="llama3.2:3b"  # Default model from templates
+        # Load the full model configuration from the user's input
+        model_identifier = kwargs.get('model', 'llama3.2:3b')
+        custom_config_path = kwargs.get('custom_config_path')
+        model_config = self.config_manager.load_model_config(
+            model_identifier,
+            custom_config_path=custom_config_path
         )
-        # Host-only (used in bash script for model pull)
+
+        if not model_config:
+            logger.error(f"Failed to load model configuration for '{model_identifier}'.")
+            # Exit gracefully if model config is not found
+            return "1"
+
+        # Set environment variables for both Ollama and vLLM based on the loaded config
+        model_name = model_config.name
+        model_hf_name = model_config.hf_name
+
+        # Host-only (used in bash script for model pull/load)
         env['OLLAMA_MODEL_NAME'] = str(model_name)
+        env['VLLM_MODEL_NAME'] = str(model_hf_name)
+
         # Container variable (used in Python inside container)
         env['APPTAINERENV_MODEL_NAME'] = str(model_name)
-        
-        # Get HuggingFace model name using config manager priority system
-        # vLLM uses HuggingFace model names (e.g., meta-llama/Llama-3.2-3B-Instruct)
-        model_hf_name = self.config_manager.get_parameter(
-            param_name="model_config.hf_name",
-            code_value=kwargs.get('hf_name'),
-            obj=processor,
-            env_var="HF_MODEL_NAME",
-            default="meta-llama/Llama-3.2-3B-Instruct"  # Default model from templates
-        )
-        # Host-only (used in bash script)
-        env['VLLM_MODEL_NAME'] = str(model_hf_name)
-        # Container variable (used in Python inside container)
         env['APPTAINERENV_VLLM_MODEL_NAME'] = str(model_hf_name)
 
         # Get batch size using config manager priority system

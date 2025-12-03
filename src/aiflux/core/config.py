@@ -431,52 +431,50 @@ class Config:
         """Load and validate model configuration.
         
         Args:
-            model_type: Type of model (e.g., 'qwen', 'llama') or the huggingface name (e.g., 'Qwen/Qwen2.5-7B-Instruct')
+            model_type: Type of model (e.g., 'qwen', 'llama')
             model_size: Size of model (e.g., '7b', '70b')
             custom_config_path: Optional path to custom config
         Returns:
             Validated ModelConfig
-            
-        Raises:
-            ValueError: If configuration is invalid
         """
-        if custom_config_path:
-            config_path = Path(custom_config_path)
-        else:
-            config_path = self.templates_dir / model_type / f"{model_size}.yaml"
-        
         try:
-            with open(config_path, 'r') as f:
-                config_data = yaml.safe_load(f)
+            config_data = None
+            
+            if custom_config_path:
+                with open(custom_config_path, 'r') as f:
+                    config_data = yaml.safe_load(f)
+            else:
+                with open(self.templates_dir / 'models.yaml', 'r') as f:
+                    all_models_data = yaml.safe_load(f)
+                
+                model_key = f"{model_type}-{model_size}"
+                models = all_models_data.get('models', {})
+                
+                if model_key in models:
+                    config_data = models[model_key]
+                else:
+                    raise FileNotFoundError(f"Model '{model_key}' not found in models.yaml")
 
-
-
-            # Create basic model config
-            model_config = ModelConfig(
-                name=f"{model_type}:{model_size}",
+            return ModelConfig(
+                name=config_data.get("name", f"{model_type}:{model_size}"),
                 hf_name=config_data.get("hf_name"),
                 type=model_type,
                 size=model_size,
-                parameters=ModelParameters(
-                    temperature=config_data.get("parameters", {}).get("temperature", 0.7),
-                    max_tokens=config_data.get("parameters", {}).get("max_tokens", 2048),
-                    top_p=config_data.get("parameters", {}).get("top_p", 0.9),
-                    top_k=config_data.get("parameters", {}).get("top_k", 40),
-                    stop_sequences=config_data.get("parameters", {}).get("stop_sequences", None)
-                )
+                parameters=ModelParameters(**config_data.get("parameters", {})),
+                resources=ResourceConfig(**config_data.get("resources", {})) if "resources" in config_data else None,
+                system=SystemConfig(**config_data.get("system", {})) if "system" in config_data else None,
+                validation=ValidationConfig(**config_data.get("validation", {})) if "validation" in config_data else None,
+                requirements=RequirementsConfig(**config_data.get("requirements", {})) if "requirements" in config_data else None,
             )
             
-            return model_config
-            
-        except Exception as e:
-            # Return default config if file not found
-            model_config = ModelConfig(
+        except (FileNotFoundError, KeyError, TypeError) as e:
+            logging.warning(f"Could not load config for {model_type}:{model_size}. Using default. Reason: {e}")
+            return ModelConfig(
                 name=f"{model_type}:{model_size}",
                 hf_name=f"{model_type}",
                 type=model_type,
                 size=model_size
             )
-            return model_config
     
     def get_slurm_config(
         self,
