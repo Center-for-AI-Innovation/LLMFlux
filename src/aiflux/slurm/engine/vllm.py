@@ -12,7 +12,14 @@ def create_vllm_batch_script(
         input_file: Path,
         output_file: Path,
         slurm_config,
+        **kwargs,
 ):
+    # Determine the in-container path for the input file
+    in_container_input_path = f"/app/data/input/{Path(input_file).name}"
+
+    # Determine the in-container path for the output file
+    in_container_output_path = f"/app/data/output/{Path(output_file).name}"
+
     # Create SLURM job script
     job_script = [
         "#!/bin/bash",
@@ -141,9 +148,8 @@ def create_vllm_batch_script(
         "",
         "# Load model configuration",
         "config = Config()",
-        "model_name = os.environ.get('VLLM_MODEL_NAME', 'llama3.2:3b')",
-        "model_type = model_name.split(':')[0] if ':' in model_name else model_name",
-        "model_size = model_name.split(':')[1] if ':' in model_name else None",
+        "model_identifier = os.environ.get('OLLAMA_MODEL_NAME', 'llama3.2:3b')",
+        "model_type, model_size = model_identifier.split(':', 1)",
         "",
         "try:",
         "    model_config = config.load_model_config(model_type, model_size)",
@@ -169,7 +175,7 @@ def create_vllm_batch_script(
         "    if key.upper() in os.environ:",
         "        run_kwargs[key] = os.environ[key.upper()]",
         "",
-        f"batch_processor.run('{input_file}', '{output_file}', **run_kwargs)",
+        f"batch_processor.run('{in_container_input_path}', '{in_container_output_path}', **run_kwargs)",
         "\"",
         "",
         "# Cleanup",
