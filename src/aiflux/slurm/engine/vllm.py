@@ -12,13 +12,7 @@ def create_vllm_batch_script(
         input_file: Path,
         output_file: Path,
         slurm_config,
-        **kwargs,
 ):
-    # Determine the in-container path for the input file
-    in_container_input_path = f"/app/data/input/{Path(input_file).name}"
-
-    # Determine the in-container path for the output file
-    in_container_output_path = f"/app/data/output/{Path(output_file).name}"
 
     # Create SLURM job script
     job_script = [
@@ -175,7 +169,6 @@ def create_vllm_batch_script(
         "    if key.upper() in os.environ:",
         "        run_kwargs[key] = os.environ[key.upper()]",
         "",
-        f"batch_processor.run('{in_container_input_path}', '{in_container_output_path}', **run_kwargs)",
         "\"",
         "",
         "# Cleanup",
