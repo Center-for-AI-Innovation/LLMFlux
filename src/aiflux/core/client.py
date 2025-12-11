@@ -23,18 +23,31 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """OpenAI-compatible client for LLM services."""
     
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
+    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, engine: str = 'ollama'):
         """Initialize LLM client.
         
         Args:
             host: Optional host address
             port: Optional port number
+            engine: The LLM engine ('ollama' or 'vllm')
         """
-        # Use OLLAMA_HOST env var if set, otherwise use provided host or default
+        self.engine = engine
+        
+        # Determine host and port based on engine
+        if self.engine == 'vllm':
+            host_env_var = 'VLLM_HOST'
+            port_env_var = 'VLLM_PORT'
+            default_port = 8000
+        else:  # Default to ollama
+            host_env_var = 'OLLAMA_HOST'
+            port_env_var = 'OLLAMA_PORT'
+            default_port = 11434
+
+        # Use env var if set, otherwise use provided host or default
         if host is None:
-            host = os.getenv('OLLAMA_HOST', None)
+            host = os.getenv(host_env_var, None)
             
-        # If OLLAMA_HOST contains a full URL, use it directly
+        # If host contains a full URL, use it directly
         if host and (host.startswith('http://') or host.startswith('https://')):
             self.base_url = host
         else:
@@ -43,16 +56,16 @@ class LLMClient:
                 host = 'localhost'
                 
             if port is None:
-                port_str = os.getenv('OLLAMA_PORT', '11434')
+                port_str = os.getenv(port_env_var, str(default_port))
                 try:
                     port = int(port_str)
                 except ValueError:
-                    logger.warning(f"Invalid OLLAMA_PORT value: {port_str}, using default 11434")
-                    port = 11434
+                    logger.warning(f"Invalid {port_env_var} value: {port_str}, using default {default_port}")
+                    port = default_port
             
             self.base_url = f"http://{host}:{port}"
         
-        logger.info(f"Connecting to Ollama at: {self.base_url}")
+        logger.info(f"Connecting to {self.engine} at: {self.base_url}")
         self.session = requests.Session()
     
     def list_models(self) -> List[str]:
@@ -100,6 +113,11 @@ class LLMClient:
         Returns:
             True if model exists, False otherwise
         """
+        # For vLLM, the model is loaded at server startup, so we don't need to check.
+        if self.engine == 'vllm':
+            logger.debug(f"Running with vLLM engine, skipping model existence check for '{model_name}'.")
+            return True
+
         # Extract base model name before colon
         # base_model = model_name
         # if ":" in model_name:
