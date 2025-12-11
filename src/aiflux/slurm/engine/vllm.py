@@ -126,7 +126,7 @@ def create_vllm_batch_script(
         "",
         "# Load model configuration",
         "config = Config()",
-        "model_identifier = os.environ.get('VLLM_MODEL_NAME', 'llama3.2:3b')",
+        "model_identifier = os.environ.get('MODEL_IDENTIFIER', 'llama3.2:3b')",
         "model_type, model_size = model_identifier.split(':', 1)",
         "",
         "try:",

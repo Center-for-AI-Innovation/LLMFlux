@@ -288,6 +288,7 @@ class SlurmRunner:
         env['VLLM_MODEL_NAME'] = str(model_hf_name)
 
         # Container variable (used in Python inside container)
+        env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
         env['APPTAINERENV_MODEL_NAME'] = str(model_name)
         env['APPTAINERENV_VLLM_MODEL_NAME'] = str(model_hf_name)
 
