@@ -66,8 +66,8 @@ class BatchProcessor:
         logger.info("Initializing LLM client")
         self.client = LLMClient(engine=self.model_config.engine)
         
-        # Check if model exists and warm it up
-        model = self.model_config.name
+        # Get the appropriate model name for this engine
+        model = self.model_config.get_model_name_for_engine()
         logger.info(f"Warming up model: {model}")
         
         try:
@@ -159,7 +159,8 @@ class BatchProcessor:
             Chat completion response
         """
         messages = body.get('messages', [])
-        model = body.get('model', self.model_config.name)
+        # Use the engine-appropriate model name
+        model = body.get('model', self.model_config.get_model_name_for_engine())
         
         # Extract parameters with defaults from model config
         temperature = body.get('temperature', self.model_config.parameters.temperature)
@@ -205,7 +206,8 @@ class BatchProcessor:
             Completion response
         """
         prompt = body.get('prompt', '')
-        model = body.get('model', self.model_config.name)
+        # Use the engine-appropriate model name
+        model = body.get('model', self.model_config.get_model_name_for_engine())
         
         # Extract parameters with defaults from model config
         temperature = body.get('temperature', self.model_config.parameters.temperature)

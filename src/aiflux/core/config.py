@@ -85,6 +85,21 @@ class ModelConfig(BaseModel):
     system: Optional[SystemConfig] = None
     validation: Optional[ValidationConfig] = None
     requirements: Optional[RequirementsConfig] = None
+    
+    def get_model_name_for_engine(self) -> str:
+        """Get the appropriate model name for the configured engine.
+        
+        Returns:
+            str: The Ollama name (e.g., 'qwen2.5:7b') if engine is 'ollama',
+                 or the HuggingFace name (e.g., 'Qwen/Qwen2.5-7B-Instruct') if engine is 'vllm'
+        """
+        if self.engine == 'vllm':
+            if self.hf_name:
+                return self.hf_name
+            else:
+                raise ValueError(f"Model config for '{self.name}' does not have hf_name set for vLLM engine")
+        else:
+            return self.name
 
 def _parse_extra_sbatch_args() -> Optional[Dict[str, str]]:
     """Parse SLURM_EXTRA_ARGS from environment variable.

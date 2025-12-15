@@ -279,18 +279,37 @@ class SlurmRunner:
             # Exit gracefully if model config is not found
             return "1"
 
-        # Set environment variables for both Ollama and vLLM based on the loaded config
-        model_name = model_config.name
-        model_hf_name = model_config.hf_name
+        # Select the appropriate model name based on the engine
+        if self.engine.engine == 'ollama':
+            selected_model_name = model_config.name  # e.g., "qwen2.5:7b"
+            logger.info(f"Using Ollama model name: {selected_model_name}")
+        elif self.engine.engine == 'vllm':
+            selected_model_name = model_config.hf_name  # e.g., "Qwen/Qwen2.5-7B-Instruct"
+            logger.info(f"Using vLLM (HuggingFace) model name: {selected_model_name}")
+        else:
+            logger.error(f"Unknown engine: {self.engine.engine}")
+            return "1"
 
-        # Host-only (used in bash script for model pull/load)
-        env['OLLAMA_MODEL_NAME'] = str(model_name)
-        env['VLLM_MODEL_NAME'] = str(model_hf_name)
+        # Set engine-specific environment variables
+        # Host-only variables (used in bash scripts)
+        if self.engine.engine == 'ollama':
+            env['OLLAMA_MODEL_NAME'] = str(selected_model_name)
+            # Also set the port for ollama
+            env['OLLAMA_HOST'] = '0.0.0.0'
+        elif self.engine.engine == 'vllm':
+            env['VLLM_MODEL_NAME'] = str(selected_model_name)
+            env['VLLM_HOST'] = '0.0.0.0'
 
-        # Container variable (used in Python inside container)
+        # Container variables (used in Python inside container)
+        # Always set MODEL_IDENTIFIER for reference
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
-        env['APPTAINERENV_MODEL_NAME'] = str(model_name)
-        env['APPTAINERENV_VLLM_MODEL_NAME'] = str(model_hf_name)
+        
+        # Set engine-specific model names for the container
+        if self.engine.engine == 'ollama':
+            env['APPTAINERENV_MODEL_NAME'] = str(selected_model_name)
+            env['APPTAINERENV_OLLAMA_MODEL_NAME'] = str(selected_model_name)
+        elif self.engine.engine == 'vllm':
+            env['APPTAINERENV_VLLM_MODEL_NAME'] = str(selected_model_name)
 
         # Get batch size using config manager priority system
         batch_size = self.config_manager.get_parameter(
