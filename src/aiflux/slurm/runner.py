@@ -303,6 +303,8 @@ class SlurmRunner:
         # Container variables (used in Python inside container)
         # Always set MODEL_IDENTIFIER for reference
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
+        # Always set ENGINE so the container knows which engine it's running
+        env['APPTAINERENV_ENGINE'] = str(self.engine.engine)
         
         # Set engine-specific model names for the container
         if self.engine.engine == 'ollama':
