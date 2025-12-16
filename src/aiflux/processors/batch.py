@@ -123,7 +123,7 @@ class BatchProcessor:
                     input=item,
                     output=response,
                     metadata={
-                        "model": self.model_config.name,
+                        "model": self.model_config.get_model_name_for_engine(),
                         "timestamp": datetime.datetime.utcnow().isoformat(),
                         **metadata
                     }
@@ -139,7 +139,7 @@ class BatchProcessor:
                     output=None,
                     error=str(e),
                     metadata={
-                        "model": self.model_config.name,
+                        "model": self.model_config.get_model_name_for_engine(),
                         "timestamp": datetime.datetime.utcnow().isoformat(),
                         "error": True,
                         **item.get("metadata", {})
@@ -207,7 +207,7 @@ class BatchProcessor:
         """
         prompt = body.get('prompt', '')
         # Use the engine-appropriate model name
-        model = body.get('model', self.model_config.get_model_name_for_engine())
+        model = body.get('model', model)
         
         # Extract parameters with defaults from model config
         temperature = body.get('temperature', self.model_config.parameters.temperature)

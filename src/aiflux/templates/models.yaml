@@ -805,7 +805,8 @@ models:
       temperature: 0.7
       top_p: 0.9
       max_tokens: 2048
-      stop_sequences: []  # Empty for vLLM compatibility
+      stop_sequences:
+      - '###'
     system:
       prompt: You are Qwen, a large language model trained by Alibaba Cloud. You are
         direct and concise in your responses.
