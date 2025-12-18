@@ -217,7 +217,7 @@ def _run_command(args: argparse.Namespace) -> int:
         if args.top_k is not None:
             run_kwargs["top_k"] = args.top_k
 
-        processor.run(input_path=input_path, output_path=output_path or str(Path("results") / "output.json"), **run_kwargs)
+        processor.run(input_path=input_path, output_path=output_path or str(Path("results") / "output.json"), engine=args.engine, **run_kwargs)
         return 0
 
     # Initialize config - engine will be automatically detected from SLURM_ENGINE env var
