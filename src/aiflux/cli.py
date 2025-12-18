@@ -110,6 +110,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
             "time": args.time,
             "mem": args.mem,
             "cpus_per_task": args.cpus_per_task,
+            "engine": args.engine,
         }.items() if value is not None
     }
     # Parse and add extra SBATCH args if provided
@@ -118,7 +119,17 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         slurm_overrides['extra_sbatch_args'] = extra_args
     # Merge CLI overrides with config from .env
     slurm_config = config.get_slurm_config(slurm_overrides)
-    runner = SlurmRunner(config=slurm_config)
+    if args.engine == "vllm":
+        engine_config = EngineConfig(
+            engine="vllm",
+            home=str(config.workspace / ".vllm")
+        )
+    else:
+        engine_config = EngineConfig(
+            engine="ollama",
+            home=str(config.workspace / ".ollama")
+        )
+    runner = SlurmRunner(config=slurm_config, engine_config=engine_config)
 
     kwargs = {
         "model": args.model,
@@ -356,6 +367,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--time", type=str)
     benchmark_parser.add_argument("--mem", type=str)
     benchmark_parser.add_argument("--cpus-per-task", type=int)
+    benchmark_parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"])
     benchmark_parser.add_argument(
         "--sbatch-arg",
         action="append",
