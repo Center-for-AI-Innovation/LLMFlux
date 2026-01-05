@@ -64,8 +64,8 @@ class BatchProcessor:
         """Initialize LLM client and warm up model."""
         # Initialize client, passing the engine from the model config
         logger.info("Initializing LLM client")
-        self.client = LLMClient(engine=engine)
-        
+        self.client = LLMClient(engine=self.model_config.engine)
+                
         # Get the appropriate model name for this engine
         model = self.model_config.get_model_name_for_engine()
         logger.info(f"Warming up model: {model}")
