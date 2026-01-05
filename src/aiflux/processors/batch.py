@@ -60,11 +60,11 @@ class BatchProcessor:
         # Ensure temp directory exists
         os.makedirs(self.temp_dir, exist_ok=True)
     
-    def setup(self):
+    def setup(self, engine: str = "ollama"):
         """Initialize LLM client and warm up model."""
         # Initialize client, passing the engine from the model config
         logger.info("Initializing LLM client")
-        self.client = LLMClient(engine=self.model_config.engine)
+        self.client = LLMClient(engine=engine)
         
         # Get the appropriate model name for this engine
         model = self.model_config.get_model_name_for_engine()
@@ -75,6 +75,7 @@ class BatchProcessor:
             warmup_messages = [{"role": "user", "content": "Hello, world!"}]
             self.client.chat(
                 model=model,
+                engine=engine,
                 messages=warmup_messages,
                 max_tokens=5
             )
@@ -90,10 +91,11 @@ class BatchProcessor:
             self.client.session.close()
             self.client = None
     
-    def process_batch(self, batch: List[Dict[str, Any]]) -> List[OutputResult]:
+    def process_batch(self, engine: str, batch: List[Dict[str, Any]]) -> List[OutputResult]:
         """Process a batch of JSONL items.
         
         Args:
+            engine: Engine used for this run
             batch: List of parsed JSONL items
             
         Returns:
@@ -112,9 +114,9 @@ class BatchProcessor:
                 
                 # Process with client based on URL endpoint
                 if url == '/v1/chat/completions':
-                    response = self._process_chat_completion(body)
+                    response = self._process_chat_completion(engine, body)
                 elif url == '/v1/completions':
-                    response = self._process_completion(body)
+                    response = self._process_completion(engine, body)
                 else:
                     raise ValueError(f"Unsupported URL: {url}")
                 
@@ -149,10 +151,11 @@ class BatchProcessor:
         
         return results
     
-    def _process_chat_completion(self, body: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_chat_completion(self, engine: str, body: Dict[str, Any]) -> Dict[str, Any]:
         """Process chat completion request.
         
         Args:
+            engine: engine used for this run
             body: Request body
             
         Returns:
@@ -171,6 +174,7 @@ class BatchProcessor:
         # Generate response
         response = self.client.chat(
             model=model,
+            engine=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -206,8 +210,7 @@ class BatchProcessor:
             Completion response
         """
         prompt = body.get('prompt', '')
-        # Use the engine-appropriate model name
-        model = body.get('model', model)
+        model = body.get('model', self.model_config.hf_name)
         
         # Extract parameters with defaults from model config
         temperature = body.get('temperature', self.model_config.parameters.temperature)
@@ -243,12 +246,13 @@ class BatchProcessor:
             ]
         }
     
-    def run(self, input_path: str, output_path: str, **kwargs) -> List[Dict[str, Any]]:
+    def run(self, input_path: str, output_path: str, engine: str, **kwargs) -> List[Dict[str, Any]]:
         """Run batch processing on JSONL input file.
         
         Args:
             input_path: Path to JSONL input file
             output_path: Path to save output results
+            engine: the engine being used for this run
             **kwargs: Additional parameters (ignored for compatibility)
             
         Returns:
@@ -257,8 +261,9 @@ class BatchProcessor:
         if not os.path.exists(input_path):
             raise FileNotFoundError(f"Input file not found: {input_path}")
             
-        self.setup()
-        
+        self.setup(engine)
+        print("Setup complete")
+
         try:
             # Process JSONL file
             all_results = []
@@ -271,7 +276,8 @@ class BatchProcessor:
                 
                 # Process batch when it reaches batch size
                 if len(current_batch) >= self.batch_size:
-                    batch_results = self.process_batch(current_batch)
+                    print("processing batch")
+                    batch_results = self.process_batch(engine, current_batch)
                     all_results.extend(batch_results)
                     current_batch = []
                     
@@ -283,7 +289,8 @@ class BatchProcessor:
             
             # Process remaining items
             if current_batch:
-                batch_results = self.process_batch(current_batch)
+                print("processing  batch")
+                batch_results = self.process_batch(engine, current_batch)
                 all_results.extend(batch_results)
                 processed_count += len(batch_results)
                 logger.info(f"Processed {processed_count} items")

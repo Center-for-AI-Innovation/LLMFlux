@@ -72,11 +72,12 @@ class RequirementsConfig(BaseModel):
 
 class ModelConfig(BaseModel):
     """Complete model configuration."""
-    name: str = Field(..., pattern=r"^[a-zA-Z0-9.-]+([-][a-zA-Z0-9.]+)*:((8x)?\d+b|mini|medium|small|vision|large|tiny|instruct)$")
-    hf_name: Optional[str] = Field(None, description="HuggingFace model identifier")
-    engine: str = Field("ollama", pattern=r"^ollama|vllm$")
+    # name: str = Field(..., pattern=r"^[a-zA-Z0-9.-]+([-][a-zA-Z0-9.]+)*:((8x)?\d+b|mini|medium|small|vision|large|tiny|instruct)$")
+    name: str = None
+    hf_name: Optional[str] = None
+    engine: str = Field("ollama")
     type: str = Field("ollama")
-    size: str = Field("7b")
+    size: Optional[str] = None
     parameters: ModelParameters = Field(default_factory=ModelParameters)
     path: Optional[str] = None
     description: Optional[str] = None
@@ -442,6 +443,7 @@ class Config:
         self,
         model_type: str,
         model_size: str = None,
+        engine: str = "ollama",
         custom_config_path: Optional[str] = None,
     ) -> ModelConfig:
         """Load and validate model configuration.
@@ -449,31 +451,29 @@ class Config:
         Args:
             model_type: Type of model (e.g., 'qwen', 'llama')
             model_size: Size of model (e.g., '7b', '70b')
+            engine: Engine to use for this run, either 'ollama' or 'vllm'
             custom_config_path: Optional path to custom config
         Returns:
             Validated ModelConfig
         """
-        try:
-            config_data = None
-            
-            if custom_config_path:
-                with open(custom_config_path, 'r') as f:
-                    config_data = yaml.safe_load(f)
-            else:
-                with open(self.templates_dir / 'models.yaml', 'r') as f:
-                    all_models_data = yaml.safe_load(f)
-                
-                model_key = f"{model_type}-{model_size}"
-                models = all_models_data.get('models', {})
-                
-                if model_key in models:
-                    config_data = models[model_key]
-                else:
-                    raise FileNotFoundError(f"Model '{model_key}' not found in models.yaml")
+        if custom_config_path:
+            config_path = Path(custom_config_path)
+        else:
+            config_path = self.templates_dir / "qwen2.5" / "7b.yaml"
 
-            return ModelConfig(
-                name=config_data.get("name", f"{model_type}:{model_size}"),
+        try:
+            with open(config_path, 'r') as f:
+                config_data = yaml.safe_load(f)
+
+            if model_size:
+                model_name = f"{model_type}:{model_size}"
+            else:
+                model_name = f"{model_type}"
+            # Create basic model config
+            model_config = ModelConfig(
+                name=model_name,
                 hf_name=config_data.get("hf_name"),
+                engine=engine,
                 type=model_type,
                 size=model_size,
                 parameters=ModelParameters(**config_data.get("parameters", {})),
