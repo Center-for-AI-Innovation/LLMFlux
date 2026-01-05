@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """OpenAI-compatible client for LLM services."""
     
-    def __init__(self, host: Optional[str] = None, port: Optional[int] = None, engine: str = 'ollama'):
+    def __init__(self, engine: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None):
         """Initialize LLM client.
         
         Args:
