@@ -167,7 +167,7 @@ def create_ollama_batch_script(
         "    if key.upper() in os.environ:",
         "        run_kwargs[key] = os.environ[key.upper()]",
         "",
-        f"batch_processor.run('{input_file}', '{output_file}', **run_kwargs)",
+        f"batch_processor.run('{input_file}', '{output_file}', 'ollama', **run_kwargs)",
         "\"",
         "",
         "# Cleanup",
