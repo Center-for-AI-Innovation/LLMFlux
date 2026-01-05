@@ -210,7 +210,7 @@ class BatchProcessor:
             Completion response
         """
         prompt = body.get('prompt', '')
-        model = body.get('model', self.model_config.hf_name)
+        model = body.get('model', model)
         
         # Extract parameters with defaults from model config
         temperature = body.get('temperature', self.model_config.parameters.temperature)

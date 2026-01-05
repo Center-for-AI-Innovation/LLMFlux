@@ -32,16 +32,6 @@ class LLMClient:
             engine: The LLM engine ('ollama' or 'vllm')
         """
         self.engine = engine
-        
-        # Determine host and port based on engine
-        if self.engine == 'vllm':
-            host_env_var = 'VLLM_HOST'
-            port_env_var = 'VLLM_PORT'
-            default_port = 8000
-        else:  # Default to ollama
-            host_env_var = 'OLLAMA_HOST'
-            port_env_var = 'OLLAMA_PORT'
-            default_port = 11434
 
         # Use env var if set, otherwise use provided host or default
         if host is None:

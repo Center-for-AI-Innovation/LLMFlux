@@ -75,7 +75,7 @@ class ModelConfig(BaseModel):
     # name: str = Field(..., pattern=r"^[a-zA-Z0-9.-]+([-][a-zA-Z0-9.]+)*:((8x)?\d+b|mini|medium|small|vision|large|tiny|instruct)$")
     name: str = None
     hf_name: Optional[str] = None
-    engine: str = Field("ollama")
+    engine: str = Field("ollama", pattern=r"^ollama|vllm$")    
     type: str = Field("ollama")
     size: Optional[str] = None
     parameters: ModelParameters = Field(default_factory=ModelParameters)
@@ -482,6 +482,7 @@ class Config:
                 validation=ValidationConfig(**config_data.get("validation", {})) if "validation" in config_data else None,
                 requirements=RequirementsConfig(**config_data.get("requirements", {})) if "requirements" in config_data else None,
             )
+            return model_config
             
         except (FileNotFoundError, KeyError, TypeError) as e:
             logging.warning(f"Could not load config for {model_type}:{model_size}. Using default. Reason: {e}")
