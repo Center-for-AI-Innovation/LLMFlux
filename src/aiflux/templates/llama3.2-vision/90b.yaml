@@ -1,5 +1,6 @@
 # Llama 3.2 Vision 90B Configuration
 name: "llama3.2-vision:90b"
+hf_name: "meta-llama/Llama-3.2-90B-Vision-Instruct"
 
 resources:
   gpu_layers: 80

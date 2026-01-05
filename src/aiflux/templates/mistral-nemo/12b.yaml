@@ -1,5 +1,6 @@
 # Mistral Nemo 12B Configuration
 name: "mistral-nemo:12b"
+hf_name: "mistralai/Mistral-Nemo-Instruct-2407"
 
 resources:
   gpu_layers: 40

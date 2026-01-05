@@ -29,8 +29,11 @@ class LLMClient:
         Args:
             host: Optional host address
             port: Optional port number
+            engine: The LLM engine ('ollama' or 'vllm')
         """
-        # Use OLLAMA_HOST env var if set, otherwise use provided host or default
+        self.engine = engine
+
+        # Use env var if set, otherwise use provided host or default
         if host is None:
             if engine.lower() == "ollama":
                 host = os.getenv('OLLAMA_HOST', None)
@@ -67,7 +70,7 @@ class LLMClient:
         Returns:
             List of available model names
         """
-        url = f"{self.base_url}/models"
+        url = f"{self.base_url}/api/tags"
         try:
             logger.debug(f"Listing models from: {url}")
             response = self.session.get(url)
@@ -106,6 +109,11 @@ class LLMClient:
         Returns:
             True if model exists, False otherwise
         """
+        # For vLLM, the model is loaded at server startup, so we don't need to check.
+        if self.engine == 'vllm':
+            logger.debug(f"Running with vLLM engine, skipping model existence check for '{model_name}'.")
+            return True
+
         # Extract base model name before colon
         # base_model = model_name
         # if ":" in model_name:
