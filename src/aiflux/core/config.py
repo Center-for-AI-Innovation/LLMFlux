@@ -456,14 +456,24 @@ class Config:
         Returns:
             Validated ModelConfig
         """
-        if custom_config_path:
-            config_path = Path(custom_config_path)
-        else:
-            config_path = self.templates_dir / "qwen2.5" / "7b.yaml"
 
         try:
-            with open(config_path, 'r') as f:
-                config_data = yaml.safe_load(f)
+            config_data = None
+
+            if custom_config_path:
+                with open(custom_config_path, 'r') as f:
+                    config_data = yaml.safe_load(f)
+            else:
+                with open(self.templates_dir / 'models.yaml', 'r') as f:
+                    all_models_data = yaml.safe_load(f)
+
+                model_key = f"{model_type}-{model_size}"
+                models = all_models_data.get('models', {})
+
+                if model_key in models:
+                    config_data = models[model_key]
+                else:
+                    raise FileNotFoundError(f"Model '{model_key}' not found in models.yaml")
 
             if model_size:
                 model_name = f"{model_type}:{model_size}"
