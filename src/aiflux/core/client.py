@@ -70,7 +70,7 @@ class LLMClient:
         Returns:
             List of available model names
         """
-        url = f"{self.base_url}/models"
+        url = f"{self.base_url}/api/tags"
         try:
             logger.debug(f"Listing models from: {url}")
             response = self.session.get(url)
