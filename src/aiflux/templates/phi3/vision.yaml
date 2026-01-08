@@ -1,5 +1,6 @@
 # Phi-3 Vision Configuration
 name: "phi3:vision"
+hf_name: "microsoft/Phi-3-vision-128k-instruct"
 
 resources:
   gpu_layers: 40

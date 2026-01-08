@@ -141,6 +141,11 @@ class SlurmRunner:
             'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
             'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
         }
+        
+        # Add HuggingFace token if available (for accessing gated models)
+        hf_token = os.getenv('HUGGINGFACE_TOKEN')
+        if hf_token:
+            container_vars['APPTAINERENV_HF_TOKEN'] = hf_token
 
         # Get base environment
         env = dict(os.environ)
@@ -253,19 +258,60 @@ class SlurmRunner:
         # Add processor configuration to environment following the established priority system
         # Use ConfigManager for consistent parameter prioritization
         
-        # Set model name using proper configuration priority system
-        model_name = self.config_manager.get_parameter(
-            param_name="model_config.name",
-            code_value=kwargs.get('model'),
-            obj=processor,
-            env_var="MODEL_NAME",
-            default="llama3.2:3b"  # Default model from templates
+        # Load the full model configuration from the user's input
+        model_identifier = kwargs.get('model', 'llama3.2:3b')
+        custom_config_path = kwargs.get('custom_config_path')
+        
+        try:
+            model_type, model_size = model_identifier.split(':', 1)
+        except ValueError:
+            logger.error(f"Invalid model format: '{model_identifier}'. Expected format 'type:size'.")
+            return "1"
+
+        model_config = self.config_manager.get_config().load_model_config(
+            model_type,
+            model_size,
+            custom_config_path=custom_config_path
         )
-        # Host-only (used in bash script for model pull)
-        env['OLLAMA_MODEL_NAME'] = str(model_name)
-        env["VLLM_MODEL_NAME"] = str(model_name)
-        # Container variable (used in Python inside container)
-        env['APPTAINERENV_MODEL_NAME'] = str(model_name)
+
+        if not model_config:
+            logger.error(f"Failed to load model configuration for '{model_identifier}'.")
+            # Exit gracefully if model config is not found
+            return "1"
+
+        # Select the appropriate model name based on the engine
+        if self.engine.engine == 'ollama':
+            selected_model_name = model_config.name  # e.g., "qwen2.5:7b"
+            logger.info(f"Using Ollama model name: {selected_model_name}")
+        elif self.engine.engine == 'vllm':
+            selected_model_name = model_config.hf_name  # e.g., "Qwen/Qwen2.5-7B-Instruct"
+            logger.info(f"Using vLLM (HuggingFace) model name: {selected_model_name}")
+        else:
+            logger.error(f"Unknown engine: {self.engine.engine}")
+            return "1"
+
+        # Set engine-specific environment variables
+        # Host-only variables (used in bash scripts)
+        if self.engine.engine == 'ollama':
+            env['OLLAMA_MODEL_NAME'] = str(selected_model_name)
+            # Also set the port for ollama
+            env['OLLAMA_HOST'] = '0.0.0.0'
+        elif self.engine.engine == 'vllm':
+            env['VLLM_MODEL_NAME'] = str(selected_model_name)
+            env['VLLM_HOST'] = '0.0.0.0'
+
+        # Container variables (used in Python inside container)
+        # Always set MODEL_IDENTIFIER for reference
+        env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
+        # Always set ENGINE so the container knows which engine it's running
+        env['APPTAINERENV_ENGINE'] = str(self.engine.engine)
+        
+        # Set engine-specific model names for the container
+        if self.engine.engine == 'ollama':
+            env['APPTAINERENV_MODEL_NAME'] = str(selected_model_name)
+            env['APPTAINERENV_OLLAMA_MODEL_NAME'] = str(selected_model_name)
+        elif self.engine.engine == 'vllm':
+            env['APPTAINERENV_VLLM_MODEL_NAME'] = str(selected_model_name)
 
         # Get batch size using config manager priority system
         batch_size = self.config_manager.get_parameter(

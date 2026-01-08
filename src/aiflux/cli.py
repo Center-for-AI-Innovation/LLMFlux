@@ -41,7 +41,11 @@ def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[st
 
     return result if result else None
 
-def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout_seconds: int = 6 * 3600) -> str | None:
+def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, 
+                                    
+                                    
+                                    
+                                    out_seconds: int = 6 * 3600) -> str | None:
     """Return elapsed runtime (seconds) once SLURM job completes; None when unavailable."""
     start = time.monotonic()
     while time.monotonic() - start < timeout_seconds:

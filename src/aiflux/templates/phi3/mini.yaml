@@ -1,5 +1,6 @@
 # Phi-3 Mini Configuration
 name: "phi3:mini"
+hf_name: "microsoft/Phi-3-mini-4k-instruct"
 
 resources:
   gpu_layers: 24

@@ -1,5 +1,6 @@
 # Llama 3.3 70B Instruct Configuration
 name: "llama3.3:70b-instruct"
+hf_name: "meta-llama/Llama-3.3-70B-Instruct"
 
 resources:
   gpu_layers: 80

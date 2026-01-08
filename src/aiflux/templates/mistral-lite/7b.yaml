@@ -1,5 +1,6 @@
 # MistralLite 7B Configuration
 name: "mistrallite:7b"
+hf_name: "amazon/MistralLite"
 
 resources:
   gpu_layers: 32

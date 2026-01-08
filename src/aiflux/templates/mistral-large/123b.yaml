@@ -1,5 +1,6 @@
 # Mistral Large 123B Configuration
 name: "mistral-large:123b"
+hf_name: "mistralai/Mistral-Large-Instruct-2407"
 
 resources:
   gpu_layers: 48

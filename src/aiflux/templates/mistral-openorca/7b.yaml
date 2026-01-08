@@ -1,5 +1,6 @@
 # Mistral OpenOrca 7B Configuration
 name: "mistral-openorca:7b"
+hf_name: "Open-Orca/Mistral-7B-OpenOrca"
 
 resources:
   gpu_layers: 32
