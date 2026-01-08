@@ -9,14 +9,15 @@ import os
 import sys
 from pathlib import Path
 import logging
-from typing import Optional, Dict, List
+import time
+import subprocess
+from typing import Optional, List, Dict
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
 from .core.config import Config, SlurmConfig, EngineConfig
 from .core.config import Config, SlurmConfig
-from .benchmark_utils import generate_synthetic_prompts, save_prompts_to_jsonl
-
+from .benchmark_utils import create_test_prompts_file
 
 def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[str, str]]:
     """Parse --sbatch-arg arguments into a dictionary.
@@ -40,13 +41,38 @@ def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[st
 
     return result if result else None
 
+def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout_seconds: int = 6 * 3600) -> str | None:
+    """Return elapsed runtime (seconds) once SLURM job completes; None when unavailable."""
+    start = time.monotonic()
+    while time.monotonic() - start < timeout_seconds:
+        result = subprocess.run(
+            [
+                "sacct",
+                "-n",
+                "-P",
+                "-j",
+                f"{job_id}.batch",
+                "--format=State,Elapsed"
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            rows = [row for row in result.stdout.splitlines() if row.strip()]
+            if rows:
+                state, elapsed = rows[0].split("|", 1)
+                state = state.upper()
+                if state in {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"}:
+                    return str(elapsed)
+        print(f"Job {job_id} is still running... Waiting for {poll_seconds} seconds")
+        time.sleep(poll_seconds)
+    return None
 
 def _benchmark_command(args: argparse.Namespace) -> int:
     """Handle the `benchmark` subcommand.
-
     Args:
         args: Parsed CLI arguments
-
     Returns:
         Process exit code
     """
@@ -60,13 +86,11 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         num_prompts = getattr(args, "num_prompts", 50)
-        prompts = generate_synthetic_prompts(num_prompts=num_prompts, model=args.model)
+        temperature = 0.7 if args.temperature is None else args.temperature
+        max_tokens = 500 if args.max_tokens is None else args.max_tokens
 
-        dataset_path = output_dir / f"{name}_prompts.jsonl"
-        save_prompts_to_jsonl(prompts, dataset_path)
-        print(f"Generated {num_prompts} prompts: {dataset_path}")
-        input_path = dataset_path
-
+        input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens)
+        
     # Set output path
     if args.output:
         output_path = args.output
@@ -88,12 +112,10 @@ def _benchmark_command(args: argparse.Namespace) -> int:
             "cpus_per_task": args.cpus_per_task,
         }.items() if value is not None
     }
-
     # Parse and add extra SBATCH args if provided
     extra_args = _parse_sbatch_args(getattr(args, 'sbatch_arg', None))
     if extra_args:
         slurm_overrides['extra_sbatch_args'] = extra_args
-
     # Merge CLI overrides with config from .env
     slurm_config = config.get_slurm_config(slurm_overrides)
     runner = SlurmRunner(config=slurm_config)
@@ -103,10 +125,6 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         "batch_size": getattr(args, "batch_size", 4),
     }
 
-    if getattr(args, "temperature", None) is not None:
-        kwargs["temperature"] = args.temperature
-    if getattr(args, "max_tokens", None) is not None:
-        kwargs["max_tokens"] = args.max_tokens
     if getattr(args, "rebuild", False):
         kwargs["rebuild"] = True
     if getattr(args, "debug", False):
@@ -119,6 +137,24 @@ def _benchmark_command(args: argparse.Namespace) -> int:
 
     job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
+
+    # Create a metrics file that log the time taken to run the batch inference and the number of prompts processed
+    elapsed_seconds = _wait_for_slurm_elapsed_seconds(job_id)
+    try:
+        if elapsed_seconds is None:
+            print("Job finished but elapsed runtime could not be retrieved from sacct.")
+            return 0
+
+        metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(
+            f"Time taken to run the batch inference: {elapsed_seconds}\n"
+            f"Number of prompts processed: {num_prompts}\n"
+        )
+    except Exception as e:
+        print(f"Error writing metrics file: {e}")
+        return 0
+
     return 0
 
 
@@ -204,12 +240,10 @@ def _run_command(args: argparse.Namespace) -> int:
             "cpus_per_task": args.cpus_per_task,
         }.items() if value is not None
     }
-
     # Parse and add extra SBATCH args if provided
     extra_args = _parse_sbatch_args(getattr(args, 'sbatch_arg', None))
     if extra_args:
         slurm_config['extra_sbatch_args'] = extra_args
-
     # Update Slurm config with args
     slurm_config = config.get_slurm_config(slurm_config)
     # SLURM mode
@@ -328,7 +362,6 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KEY=VALUE",
         help="Additional SBATCH directive (e.g., --sbatch-arg reservation=my_res). Can be used multiple times."
     )
-
     # Container rebuild control
     benchmark_parser.add_argument(
         "--rebuild",
@@ -358,4 +391,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

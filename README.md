@@ -163,6 +163,27 @@ aiflux convert dir --input data/documents/ --output data/docs.jsonl --recursive
 
 For code examples of converters, see the [examples directory](examples/).
 
+## Benchmarking
+
+AI-Flux ships with a benchmarking workflow that can source prompts, submit the SLURM job, and collect results/metrics for you.
+
+```bash
+aiflux benchmark --model llama3.2:3b --name nightly --num-prompts 60 \
+  --account ACCOUNT_NAME --partition PARTITION_NAME --nodes 1
+```
+
+- **Prompt sources**: omit `--input` to automatically download and cache LiveBench categories (``benchmark_data/``). Provide `--input path/to/prompts.jsonl` to reuse an existing JSONL file instead. Use `--num-prompts`, `--temperature`, and `--max-tokens` to control synthetic dataset generation.
+- **Outputs**: results default to `results/benchmarks/<name>_results.json` and a metrics summary (`<name>_metrics.txt`) containing elapsed SLURM runtime and number of prompts processed.
+- **Batch tuning**: adjust `--batch-size` for throughput. Pass model arguments such as `--temperature` and `--max-tokens` to forward them to the runner.
+- **SLURM overrides**: forward scheduler settings with `--account`, `--partition`, `--nodes`, `--gpus-per-node`, `--time`, `--mem`, and `--cpus-per-task`.
+- **Job controls**: add `--rebuild` to force an Apptainer image rebuild or `--debug` to keep the generated job script for inspection.
+
+For the complete option reference:
+
+```bash
+aiflux benchmark --help
+```
+
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
