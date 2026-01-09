@@ -161,7 +161,6 @@ def create_vllm_batch_script(
         "if [ -d \"$APPTAINER_CACHEDIR\" ] && [ -w \"$APPTAINER_CACHEDIR\" ]; then",
         "    rm -rf \"$APPTAINER_CACHEDIR\"",
         "fi",
-        "# Cleanup",
         "echo \"Cleaning up...\"",
         "kill $VLLM_PID 2>/dev/null || true",
         "sleep 2",
