@@ -5,7 +5,6 @@ Provides the `aiflux` executable with subcommands.
 """
 
 import argparse
-import os
 import sys
 from pathlib import Path
 import logging
@@ -15,8 +14,7 @@ from typing import Optional, List, Dict
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
-from .core.config import Config, SlurmConfig, EngineConfig
-from .core.config import Config, SlurmConfig
+from .core.config import Config, EngineConfig
 from .benchmark_utils import create_test_prompts_file
 
 def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[str, str]]:
