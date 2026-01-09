@@ -138,6 +138,7 @@ class SlurmRunner:
             'APPTAINERENV_OLLAMA_INSECURE': 'true',
             'APPTAINERENV_CUDA_VISIBLE_DEVICES': cuda_visible_devices,
             'APPTAINERENV_OLLAMA_SCHED_SPREAD': ollama_sched_spread,
+            'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
             'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
             'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
         }
