@@ -26,7 +26,6 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.31.0",
-    "pandas>=2.1.0",
     "pyyaml>=6.0.1",
     "python-dotenv>=1.0.1",
     "pydantic>=2.11.7",
@@ -54,4 +53,4 @@ where = ["src"]
     "templates/models/*/*.yaml",
     "container/*.def",
     "slurm/*.sh"
-] 
+]
