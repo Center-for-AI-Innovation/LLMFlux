@@ -1,4 +1,4 @@
-"""AI-Flux: LLM Batch Processing Pipeline for HPC Systems."""
+"""LLMFlux: LLM Batch Processing Pipeline for HPC Systems."""
 
 from .processors.batch import BatchProcessor
 from .slurm.runner import SlurmRunner
