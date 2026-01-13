@@ -1,12 +1,15 @@
-# AI-Flux: LLM Batch Processing Pipeline for HPC Systems
+# LLMFlux: LLM Batch Processing Pipeline for HPC Systems
 
-A streamlined solution for running Large Language Models (LLMs) in batch mode on HPC systems powered by Slurm. AI-Flux uses the OpenAI-compatible API format with a JSONL-first architecture for all interactions.
+A streamlined solution for running Large Language Models (LLMs) in batch mode on HPC systems powered by Slurm. LLMFlux uses the OpenAI-compatible API format with a JSONL-first architecture, enabling your prompts to flow efficiently through LLM engines at scale.
+
+[![PyPI version](https://badge.fury.io/py/llmflux.svg)](https://pypi.org/project/llmflux/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Architecture
 
 ```
       JSONL Input                    Batch Processing                    Results
-   (OpenAI Format)                  (Ollama + Model)                   (JSON Output)
+   (OpenAI Format)                 (Ollama/vLLM + Model)               (JSON Output)
          │                                 │                                 │
          │                                 │                                 │
          ▼                                 ▼                                 ▼
@@ -18,20 +21,26 @@ A streamlined solution for running Large Language Models (LLMs) in batch mode on
                                    └──────────────┘                    
 ```
 
-AI-Flux processes JSONL files in a standardized OpenAI-compatible batch API format, enabling efficient processing of thousands of prompts on HPC systems with minimal overhead.
+LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API format, enabling efficient processing of thousands of prompts on HPC systems with minimal overhead.
 
 ## Documentation
 
-- [Configuration Guide](docs/CONFIGURATION.md) - How to configure AI-Flux
+- [Configuration Guide](docs/CONFIGURATION.md) - How to configure LLMFlux
 - [Models Guide](docs/MODELS.md) - Supported models and requirements
 - [Repository Structure](docs/REPOSITORY_STRUCTURE.md) - Codebase organization
 
 ## Installation
 
+```bash
+pip install llmflux
+```
+
+Or for development:
+
 1. **Create and Activate Conda Environment:**
    ```bash
-   conda create -n aiflux python=3.11 -y
-   conda activate aiflux
+   conda create -n llmflux python=3.11 -y
+   conda activate llmflux
    ```
 
 2. **Install Package:**
@@ -49,7 +58,7 @@ AI-Flux processes JSONL files in a standardized OpenAI-compatible batch API form
 
 ### Core Batch Processing on SLURM
 
-The primary workflow for AI-Flux is submitting JSONL files for batch processing on SLURM:
+The primary workflow for LLMFlux is submitting JSONL files for batch processing on SLURM:
 
 ```python
 from aiflux.slurm import SlurmRunner
@@ -88,7 +97,7 @@ For advanced model configuration, see the [Models Guide](docs/MODELS.md).
 
 ## Command-Line Interface
 
-AI-Flux includes a command-line interface for submitting batch processing jobs:
+LLMFlux includes a command-line interface for submitting batch processing jobs:
 
 ```bash
 # Process JSONL file directly (core functionality)
@@ -151,7 +160,7 @@ Results are saved in the user's workspace:
 
 ## Utility Converters
 
-AI-Flux provides utility converters to help prepare JSONL files from various input formats:
+LLMFlux provides utility converters to help prepare JSONL files from various input formats:
 
 ```bash
 # Convert CSV to JSONL
@@ -165,7 +174,7 @@ For code examples of converters, see the [examples directory](examples/).
 
 ## Benchmarking
 
-AI-Flux ships with a benchmarking workflow that can source prompts, submit the SLURM job, and collect results/metrics for you.
+LLMFlux ships with a benchmarking workflow that can source prompts, submit the SLURM job, and collect results/metrics for you.
 
 ```bash
 aiflux benchmark --model llama3.2:3b --name nightly --num-prompts 60 \
