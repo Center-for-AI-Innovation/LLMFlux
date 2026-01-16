@@ -337,6 +337,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Preserve generated SLURM job script (job.sh) for debugging",
     )
 
+    # VLLM specific options
+    run_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
 
     # Local execution toggle
     # Add support for this in the future - Can be directly used on the compute node
@@ -385,6 +387,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Preserve generated SLURM job script (job.sh) for debugging",
     )
+
+    # VLLM specific options
+    benchmark_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
 
     benchmark_parser.set_defaults(func=_benchmark_command)
     return parser
