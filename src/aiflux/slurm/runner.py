@@ -145,6 +145,11 @@ class SlurmRunner:
         hf_token = os.getenv('HUGGINGFACE_TOKEN')
         if hf_token:
             container_vars['APPTAINERENV_HF_TOKEN'] = hf_token
+        
+        # Pass through HF_HOME if set (for controlling HuggingFace model cache location)
+        hf_home = os.getenv('HF_HOME')
+        if hf_home:
+            container_vars['APPTAINERENV_HF_HOME'] = hf_home
 
         # Get base environment
         env = dict(os.environ)
