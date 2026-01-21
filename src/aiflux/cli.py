@@ -79,8 +79,12 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     # Generate or use provided dataset
     name = args.name or f"benchmark_{args.model.replace(':', '_')}"
     num_prompts = getattr(args, "num_prompts", 50)
+
     if args.input:
         input_path = Path(args.input)
+        # Read number of prompts from the input file
+        num_prompts = sum(1 for _ in open(input_path))
+        print(f"Number of prompts in the input file: {num_prompts}")
     else:
         # Generate synthetic prompts
         output_dir = Path("data/benchmarks")
@@ -154,7 +158,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
             print("Job finished but elapsed runtime could not be retrieved from sacct.")
             return 0
 
-        metrics_path = Path(f"results/benchmarks/{args.name}_metrics.txt")
+        metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         metrics_path.write_text(
             f"Time taken to run the batch inference: {elapsed_seconds}\n"
