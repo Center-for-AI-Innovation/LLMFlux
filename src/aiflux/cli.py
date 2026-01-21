@@ -77,15 +77,14 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         Process exit code
     """
     # Generate or use provided dataset
+    name = args.name or f"benchmark_{args.model.replace(':', '_')}"
+    num_prompts = getattr(args, "num_prompts", 50)
     if args.input:
         input_path = Path(args.input)
     else:
         # Generate synthetic prompts
-        name = args.name or f"benchmark_{args.model.replace(':', '_')}"
         output_dir = Path("data/benchmarks")
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        num_prompts = getattr(args, "num_prompts", 50)
         temperature = 0.7 if args.temperature is None else args.temperature
         max_tokens = 500 if args.max_tokens is None else args.max_tokens
 
@@ -95,7 +94,6 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     if args.output:
         output_path = args.output
     else:
-        name = args.name or f"benchmark_{args.model.replace(':', '_')}"
         output_path = f"results/benchmarks/{name}_results.json"
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -156,7 +154,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
             print("Job finished but elapsed runtime could not be retrieved from sacct.")
             return 0
 
-        metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
+        metrics_path = Path(f"results/benchmarks/{args.name}_metrics.txt")
         metrics_path.parent.mkdir(parents=True, exist_ok=True)
         metrics_path.write_text(
             f"Time taken to run the batch inference: {elapsed_seconds}\n"
@@ -285,7 +283,7 @@ def _run_command(args: argparse.Namespace) -> int:
         kwargs["debug"] = True
 
     job_id = runner.run(input_path=input_path, output_path=output_path, **kwargs)
-    print(job_id)
+    print(f"Job ID: {job_id}")
     return 0
 
 
