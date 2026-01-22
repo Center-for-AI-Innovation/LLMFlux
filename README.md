@@ -6,7 +6,7 @@ A streamlined solution for running Large Language Models (LLMs) in batch mode on
 
 ```
       JSONL Input                    Batch Processing                    Results
-   (OpenAI Format)                  (Ollama + Model)                   (JSON Output)
+   (OpenAI Format)                  (Ollama/VLLM + Model)                   (JSON Output)
          │                                 │                                 │
          │                                 │                                 │
          ▼                                 ▼                                 ▼
@@ -107,7 +107,18 @@ This will run the same as above, using VLLM as the backend interface. If you wan
 # Process JSONL file using VLLM backend
 aiflux run --model mistral-lite:7b --input data/prompts.jsonl --output results/output.json --engine=vllm
 ```
-this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`.
+this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`. You will
+need to check an existing model file from the folder src/aiflux/templates to find a configuration that matches what you want
+and use the name as the argument for the --model argument.
+
+Note that in order to use some HuggingFace models, you will need a key from HF. Once you have a token, update your
+local copy of the .env file and change this line:
+
+```bash
+HUGGINGFACE_TOKEN=hf_XXXXXXXXXXXXXXX
+```
+to use the token, replace the hf_XXXX piece with your token. VLLM should handle the rest.
+
 
 For detailed command options:
 ```bash
