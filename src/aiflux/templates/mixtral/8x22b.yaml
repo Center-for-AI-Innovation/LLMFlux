@@ -1,5 +1,6 @@
 # Mixtral 8x22B Configuration
 name: "mixtral:8x22b"
+hf_name: "mistralai/Mixtral-8x22B-Instruct-v0.1"
 
 resources:
   gpu_layers: 48

@@ -1,5 +1,6 @@
 # Mistral Small 24B Configuration
 name: "mistral-small:24b"
+hf_name: "mistralai/Mistral-Small-24B-Instruct-2501"
 
 resources:
   gpu_layers: 48  # Based on 24B parameters

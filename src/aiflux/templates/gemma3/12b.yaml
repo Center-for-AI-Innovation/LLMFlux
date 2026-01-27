@@ -1,5 +1,6 @@
 # Gemma 3 12B Configuration (Vision-capable model)
 name: "gemma3:12b"
+hf_name: "google/gemma-3-12b-it"
 
 resources:
   gpu_layers: 40

@@ -1,5 +1,6 @@
 # Phi-3 Medium Configuration
 name: "phi3:medium"
+hf_name: "microsoft/Phi-3-medium-4k-instruct"
 
 resources:
   gpu_layers: 36
