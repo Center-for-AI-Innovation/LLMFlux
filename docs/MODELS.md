@@ -1,10 +1,10 @@
-# AI-Flux Supported Models
+# LLMFlux Supported Models
 
-This document lists all models supported by AI-Flux, along with their hardware requirements and configuration details.
+This document lists all models supported by LLMFlux, along with their hardware requirements and configuration details.
 
 ## Model Naming Convention
 
-Models in AI-Flux follow the naming convention `family:size`, for example:
+Models in LLMFlux follow the naming convention `family:size`, for example:
 - `llama3.2:3b` - Llama 3.2 model with 3 billion parameters
 - `gemma3:27b` - Gemma 3 model with 27 billion parameters
 - `phi3:small` - Phi-3 Small model
@@ -261,7 +261,7 @@ parameters:
 
 Then load it in your code:
 ```python
-from aiflux.core.config import Config
+from llmflux.core.config import Config
 
 config = Config()
 model_config = config.load_model_config(

@@ -1,6 +1,6 @@
-# AI-Flux Examples
+# LLMFlux Examples
 
-This directory contains example scripts demonstrating how to use AI-Flux for batch processing with LLMs on HPC systems.
+This directory contains example scripts demonstrating how to use LLMFlux for batch processing with LLMs on HPC systems.
 
 ## JSONL-First Examples
 
@@ -119,7 +119,7 @@ runner.run(
 
 ## JSONL Format
 
-AI-Flux uses the OpenAI Batch API specification for its JSONL files:
+LLMFlux uses the OpenAI Batch API specification for its JSONL files:
 
 ```jsonl
 {"custom_id":"request1","method":"POST","url":"/v1/chat/completions","body":{"model":"llama3.2:3b","messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"What is quantum computing?"}],"temperature":0.7,"max_tokens":500}}

@@ -61,8 +61,8 @@ Or for development:
 The primary workflow for LLMFlux is submitting JSONL files for batch processing on SLURM:
 
 ```python
-from aiflux.slurm import SlurmRunner
-from aiflux.core.config import Config
+from llmflux.slurm import SlurmRunner
+from llmflux.core.config import Config
 
 # Setup SLURM configuration
 config = Config()
@@ -101,12 +101,12 @@ LLMFlux includes a command-line interface for submitting batch processing jobs:
 
 ```bash
 # Process JSONL file directly (core functionality)
-aiflux run --model llama3.2:3b --input data/prompts.jsonl --output results/output.json
+llmflux run --model llama3.2:3b --input data/prompts.jsonl --output results/output.json
 ```
 
 For detailed command options:
 ```bash
-aiflux --help
+llmflux --help
 ```
 
 ## Output Format
@@ -164,10 +164,10 @@ LLMFlux provides utility converters to help prepare JSONL files from various inp
 
 ```bash
 # Convert CSV to JSONL
-aiflux convert csv --input data/papers.csv --output data/papers.jsonl --template "Summarize: {text}"
+llmflux convert csv --input data/papers.csv --output data/papers.jsonl --template "Summarize: {text}"
 
 # Convert directory to JSONL
-aiflux convert dir --input data/documents/ --output data/docs.jsonl --recursive
+llmflux convert dir --input data/documents/ --output data/docs.jsonl --recursive
 ```
 
 For code examples of converters, see the [examples directory](examples/).
@@ -177,7 +177,7 @@ For code examples of converters, see the [examples directory](examples/).
 LLMFlux ships with a benchmarking workflow that can source prompts, submit the SLURM job, and collect results/metrics for you.
 
 ```bash
-aiflux benchmark --model llama3.2:3b --name nightly --num-prompts 60 \
+llmflux benchmark --model llama3.2:3b --name nightly --num-prompts 60 \
   --account ACCOUNT_NAME --partition PARTITION_NAME --nodes 1
 ```
 
@@ -190,7 +190,7 @@ aiflux benchmark --model llama3.2:3b --name nightly --num-prompts 60 \
 For the complete option reference:
 
 ```bash
-aiflux benchmark --help
+llmflux benchmark --help
 ```
 
 ## Contributing

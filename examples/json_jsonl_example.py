@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example for processing JSON files with the JSONL-first approach in AI-Flux."""
+"""Example for processing JSON files with the JSONL-first approach in LLMFlux."""
 
 import os
 import sys
@@ -11,10 +11,10 @@ parent_dir = str(Path(__file__).resolve().parent.parent)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from src.aiflux.core.config import Config
-from src.aiflux.processors.batch import BatchProcessor
-from src.aiflux.converters import json_to_jsonl
-from src.aiflux.slurm.runner import SlurmRunner
+from llmflux.core.config import Config
+from llmflux.processors.batch import BatchProcessor
+from llmflux.converters import json_to_jsonl
+from llmflux.slurm.runner import SlurmRunner
 from examples.utils import get_timestamped_filename, ensure_results_dir
 
 def process_json_with_jsonl(input_path: str, output_path: str):
@@ -37,7 +37,7 @@ def process_json_with_jsonl(input_path: str, output_path: str):
     
     print(f"Using SLURM account: {slurm_config.account}")
     
-    print("\n===== AI-FLUX JSON TO JSONL PROCESSING DEMO =====")
+    print("\n===== LLMFLUX JSON TO JSONL PROCESSING DEMO =====")
     print(f"Input JSON: {input_path}")
     print(f"Output path: {output_path}")
     print(f"SLURM settings: {slurm_config.partition}, {slurm_config.time}, {slurm_config.mem}, {slurm_config.gpus_per_node} GPU(s)")

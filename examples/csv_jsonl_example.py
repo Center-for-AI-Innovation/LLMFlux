@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example script for CSV to JSONL conversion and processing with AI-Flux."""
+"""Example script for CSV to JSONL conversion and processing with LLMFlux."""
 
 import os
 import sys
@@ -10,10 +10,10 @@ parent_dir = str(Path(__file__).resolve().parent.parent)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from src.aiflux import BatchProcessor
-from src.aiflux.core.config import Config
-from src.aiflux.converters import csv_to_jsonl
-from src.aiflux.slurm import SlurmRunner
+from llmflux import BatchProcessor
+from llmflux.core.config import Config
+from llmflux.converters import csv_to_jsonl
+from llmflux.slurm import SlurmRunner
 from examples.utils import get_timestamped_filename, ensure_results_dir
 
 def process_csv_with_jsonl():
