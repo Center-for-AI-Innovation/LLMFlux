@@ -31,11 +31,11 @@ class LLMClient:
             port: Optional port number
             engine: The LLM engine ('ollama' or 'vllm')
         """
-        self.engine = engine
+        self.engine = engine or os.getenv("SLURM_ENGINE") or os.getenv("AIFLUX_ENGINE") or "ollama"
 
         # Use env var if set, otherwise use provided host or default
         if host is None:
-            if engine.lower() == "ollama":
+            if self.engine.lower() == "ollama":
                 host = os.getenv('OLLAMA_HOST', None)
             else:
                 host = os.getenv('VLLM_HOST', None)
@@ -49,7 +49,7 @@ class LLMClient:
                 host = 'localhost'
                 
             if port is None:
-                if engine.lower() == "ollama":
+                if self.engine.lower() == "ollama":
                     port_str = os.getenv('OLLAMA_PORT', '11434')
                 else:
                     port_str = os.getenv('VLLM_PORT', '11434')
@@ -261,4 +261,27 @@ class LLMClient:
             raise
         except ValueError as e:
             logger.error(f"Error decoding response: {e}")
-            return response.text 
+            return response.text
+
+    def generate(
+        self,
+        model: str,
+        messages: List[Dict[str, Any]],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        stop: Optional[List[str]] = None,
+        engine: Optional[str] = None,
+    ) -> str:
+        """Generate a response using the configured engine."""
+        resolved_engine = (engine or self.engine or "ollama").lower()
+        kwargs: Dict[str, Any] = {}
+        if temperature is not None:
+            kwargs["temperature"] = temperature
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+        if stop is not None:
+            kwargs["stop"] = stop
+        return self.chat(model=model, engine=resolved_engine, messages=messages, **kwargs)

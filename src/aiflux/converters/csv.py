@@ -85,12 +85,12 @@ def csv_to_jsonl(
         "output_path": None,
         "error": None
     }
-    
-    if not os.path.exists(input_path):
-        raise FileNotFoundError(f"CSV file not found: {input_path}")
-        
+
     if not prompt_template and not prompt_column:
         raise ValueError("Either prompt_template or prompt_column must be provided")
+
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"CSV file not found: {input_path}")
     
     # Create output path if not provided
     if not output_path:
