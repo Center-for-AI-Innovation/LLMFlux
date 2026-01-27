@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configuration Manager for AI-Flux."""
+"""Configuration Manager for LLMFlux."""
 
 from typing import Optional, Dict, Any, List
 from .config import Config, ModelConfig, SlurmConfig, EngineConfig

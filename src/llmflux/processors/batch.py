@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Batch processor for AI-Flux."""
+"""Batch processor for LLMFlux."""
 
 import logging
 import os
@@ -55,7 +55,7 @@ class BatchProcessor:
         self.output_handler = output_handler
         self.client = None
         self.temp_dir = temp_dir or tempfile.gettempdir()
-        self.temp_file = os.path.join(self.temp_dir, f"aiflux_{int(time.time())}.jsonl")
+        self.temp_file = os.path.join(self.temp_dir, f"llmflux_{int(time.time())}.jsonl")
         
         # Ensure temp directory exists
         os.makedirs(self.temp_dir, exist_ok=True)

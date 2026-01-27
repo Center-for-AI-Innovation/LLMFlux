@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Command-line interface for AI-Flux.
+"""Command-line interface for LLMFlux.
 
-Provides the `aiflux` executable with subcommands.
+Provides the `llmflux` executable with subcommands.
 """
 
 import argparse
@@ -290,7 +290,7 @@ def _run_command(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="aiflux", description="AI-Flux CLI")
+    parser = argparse.ArgumentParser(prog="llmflux", description="LLMFlux CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # run subcommand

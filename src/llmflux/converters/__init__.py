@@ -1,5 +1,5 @@
 """
-Converters module for AI-Flux.
+Converters module for LLMFlux.
 
 This module provides utility functions for converting various input formats
 to the standardized JSONL format used by the batch processor.

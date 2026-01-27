@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Base classes for input and output handling in AI-Flux."""
+"""Base classes for input and output handling in LLMFlux."""
 
 import abc
 from typing import Dict, Any, List, Iterator, Optional, Union

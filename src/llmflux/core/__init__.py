@@ -1,4 +1,4 @@
-"""Core functionality for AI-Flux."""
+"""Core functionality for LLMFlux."""
 
 from .processor import BaseProcessor
 from .config import Config, ModelConfig, ModelParameters, SlurmConfig

@@ -193,5 +193,4 @@ results/*
 data/*
 
 # Benchmark data
-src/aiflux/benchmark_data/*
-
+src/llmflux/benchmark_data/*

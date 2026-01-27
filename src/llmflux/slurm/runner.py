@@ -257,7 +257,7 @@ class SlurmRunner:
         except Exception:
             rebuild_requested = False
         # Host-only variable (used in bash script if condition)
-        env["AIFLUX_FORCE_REBUILD"] = "1" if rebuild_requested or os.getenv("AIFLUX_FORCE_REBUILD") == "1" else "0"
+        env["LLMFLUX_FORCE_REBUILD"] = "1" if rebuild_requested or os.getenv("LLMFLUX_FORCE_REBUILD") == "1" else "0"
 
         # Add processor configuration to environment following the established priority system
         # Use ConfigManager for consistent parameter prioritization

@@ -208,10 +208,10 @@ class Config:
         self.workspace = Path.cwd()
         
         # Set directories from parameters or environment variables
-        self.data_dir = data_dir or os.getenv('AIFLUX_DATA_DIR') or str(self.workspace / "data")
-        self.models_dir = models_dir or os.getenv('AIFLUX_MODELS_DIR') or str(self.workspace / "models")
-        self.logs_dir = logs_dir or os.getenv('AIFLUX_LOGS_DIR') or str(self.workspace / "logs")
-        self.containers_dir = containers_dir or os.getenv('AIFLUX_CONTAINERS_DIR') or str(self.workspace / "containers")
+        self.data_dir = data_dir or os.getenv('LLMFLUX_DATA_DIR') or str(self.workspace / "data")
+        self.models_dir = models_dir or os.getenv('LLMFLUX_MODELS_DIR') or str(self.workspace / "models")
+        self.logs_dir = logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or str(self.workspace / "logs")
+        self.containers_dir = containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or str(self.workspace / "containers")
         
         # Set SLURM configuration
         self.slurm = slurm or SlurmConfig()

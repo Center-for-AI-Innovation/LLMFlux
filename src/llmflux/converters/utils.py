@@ -1,4 +1,4 @@
-"""JSONL utility functions for AI-Flux."""
+"""JSONL utility functions for LLMFlux."""
 
 import json
 import os

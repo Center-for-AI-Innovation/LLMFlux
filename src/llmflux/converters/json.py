@@ -1,4 +1,4 @@
-"""JSON to JSONL conversion utilities for AI-Flux."""
+"""JSON to JSONL conversion utilities for LLMFlux."""
 
 import os
 import json

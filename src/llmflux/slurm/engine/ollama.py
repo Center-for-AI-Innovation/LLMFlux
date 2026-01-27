@@ -1,6 +1,6 @@
 from pathlib import Path
 
-# This function generates an ollama batch script for running aiflux
+# This function generates an ollama batch script for running llmflux
 
 def create_ollama_batch_script(
     account: str,
@@ -63,7 +63,7 @@ def create_ollama_batch_script(
         "mkdir -p $OLLAMA_HOME $OLLAMA_MODELS",
         "",
         "# Build container if needed (or if forced)",
-        "if [ \"$AIFLUX_FORCE_REBUILD\" = \"1\" ] || [ ! -f \"$CONTAINERS_DIR/llm_processor.sif\" ]; then",
+        "if [ \"$LLMFLUX_FORCE_REBUILD\" = \"1\" ] || [ ! -f \"$CONTAINERS_DIR/llm_processor.sif\" ]; then",
         "    echo \"Building Container in ${CONTAINERS_DIR}\"",
         "    export APPTAINER_DEBUG=1",
         "    apptainer build --force $CONTAINERS_DIR/llm_processor.sif $CONTAINER_DEF",
@@ -126,8 +126,8 @@ def create_ollama_batch_script(
         "import sys",
         "import os",
         "sys.path.append('$PROJECT_ROOT')",
-        "from aiflux.core.config import Config",
-        "from aiflux.processors import BatchProcessor",
+        "from llmflux.core.config import Config",
+        "from llmflux.processors import BatchProcessor",
         "",
         "# Ensure OLLAMA environment variables are available in Python",
         "ollama_port = os.environ.get('OLLAMA_PORT')",

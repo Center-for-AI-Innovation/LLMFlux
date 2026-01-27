@@ -1,4 +1,4 @@
-"""Vision to JSONL conversion utilities for AI-Flux."""
+"""Vision to JSONL conversion utilities for LLMFlux."""
 
 import os
 import json

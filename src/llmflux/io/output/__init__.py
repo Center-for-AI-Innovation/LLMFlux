@@ -1,4 +1,4 @@
-"""Output handlers for AI-Flux."""
+"""Output handlers for LLMFlux."""
 
 from .json_output import JSONOutputHandler
 

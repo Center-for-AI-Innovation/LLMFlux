@@ -36,12 +36,12 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Center-for-AI-Innovation/ai-flux"
-Repository = "https://github.com/Center-for-AI-Innovation/ai-flux"
-Issues = "https://github.com/Center-for-AI-Innovation/ai-flux/issues"
+Homepage = "https://github.com/Center-for-AI-Innovation/llmflux"
+Repository = "https://github.com/Center-for-AI-Innovation/llmflux"
+Issues = "https://github.com/Center-for-AI-Innovation/llmflux/issues"
 
 [project.scripts]
-aiflux = "aiflux.cli:main"
+llmflux = "llmflux.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -50,7 +50,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"aiflux" = [
+"llmflux" = [
     "templates/models/*/*.yaml",
     "container/*.def",
     "slurm/*.sh"

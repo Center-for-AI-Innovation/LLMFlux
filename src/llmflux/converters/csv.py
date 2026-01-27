@@ -1,4 +1,4 @@
-"""CSV to JSONL conversion utilities for AI-Flux."""
+"""CSV to JSONL conversion utilities for LLMFlux."""
 
 import os
 import csv

@@ -1,4 +1,4 @@
-"""SLURM integration for AI-Flux."""
+"""SLURM integration for LLMFlux."""
 
 from .runner import SlurmRunner
 from .engine import create_ollama_batch_script

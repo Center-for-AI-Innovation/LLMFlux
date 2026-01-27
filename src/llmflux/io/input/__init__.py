@@ -1,4 +1,4 @@
-"""Input handlers for AI-Flux."""
+"""Input handlers for LLMFlux."""
 
 from .json_handler import JSONBatchHandler
 from .csv_handler import CSVSinglePromptHandler, CSVMultiPromptHandler

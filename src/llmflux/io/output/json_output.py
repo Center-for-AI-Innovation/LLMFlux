@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""JSON output handler for AI-Flux."""
+"""JSON output handler for LLMFlux."""
 
 import json
 import logging
