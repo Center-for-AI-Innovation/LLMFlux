@@ -1,5 +1,6 @@
 # Mistral 7B Configuration
 name: "mistral:7b"
+hf_name: "mistralai/Mistral-7B-Instruct-v0.3"
 
 resources:
   gpu_layers: 32

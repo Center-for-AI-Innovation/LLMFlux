@@ -5,11 +5,15 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 import yaml
+import logging
 from pydantic import BaseModel, Field, field_validator
 
 class EngineConfig(BaseModel):
     """Model engine configuration."""
     engine: str = Field(..., pattern=r"^ollama|vllm$")
+    origins: str = Field(default="*")
+    insecure: str = Field(default="true")
+    home: Optional[str] = None
 
 class ResourceConfig(BaseModel):
     """Model resource configuration."""
@@ -68,9 +72,12 @@ class RequirementsConfig(BaseModel):
 
 class ModelConfig(BaseModel):
     """Complete model configuration."""
-    name: str = Field(..., pattern=r"^[a-zA-Z0-9.-]+([-][a-zA-Z0-9.]+)*:((8x)?\d+b|mini|medium|small|vision|large|tiny|instruct)$")
+    # name: str = Field(..., pattern=r"^[a-zA-Z0-9.-]+([-][a-zA-Z0-9.]+)*:((8x)?\d+b|mini|medium|small|vision|large|tiny|instruct)$")
+    name: str = None
+    hf_name: Optional[str] = None
+    engine: str = Field("ollama", pattern=r"^ollama|vllm$")    
     type: str = Field("ollama")
-    size: str = Field("7b")
+    size: Optional[str] = None
     parameters: ModelParameters = Field(default_factory=ModelParameters)
     path: Optional[str] = None
     description: Optional[str] = None
@@ -79,27 +86,42 @@ class ModelConfig(BaseModel):
     system: Optional[SystemConfig] = None
     validation: Optional[ValidationConfig] = None
     requirements: Optional[RequirementsConfig] = None
+    
+    def get_model_name_for_engine(self) -> str:
+        """Get the appropriate model name for the configured engine.
+        
+        Returns:
+            str: The Ollama name (e.g., 'qwen2.5:7b') if engine is 'ollama',
+                 or the HuggingFace name (e.g., 'Qwen/Qwen2.5-7B-Instruct') if engine is 'vllm'
+        """
+        if self.engine == 'vllm':
+            if self.hf_name:
+                return self.hf_name
+            else:
+                raise ValueError(f"Model config for '{self.name}' does not have hf_name set for vLLM engine")
+        else:
+            return self.name
 
 def _parse_extra_sbatch_args() -> Optional[Dict[str, str]]:
     """Parse SLURM_EXTRA_ARGS from environment variable.
-    
+
     Supports JSON format: {"reservation": "my_res", "qos": "high"}
     Or key=value format: "reservation=my_res,qos=high"
-    
+
     Returns:
         Dictionary of extra SBATCH arguments or None
     """
     extra_args_str = os.getenv('SLURM_EXTRA_ARGS')
     if not extra_args_str:
         return None
-    
+
     # Try JSON format first
     if extra_args_str.strip().startswith('{'):
         try:
             return json.loads(extra_args_str)
         except json.JSONDecodeError:
             pass
-    
+
     # Try key=value format
     result = {}
     for pair in extra_args_str.split(','):
@@ -107,7 +129,7 @@ def _parse_extra_sbatch_args() -> Optional[Dict[str, str]]:
         if '=' in pair:
             key, value = pair.split('=', 1)
             result[key.strip()] = value.strip()
-    
+
     return result if result else None
 
 class SlurmConfig(BaseModel):
@@ -140,6 +162,9 @@ class SlurmConfig(BaseModel):
     ntasks_per_node: int = Field(
         default_factory=lambda: int(os.getenv('SLURM_NTASKS_PER_NODE', '1'))
     )
+    engine: str = Field(
+        default_factory=lambda: os.getenv('SLURM_ENGINE', 'ollama')
+    )
     extra_sbatch_args: Optional[Dict[str, str]] = Field(
         default_factory=_parse_extra_sbatch_args
     )
@@ -161,7 +186,7 @@ class Config:
                  containers_dir: Optional[str] = None,
                  slurm: Optional[SlurmConfig] = None,
                  models: Optional[List[ModelConfig]] = None,
-                 engine: Optional[EngineConfig] = None):
+                 engine: Optional[str] = None):
         """Initialize configuration.
         
         Args:
@@ -171,6 +196,7 @@ class Config:
             containers_dir: Optional path to containers directory
             slurm: Optional SLURM configuration
             models: Optional list of model configurations
+            engine: Optional string for which engine to use
         """
         self.package_dir = Path(__file__).parent.parent
         self.templates_dir = self.package_dir / 'templates'
@@ -192,10 +218,20 @@ class Config:
         
         # Set model configurations
         self.models = models or []
-        
-        # Set engine configuration
-        self.engine = engine or EngineConfig(engine="ollama")
-        
+
+        # Set engine configuration from environment variable
+        engine_value = os.getenv('SLURM_ENGINE', 'ollama')
+        if engine_value == "vllm":
+            self.engine = EngineConfig(
+                engine="vllm",
+                home=str(self.workspace / ".vllm")
+            )
+        else:
+            self.engine = EngineConfig(
+                engine="ollama",
+                home=str(self.workspace / ".ollama")
+            )
+
         # Define default paths
         self.default_paths = {
             'DATA_INPUT_DIR': Path(self.data_dir) / "input",
@@ -406,55 +442,66 @@ class Config:
     def load_model_config(
         self,
         model_type: str,
-        model_size: str,
-        custom_config_path: Optional[str] = None
+        model_size: str = None,
+        engine: str = "ollama",
+        custom_config_path: Optional[str] = None,
     ) -> ModelConfig:
         """Load and validate model configuration.
         
         Args:
             model_type: Type of model (e.g., 'qwen', 'llama')
             model_size: Size of model (e.g., '7b', '70b')
+            engine: Engine to use for this run, either 'ollama' or 'vllm'
             custom_config_path: Optional path to custom config
-            
         Returns:
             Validated ModelConfig
-            
-        Raises:
-            ValueError: If configuration is invalid
         """
-        if custom_config_path:
-            config_path = Path(custom_config_path)
-        else:
-            config_path = self.templates_dir / model_type / f"{model_size}.yaml"
-        
+
         try:
-            with open(config_path, 'r') as f:
-                config_data = yaml.safe_load(f)
-            
+            config_data = None
+
+            if custom_config_path:
+                with open(custom_config_path, 'r') as f:
+                    config_data = yaml.safe_load(f)
+            else:
+                with open(self.templates_dir / 'models.yaml', 'r') as f:
+                    all_models_data = yaml.safe_load(f)
+
+                model_key = f"{model_type}-{model_size}"
+                models = all_models_data.get('models', {})
+
+                if model_key in models:
+                    config_data = models[model_key]
+                else:
+                    raise FileNotFoundError(f"Model '{model_key}' not found in models.yaml")
+
+            if model_size:
+                model_name = f"{model_type}:{model_size}"
+            else:
+                model_name = f"{model_type}"
             # Create basic model config
             model_config = ModelConfig(
-                name=f"{model_type}:{model_size}",
+                name=model_name,
+                hf_name=config_data.get("hf_name"),
+                engine=engine,
                 type=model_type,
                 size=model_size,
-                parameters=ModelParameters(
-                    temperature=config_data.get("parameters", {}).get("temperature", 0.7),
-                    max_tokens=config_data.get("parameters", {}).get("max_tokens", 2048),
-                    top_p=config_data.get("parameters", {}).get("top_p", 0.9),
-                    top_k=config_data.get("parameters", {}).get("top_k", 40),
-                    stop_sequences=config_data.get("parameters", {}).get("stop_sequences", None)
-                )
+                parameters=ModelParameters(**config_data.get("parameters", {})),
+                resources=ResourceConfig(**config_data.get("resources", {})) if "resources" in config_data else None,
+                system=SystemConfig(**config_data.get("system", {})) if "system" in config_data else None,
+                validation=ValidationConfig(**config_data.get("validation", {})) if "validation" in config_data else None,
+                requirements=RequirementsConfig(**config_data.get("requirements", {})) if "requirements" in config_data else None,
             )
-            
             return model_config
             
-        except Exception as e:
-            # Return default config if file not found
-            model_config = ModelConfig(
+        except (FileNotFoundError, KeyError, TypeError) as e:
+            logging.warning(f"Could not load config for {model_type}:{model_size}. Using default. Reason: {e}")
+            return ModelConfig(
                 name=f"{model_type}:{model_size}",
+                hf_name=f"{model_type}",
                 type=model_type,
                 size=model_size
             )
-            return model_config
     
     def get_slurm_config(
         self,

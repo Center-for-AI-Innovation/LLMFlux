@@ -47,6 +47,7 @@ The tables below show each parameter with its environment variable name, code se
 | Workspace | `WORKSPACE` | `workspace="/path/to/workspace"` in SlurmRunner | `./` | Project root directory |
 | Input directory | `DATA_INPUT_DIR` | Set via config | `data/input` | Directory for input files |
 | Output directory | `DATA_OUTPUT_DIR` | Set via config | `data/output` | Directory for output files |
+| HuggingFace cache | `HF_HOME` | Set via env | `{workspace}/.cache/huggingface` | Directory for HuggingFace model cache (used by vLLM) |
 
 ## Configuration Methods
 

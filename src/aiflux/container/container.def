@@ -59,7 +59,7 @@ From: ollama/ollama:latest
 %environment
     # Locale
     export LC_ALL=C
-    
+
     # Python virtual environment and CUDA paths
     export PATH=/app/venv/bin:/usr/local/cuda/bin:$PATH
     export VIRTUAL_ENV=/app/venv
@@ -71,4 +71,4 @@ From: ollama/ollama:latest
     Description LLM Batch Processing Container - Simplified for SLURM
     LastModified 2025-10-24
     ModifiedBy Darren Adams
-    Note Runtime configuration handled by SLURM job script 
+    Note Runtime configuration handled by SLURM job script
