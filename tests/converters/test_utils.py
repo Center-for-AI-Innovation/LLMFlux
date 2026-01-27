@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aiflux.converters.utils import (
+from llmflux.converters.utils import (
     validate_jsonl,
     read_jsonl,
     merge_jsonl_files,
