@@ -75,15 +75,18 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         Process exit code
     """
     # Generate or use provided dataset
+    name = args.name or f"benchmark_{args.model.replace(':', '_')}"
+    num_prompts = getattr(args, "num_prompts", 50)
+
     if args.input:
         input_path = Path(args.input)
+        # Read number of prompts from the input file
+        num_prompts = sum(1 for _ in open(input_path))
+        print(f"Number of prompts in the input file: {num_prompts}")
     else:
         # Generate synthetic prompts
-        name = args.name or f"benchmark_{args.model.replace(':', '_')}"
         output_dir = Path("data/benchmarks")
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        num_prompts = getattr(args, "num_prompts", 50)
         temperature = 0.7 if args.temperature is None else args.temperature
         max_tokens = 500 if args.max_tokens is None else args.max_tokens
 
@@ -93,7 +96,6 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     if args.output:
         output_path = args.output
     else:
-        name = args.name or f"benchmark_{args.model.replace(':', '_')}"
         output_path = f"results/benchmarks/{name}_results.json"
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -283,7 +285,7 @@ def _run_command(args: argparse.Namespace) -> int:
         kwargs["debug"] = True
 
     job_id = runner.run(input_path=input_path, output_path=output_path, **kwargs)
-    print(job_id)
+    print(f"Job ID: {job_id}")
     return 0
 
 
