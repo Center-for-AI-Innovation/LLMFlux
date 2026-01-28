@@ -140,6 +140,8 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         kwargs["rebuild"] = True
     if getattr(args, "debug", False):
         kwargs["debug"] = True
+    if getattr(args, "vllm_engine_args", None) is not None:
+        kwargs["vllm_engine_args"] = args.vllm_engine_args
 
     print(f"Submitting benchmark job...")
     print(f"  Model: {args.model}")
@@ -284,6 +286,9 @@ def _run_command(args: argparse.Namespace) -> int:
     if getattr(args, "debug", False):
         kwargs["debug"] = True
 
+    if getattr(args, "vllm_engine_args", None) is not None:
+        kwargs["vllm_engine_args"] = args.vllm_engine_args
+
     job_id = runner.run(input_path=input_path, output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
     return 0
@@ -339,6 +344,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Preserve generated SLURM job script (job.sh) for debugging",
     )
 
+    # VLLM specific options
+    run_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
 
     # Local execution toggle
     # Add support for this in the future - Can be directly used on the compute node
@@ -387,6 +394,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Preserve generated SLURM job script (job.sh) for debugging",
     )
+
+    # VLLM specific options
+    benchmark_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
 
     benchmark_parser.set_defaults(func=_benchmark_command)
     return parser

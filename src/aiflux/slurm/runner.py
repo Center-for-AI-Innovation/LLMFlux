@@ -5,8 +5,9 @@ import subprocess
 import socket
 import shutil
 import time
+import shlex
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 import json
 
 from .engine import create_vllm_batch_script
@@ -184,6 +185,52 @@ class SlurmRunner:
                 return 11434
         finally:
             s.close()
+
+    def _load_vllm_engine_args(self, raw_value: Any, source: str) -> Dict[str, Any]:
+        """Parse JSON engine args into a dict."""
+        if raw_value is None:
+            return {}
+        if isinstance(raw_value, dict):
+            return raw_value
+        if isinstance(raw_value, str):
+            if not raw_value.strip():
+                return {}
+            try:
+                parsed = json.loads(raw_value)
+            except json.JSONDecodeError as exc:
+                logger.warning(f"Invalid JSON for {source}: {exc}")
+                return {}
+            if not isinstance(parsed, dict):
+                logger.warning(f"{source} must be a JSON object")
+                return {}
+            return parsed
+
+        logger.warning(f"{source} must be a JSON object string")
+        return {}
+
+    def _build_vllm_engine_args(self, merged_args: Dict[str, Any]) -> str:
+        """Build a safe flag string for vLLM engine args."""
+        parts: list[str] = []
+        for key, value in merged_args.items():
+            if not isinstance(key, str):
+                logger.warning(f"Skipping non-string vLLM engine arg key: {key}")
+                continue
+            flag = key if key.startswith("--") else f"--{key}"
+            if isinstance(value, bool):
+                if value:
+                    parts.append(flag)
+                continue
+            if value is None:
+                continue
+            if isinstance(value, (int, float, str)):
+                parts.append(flag)
+                parts.append(shlex.quote(str(value)))
+                continue
+            logger.warning(
+                f"Skipping unsupported vLLM engine arg type for '{key}': {type(value).__name__}"
+            )
+
+        return " ".join(parts)
     
     def run(
         self,
@@ -303,6 +350,11 @@ class SlurmRunner:
         elif self.engine.engine == 'vllm':
             env['VLLM_MODEL_NAME'] = str(selected_model_name)
             env['VLLM_HOST'] = '0.0.0.0'
+            # Load vLLM engine args from environment and CLI, merging them with priority to CLI
+            env_args = self._load_vllm_engine_args(os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS")
+            cli_args = self._load_vllm_engine_args(kwargs.get("vllm_engine_args"), "--vllm-engine-args")
+            merged_args = {**env_args, **cli_args}
+            env['VLLM_ENGINE_ARGS'] = self._build_vllm_engine_args(merged_args)
 
         # Container variables (used in Python inside container)
         # Always set MODEL_IDENTIFIER for reference
@@ -340,7 +392,7 @@ class SlurmRunner:
         # Add additional parameters from kwargs through config manager
         for key, value in kwargs.items():
             # Skip parameters that are already handled
-            if key in ['model', 'batch_size', 'save_frequency']:
+            if key in ['model', 'batch_size', 'save_frequency', 'vllm_engine_args']:
                 continue
                 
             # Use config manager to get the value with proper priority
