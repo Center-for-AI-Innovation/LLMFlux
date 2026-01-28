@@ -39,6 +39,7 @@ The tables below show each parameter with its environment variable name, code se
 | Max tokens | `MAX_TOKENS` | `max_tokens=4096` (in `run()`) | `2048` | Maximum tokens to generate |
 | Top P | `TOP_P` | `top_p=0.95` (in `run()`) | `0.9` | Top-p sampling parameter |
 | Top K | `TOP_K` | `top_k=50` (in `run()`) | `40` | Top-k sampling parameter |
+| vLLM engine args | `VLLM_ENGINE_ARGS` | `--vllm-engine-args '{"trust-remote-code":true}'` | (optional) | JSON object of vLLM engine flags |
 
 ### Directory Configuration
 
@@ -52,6 +53,8 @@ The tables below show each parameter with its environment variable name, code se
 ## Configuration Methods
 
 You can configure LLMFlux in multiple ways, depending on your preference and needs.
+
+For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts.
 
 ### Method 1: Environment Variables (.env file)
 
@@ -67,6 +70,7 @@ SLURM_TIME=01:00:00
 MODEL_NAME=gemma3:27b
 BATCH_SIZE=8
 MAX_TOKENS=4096
+VLLM_ENGINE_ARGS={"trust-remote-code":true,"max-model-len":8192}
 ```
 
 ### Method 2: Direct Code Parameters (Recommended)

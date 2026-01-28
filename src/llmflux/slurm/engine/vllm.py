@@ -70,7 +70,7 @@ def create_vllm_batch_script(
         "        --model \"$VLLM_MODEL_NAME\" \\",
         "        --host \"$VLLM_HOST\" \\",
         "        --port \"$VLLM_PORT\" \\",
-        "        --max-model-len 8192 &",
+        "        $VLLM_ENGINE_ARGS &",
         "VLLM_PID=$!",
         "echo \"        PID: $VLLM_PID\"",
         "echo \"\"",
