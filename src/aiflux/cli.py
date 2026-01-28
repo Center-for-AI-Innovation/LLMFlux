@@ -140,6 +140,8 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         kwargs["rebuild"] = True
     if getattr(args, "debug", False):
         kwargs["debug"] = True
+    if getattr(args, "vllm_engine_args", None) is not None:
+        kwargs["vllm_engine_args"] = args.vllm_engine_args
 
     print(f"Submitting benchmark job...")
     print(f"  Model: {args.model}")
@@ -283,6 +285,9 @@ def _run_command(args: argparse.Namespace) -> int:
     # Pass debug flag through to runner
     if getattr(args, "debug", False):
         kwargs["debug"] = True
+
+    if getattr(args, "vllm_engine_args", None) is not None:
+        kwargs["vllm_engine_args"] = args.vllm_engine_args
 
     job_id = runner.run(input_path=input_path, output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
