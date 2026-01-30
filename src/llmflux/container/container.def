@@ -39,22 +39,22 @@ From: ollama/ollama:latest
 
     # Core Python dependencies (latest versions)
     pip install --no-cache-dir \
-        numpy \
-        pandas \
-        pyyaml \
-        requests \
-        tqdm \
-        psutil
+        numpy==2.2.6 \
+        pandas==3.0.0 \
+        pyyaml==6.0.3 \
+        requests==2.32.5 \
+        tqdm==4.67.1 \
+        psutil==7.2.2
 
-    # Install PyTorch 2.8.0 with CUDA 12.9 wheels (pinned to match vLLM requirements)
+    # Install PyTorch 2.9.1 with CUDA 12.9 wheels (pinned to match vLLM requirements)
     pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu129 \
-        torch==2.8.0 \
-        torchvision==0.23.0 \
-        torchaudio==2.8.0
+        torch==2.9.1 \
+        torchvision==0.24.1 \
+        torchaudio==2.9.1
     
     # Install vLLM for high-performance LLM inference
-    # Pinned versions ensure PyTorch 2.8.0+cu129 is not overwritten
-    pip install --no-cache-dir vllm==0.11.0
+    # Pinned versions ensure PyTorch 2.9.1+cu129 is not overwritten
+    pip install --no-cache-dir vllm==0.15.0
 
 %environment
     # Locale
