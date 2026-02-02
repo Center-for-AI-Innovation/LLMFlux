@@ -1,13 +1,13 @@
-# AI-Flux Repository Structure
+# LLMFlux Repository Structure
 
-This document explains the organization of the AI-Flux codebase to help you understand and navigate the project.
+This document explains the organization of the LLMFlux codebase to help you understand and navigate the project.
 
 ## Directory Structure
 
 ```
-aiflux/
+llmflux/
 ├── src/
-│   └── aiflux/                 
+│   └── llmflux/                 
 │       ├── core/              
 │       │   ├── processor.py   # Base processor interface
 │       │   ├── config.py      # Configuration management

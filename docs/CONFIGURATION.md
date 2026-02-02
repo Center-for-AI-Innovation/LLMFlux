@@ -1,10 +1,10 @@
-# AI-Flux Configuration Guide
+# LLMFlux Configuration Guide
 
-AI-Flux uses a flexible configuration system with clear parameter priority to ensure a smooth user experience whether using code, environment variables, or defaults.
+LLMFlux uses a flexible configuration system with clear parameter priority to ensure a smooth user experience whether using code, environment variables, or defaults.
 
 ## Configuration Priority System
 
-When determining which configuration value to use, AI-Flux follows this priority order:
+When determining which configuration value to use, LLMFlux follows this priority order:
 
 1. **Direct code parameters** (highest priority)
 2. **Environment variables** (.env file)
@@ -52,13 +52,15 @@ The tables below show each parameter with its environment variable name, code se
 
 ## Configuration Methods
 
-You can configure AI-Flux in multiple ways, depending on your preference and needs.
+You can configure LLMFlux in multiple ways, depending on your preference and needs.
+
+For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts.
 
 For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts.
 
 ### Method 1: Environment Variables (.env file)
 
-The simplest way to configure AI-Flux is by creating a `.env` file in your project root:
+The simplest way to configure LLMFlux is by creating a `.env` file in your project root:
 
 ```bash
 # SLURM Settings
@@ -78,8 +80,8 @@ VLLM_ENGINE_ARGS={"trust-remote-code":true,"max-model-len":8192}
 For more control, you can set configuration parameters directly in your code:
 
 ```python
-from aiflux.slurm import SlurmRunner
-from aiflux.core.config import Config
+from llmflux.slurm import SlurmRunner
+from llmflux.core.config import Config
 
 # Setup SLURM configuration
 config = Config()

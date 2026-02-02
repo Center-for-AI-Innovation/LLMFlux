@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-SLURM-based JSONL Processing Example for AI-Flux
+SLURM-based JSONL Processing Example for LLMFlux
 
 This example demonstrates the core functionality of the JSONL-first approach:
 1. Creating a properly formatted JSONL file with OpenAI API-compatible requests
 2. Submitting the JSONL file directly to SLURM for processing
 3. No converters or input handlers required
 
-This is the primary workflow for AI-Flux on HPC systems.
+This is the primary workflow for LLMFlux on HPC systems.
 """
 
 import json
@@ -20,8 +20,8 @@ parent_dir = str(Path(__file__).resolve().parent.parent)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from src.aiflux.core.config import Config
-from src.aiflux.slurm.runner import SlurmRunner
+from llmflux.core.config import Config
+from llmflux.slurm.runner import SlurmRunner
 from examples.utils import get_timestamped_filename, ensure_results_dir
 
 def run_slurm_jsonl_job():
@@ -52,7 +52,7 @@ def run_slurm_jsonl_job():
     # Create test JSONL file with proper formatting
     create_test_jsonl(jsonl_path)
     
-    print("\n===== AI-FLUX SLURM JSONL PROCESSING DEMO =====")
+    print("\n===== LLMFLUX SLURM JSONL PROCESSING DEMO =====")
     print(f"Input JSONL: {jsonl_path}")
     print(f"Output path: {output_path}")
     print(f"SLURM settings: {slurm_config.partition}, {slurm_config.time}, {slurm_config.mem}, {slurm_config.gpus_per_node} GPU(s)")

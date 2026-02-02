@@ -1,1 +1,1 @@
-"""Tests package for AI-Flux.""" 
+"""Tests package for LLMFlux.""" 

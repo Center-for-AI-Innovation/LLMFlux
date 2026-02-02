@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Utility functions for AI-Flux examples."""
+"""Utility functions for LLMFlux examples."""
 
 import datetime
 from pathlib import Path
