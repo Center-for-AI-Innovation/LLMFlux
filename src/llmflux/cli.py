@@ -11,11 +11,20 @@ import time
 import subprocess
 import logging
 from typing import Optional, List, Dict
+from importlib.metadata import PackageNotFoundError, version as pkg_version
 
 from .slurm.runner import SlurmRunner
 from .processors import BatchProcessor
 from .core.config import Config, EngineConfig
 from .benchmark_utils import create_test_prompts_file
+
+
+def _get_llmflux_version() -> str:
+    """Return installed llmflux version (best effort)."""
+    try:
+        return pkg_version("llmflux")
+    except PackageNotFoundError:
+        return "unknown"
 
 def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[str, str]]:
     """Parse --sbatch-arg arguments into a dictionary.
@@ -334,6 +343,13 @@ def _show_models_command(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llmflux", description="LLMFlux CLI")
+    parser.add_argument(
+        "--version",
+        "-V",
+        action="version",
+        version=f"%(prog)s {_get_llmflux_version()}",
+        help="Show llmflux version and exit",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # run subcommand
