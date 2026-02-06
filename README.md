@@ -104,7 +104,7 @@ LLMFlux includes a command-line interface for submitting batch processing jobs:
 llmflux run --model llama3.2:3b --input data/prompts.jsonl --output results/output.json
 ```
 
-In addition to the default OLLAMA engine, AI-Flux can also be run using VLLM, to take advantage of HuggingFace models. In order to use a model that requires a HuggingFace key, you will first need to update the default .env parameter to use your personal token. You then can call using the names as established in the templates dir:
+In addition to the default OLLAMA engine, LLMFlux can also be run using vLLM, to take advantage of HuggingFace models. In order to use a model that requires a HuggingFace key, you will first need to update the default .env parameter to use your personal token. You then can call using the names as established in the templates dir:
 
 ```bash
 # Process JSONL file using VLLM backend
