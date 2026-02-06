@@ -7,9 +7,9 @@ import unittest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-from aiflux.processors.batch import BatchProcessor
-from aiflux.core.config import ModelConfig, ModelParameters
-from aiflux.io.base import OutputResult
+from llmflux.processors.batch import BatchProcessor
+from llmflux.core.config import ModelConfig, ModelParameters
+from llmflux.io.base import OutputResult
 
 class TestBatchProcessor(unittest.TestCase):
     """Test suite for the BatchProcessor class."""
@@ -83,7 +83,7 @@ class TestBatchProcessor(unittest.TestCase):
         """Clean up test environment."""
         self.temp_dir.cleanup()
     
-    @patch('aiflux.processors.batch.LLMClient')
+    @patch('llmflux.processors.batch.LLMClient')
     def test_batch_processor_initialization(self, mock_client_class):
         """Test BatchProcessor initialization."""
         processor = BatchProcessor(model_config=self.model_config)
@@ -94,7 +94,7 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertEqual(processor.save_frequency, 50)  # Default value
         self.assertIsNone(processor.client)  # Client initialized in setup
     
-    @patch('aiflux.processors.batch.LLMClient')
+    @patch('llmflux.processors.batch.LLMClient')
     def test_batch_processor_setup(self, mock_client_class):
         """Test BatchProcessor setup."""
         # Mock client instance
@@ -111,7 +111,7 @@ class TestBatchProcessor(unittest.TestCase):
         # Check that warmup was called
         mock_client.generate.assert_called_once()
     
-    @patch('aiflux.processors.batch.LLMClient')
+    @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch(self, mock_client_class):
         """Test processing a batch of items."""
         # Mock client instance
@@ -143,7 +143,7 @@ class TestBatchProcessor(unittest.TestCase):
             stop=None
         )
     
-    @patch('aiflux.processors.batch.LLMClient')
+    @patch('llmflux.processors.batch.LLMClient')
     def test_run_with_jsonl(self, mock_client_class):
         """Test running the processor with a JSONL file."""
         # Mock client instance
@@ -171,7 +171,7 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertEqual(output_data[0]["input"]["custom_id"], "test-1")
         self.assertEqual(output_data[1]["input"]["custom_id"], "test-2")
     
-    @patch('aiflux.processors.batch.LLMClient')
+    @patch('llmflux.processors.batch.LLMClient')
     def test_error_handling(self, mock_client_class):
         """Test error handling in processing."""
         # Mock client instance to raise an exception
@@ -191,7 +191,7 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertEqual(results[0].error, "Test error")
         self.assertTrue(results[0].metadata.get("error"))
     
-    @patch('aiflux.processors.batch.LLMClient')
+    @patch('llmflux.processors.batch.LLMClient')
     def test_completion_endpoint(self, mock_client_class):
         """Test handling the completions endpoint."""
         # Create a test JSONL with completions endpoint

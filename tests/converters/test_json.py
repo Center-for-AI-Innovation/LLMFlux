@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aiflux.converters.json import json_to_jsonl
+from llmflux.converters.json import json_to_jsonl
 
 class TestJSONToJSONL(unittest.TestCase):
     """Test suite for the json_to_jsonl function."""

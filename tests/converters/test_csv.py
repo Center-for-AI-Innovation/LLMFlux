@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aiflux.converters.csv import csv_to_jsonl
+from llmflux.converters.csv import csv_to_jsonl
 
 class TestCSVToJSONL(unittest.TestCase):
     """Test suite for the csv_to_jsonl function."""

@@ -1,10 +1,10 @@
-# AI-Flux Configuration Guide
+# LLMFlux Configuration Guide
 
-AI-Flux uses a flexible configuration system with clear parameter priority to ensure a smooth user experience whether using code, environment variables, or defaults.
+LLMFlux uses a flexible configuration system with clear parameter priority to ensure a smooth user experience whether using code, environment variables, or defaults.
 
 ## Configuration Priority System
 
-When determining which configuration value to use, AI-Flux follows this priority order:
+When determining which configuration value to use, LLMFlux follows this priority order:
 
 1. **Direct code parameters** (highest priority)
 2. **Environment variables** (.env file)
@@ -39,6 +39,7 @@ The tables below show each parameter with its environment variable name, code se
 | Max tokens | `MAX_TOKENS` | `max_tokens=4096` (in `run()`) | `2048` | Maximum tokens to generate |
 | Top P | `TOP_P` | `top_p=0.95` (in `run()`) | `0.9` | Top-p sampling parameter |
 | Top K | `TOP_K` | `top_k=50` (in `run()`) | `40` | Top-k sampling parameter |
+| vLLM engine args | `VLLM_ENGINE_ARGS` | `--vllm-engine-args '{"trust-remote-code":true}'` | (optional) | JSON object of vLLM engine flags |
 
 ### Directory Configuration
 
@@ -47,14 +48,19 @@ The tables below show each parameter with its environment variable name, code se
 | Workspace | `WORKSPACE` | `workspace="/path/to/workspace"` in SlurmRunner | `./` | Project root directory |
 | Input directory | `DATA_INPUT_DIR` | Set via config | `data/input` | Directory for input files |
 | Output directory | `DATA_OUTPUT_DIR` | Set via config | `data/output` | Directory for output files |
+| HuggingFace cache | `HF_HOME` | Set via env | `{workspace}/.cache/huggingface` | Directory for HuggingFace model cache (used by vLLM) |
 
 ## Configuration Methods
 
-You can configure AI-Flux in multiple ways, depending on your preference and needs.
+You can configure LLMFlux in multiple ways, depending on your preference and needs.
+
+For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts.
+
+For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts.
 
 ### Method 1: Environment Variables (.env file)
 
-The simplest way to configure AI-Flux is by creating a `.env` file in your project root:
+The simplest way to configure LLMFlux is by creating a `.env` file in your project root:
 
 ```bash
 # SLURM Settings
@@ -66,6 +72,7 @@ SLURM_TIME=01:00:00
 MODEL_NAME=gemma3:27b
 BATCH_SIZE=8
 MAX_TOKENS=4096
+VLLM_ENGINE_ARGS={"trust-remote-code":true,"max-model-len":8192}
 ```
 
 ### Method 2: Direct Code Parameters (Recommended)
@@ -73,8 +80,8 @@ MAX_TOKENS=4096
 For more control, you can set configuration parameters directly in your code:
 
 ```python
-from aiflux.slurm import SlurmRunner
-from aiflux.core.config import Config
+from llmflux.slurm import SlurmRunner
+from llmflux.core.config import Config
 
 # Setup SLURM configuration
 config = Config()

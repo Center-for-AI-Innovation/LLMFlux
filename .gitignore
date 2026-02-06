@@ -1,3 +1,7 @@
+# Ollama models
+.ollama/*
+# TEMP
+tmp/*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -188,3 +192,5 @@ results/*
 # Data
 data/*
 
+# Benchmark data
+src/llmflux/benchmark_data/*
