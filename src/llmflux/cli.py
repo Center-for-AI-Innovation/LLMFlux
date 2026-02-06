@@ -308,6 +308,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         "-V",
+        "-v",
         action="version",
         version=f"%(prog)s {_get_llmflux_version()}",
         help="Show llmflux version and exit",
