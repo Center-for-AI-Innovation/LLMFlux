@@ -116,7 +116,7 @@ For advanced model configuration, see the [Models Guide](docs/MODELS.md).
 
 ## Command-Line Interface
 
-LLMFlux includes a command-line interface for submitting batch processing jobs:
+LLMFlux includes a command-line interface for submitting batch processing jobs. It uses Ollama as it's default engine, and model configurations rely on the Ollama naming scheme. To process your prompts.jsonl file using the Ollama engine running the llama3.2 model with 3b parameters, you would run the command:
 
 ```bash
 # Process JSONL file directly (core functionality)
