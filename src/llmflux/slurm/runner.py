@@ -472,7 +472,6 @@ class SlurmRunner:
             raise NotImplementedError
 
         job_script_text = "\n".join(job_script)
-        print(f'Job script:\n{job_script_text}')
         logging.debug(f'Job script:\n{job_script_text}')
         job_script_path = self.workspace / "job.sh"
         debug_mode = kwargs.get('debug', False)

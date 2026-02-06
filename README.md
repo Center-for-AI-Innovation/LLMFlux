@@ -53,6 +53,25 @@ Or for development:
    cp .env.example .env
    # Edit .env with your SLURM account and model details
    ```
+   
+Confirm the installation by running a base command and ensuring your system gives the correct output:
+
+```bash
+$llmflux -h
+usage: llmflux [-h] {run,benchmark} ...
+
+LLMFlux CLI
+
+positional arguments:
+  {run,benchmark}
+    run            Submit a batch processing job
+    benchmark      Run a benchmark job
+
+options:
+  -h, --help       show this help message and exit
+$llmflux -v
+llmflux 0.1.2
+```
 
 ## Quick Start
 
