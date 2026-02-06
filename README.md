@@ -10,6 +10,7 @@ A streamlined solution for running Large Language Models (LLMs) in batch mode on
 ```
       JSONL Input                    Batch Processing                    Results
    (OpenAI Format)                 (Ollama/vLLM + Model)               (JSON Output)
+
          │                                 │                                 │
          │                                 │                                 │
          ▼                                 ▼                                 ▼
@@ -103,6 +104,31 @@ LLMFlux includes a command-line interface for submitting batch processing jobs:
 # Process JSONL file directly (core functionality)
 llmflux run --model llama3.2:3b --input data/prompts.jsonl --output results/output.json
 ```
+
+In addition to the default OLLAMA engine, AI-Flux can also be run using VLLM, to take advantage of HuggingFace models. In order to use a model that requires a HuggingFace key, you will first need to update the default .env parameter to use your personal token. You then can call using the names as established in the templates dir:
+
+```bash
+# Process JSONL file using VLLM backend
+aiflux run --model llama3.2:3b --input data/prompts.jsonl --output results/output.json --engine=vllm
+```
+
+This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file mistral-lite/7b.yaml reveals the name: "mistrallite:7b". Update to the appropriate HuggingFace key and run 
+```bash
+# Process JSONL file using VLLM backend
+aiflux run --model mistral-lite:7b --input data/prompts.jsonl --output results/output.json --engine=vllm
+```
+this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`. You will
+need to check an existing model file from the folder src/aiflux/templates to find a configuration that matches what you want
+and use the name as the argument for the --model argument.
+
+Note that in order to use some HuggingFace models, you will need a key from HF. Once you have a token, update your
+local copy of the .env file and change this line:
+
+```bash
+HUGGINGFACE_TOKEN=hf_XXXXXXXXXXXXXXX
+```
+to use the token, replace the hf_XXXX piece with your token. VLLM should handle the rest.
+
 
 For detailed command options:
 ```bash
