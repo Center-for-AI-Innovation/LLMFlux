@@ -229,8 +229,13 @@ For code examples of converters, see the [examples directory](examples/).
 LLMFlux ships with a benchmarking workflow that can source prompts, submit the SLURM job, and collect results/metrics for you.
 
 ```bash
-llmflux benchmark --model llama3.2:3b --name nightly --num-prompts 60 \
-  --account ACCOUNT_NAME --partition PARTITION_NAME --nodes 1
+llmflux benchmark \
+    --model llama3.2:3b \
+    --name nightly \
+    --num-prompts 60 \
+    --account ACCOUNT_NAME \
+    --partition PARTITION_NAME \
+    --nodes 1
 ```
 
 - **Prompt sources**: omit `--input` to automatically download and cache LiveBench categories (``benchmark_data/``). Provide `--input path/to/prompts.jsonl` to reuse an existing JSONL file instead. Use `--num-prompts`, `--temperature`, and `--max-tokens` to control synthetic dataset generation.
