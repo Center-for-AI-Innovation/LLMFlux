@@ -30,9 +30,9 @@ LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API form
 
 ## Documentation
 
-- [Configuration Guide](docs/CONFIGURATION.md) - How to configure LLMFlux
-- [Models Guide](docs/MODELS.md) - Supported models and requirements
-- [Repository Structure](docs/REPOSITORY_STRUCTURE.md) - Codebase organization
+- [Configuration Guide](CONFIGURATION.md) - How to configure LLMFlux
+- [Models Guide](MODELS.md) - Supported models and requirements
+- [Repository Structure](REPOSITORY_STRUCTURE.md) - Codebase organization
 
 ## Installation
 
@@ -115,9 +115,9 @@ JSONL input format follows the OpenAI Batch API specification:
 {"custom_id":"request2","method":"POST","url":"/v1/chat/completions","body":{"model":"llama3.2:3b","messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"What is machine learning?"}],"temperature":0.7,"max_tokens":500}}
 ```
 
-For advanced options like custom batch sizes, processing settings, or SLURM configuration, see the [Configuration Guide](docs/CONFIGURATION.md).
+For advanced options like custom batch sizes, processing settings, or SLURM configuration, see the [Configuration Guide](CONFIGURATION.md).
 
-For advanced model configuration, see the [Models Guide](docs/MODELS.md).
+For advanced model configuration, see the [Models Guide](MODELS.md).
 
 ## Command-Line Interface
 
@@ -251,4 +251,4 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## License
 
-[MIT License](LICENSE) 
+[MIT License](../LICENSE) 
