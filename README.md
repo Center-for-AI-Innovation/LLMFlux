@@ -1,3 +1,8 @@
+---
+layout: default
+title: LLMFlux Documentation
+---
+
 # LLMFlux: LLM Batch Processing Pipeline for HPC Systems
 
 A streamlined solution for running Large Language Models (LLMs) in batch mode on HPC systems powered by Slurm. LLMFlux uses the OpenAI-compatible API format with a JSONL-first architecture, enabling your prompts to flow efficiently through LLM engines at scale.
