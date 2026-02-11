@@ -1,5 +1,5 @@
-title: AI-Flux Documentation
-description: Documentation for AI-Flux - LLM Batch Processing Pipeline for HPC Systems
+title: LLMFlux Documentation
+description: Documentation for LLMFlux - LLM Batch Processing Pipeline for HPC Systems
 url: https://llmflux.ncsa.ai
 baseurl: ""
 remote_theme: pages-themes/minimal
