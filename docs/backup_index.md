@@ -1,6 +1,6 @@
 ---
 layout: default
-title: AI-Flux Documentation
+title: LLMFlux Documentation
 ---
 
 # AI-Flux: LLM Batch Processing Pipeline for HPC Systems
