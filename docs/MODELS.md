@@ -26,6 +26,9 @@ Some example model keys are:
 - `gemma-3-27b-it` - Gemma 3 model with 27 billion parameters
 - `Qwen2.5-32B-Instruct` - Qwen 2.5 model with 32 billion parameters
 
+In addition, if a matching model on HuggingFace was identified and the engine choice is vLLM, then the model also includes an HF Name.
+This is the actual model that vLLM will attempt to use.
+
 ## Supported Models
 
 ### Llama 3.2
