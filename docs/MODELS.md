@@ -495,3 +495,5 @@ model_config = config.load_model_config(
     custom_config_path="path/to/custom/my-model.yaml"
 ) 
 ```
+
+[Back](README.md) to LLMFlux home.
