@@ -118,3 +118,5 @@ The `templates` module contains YAML configuration files for supported models:
 - `pyproject.toml`: Package configuration and dependencies
 - `.env.example`: Example environment configuration
 - `README.md`: Main project documentation 
+
+[Back](README.md) to LLMFlux home.
