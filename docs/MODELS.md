@@ -494,3 +494,4 @@ model_config = config.load_model_config(
     model_key="my-custom-model",
     custom_config_path="path/to/custom/my-model.yaml"
 ) 
+```
