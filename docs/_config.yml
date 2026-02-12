@@ -2,7 +2,7 @@ title: LLMFlux Documentation
 description: Documentation for LLMFlux - LLM Batch Processing Pipeline for HPC Systems
 url: https://llmflux.ncsa.ai
 baseurl: ""
-remote_theme: pages-themes/minimal
+remote_theme: pages-themes/cayman
 github:
   repository_url: https://github.com/Center-for-AI-Innovation/llmflux
   is_project_page: true
