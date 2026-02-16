@@ -455,7 +455,7 @@ models:
       gpu_memory_utilization: 0.9
   mistral-small-22b:
     name: mistral-small:22b
-    hf_name: NA
+    hf_name: mistralai/Mistral-Small-Instruct-2409
     resources:
       gpu_layers: 44
       gpu_memory: 13GB
@@ -1133,7 +1133,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  codellama-7b-instruct-hf:
+  codellama-7b:
     hf_name: codellama/CodeLlama-7b-Instruct-hf
     name: codellama:7b
     parameters:
@@ -1711,7 +1711,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  kimi-k2-instruct:
+  kimi-k2:
     hf_name: Moonshot/Kimi-K2-Instruct
     name: kimi-k2:1t-cloud
     parameters:
@@ -1779,7 +1779,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  llama-2-13b-chat-hf:
+  llama-2-13b:
     hf_name: meta-llama/Llama-2-13b-chat-hf
     name: llama2:13b
     parameters:
@@ -1813,7 +1813,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  llama-2-70b-chat-hf:
+  llama-2-70b:
     hf_name: meta-llama/Llama-2-70b-chat-hf
     name: llama2:70b
     parameters:
@@ -1847,7 +1847,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  llama-2-7b-chat-hf:
+  llama-2-7b:
     hf_name: meta-llama/Llama-2-7b-chat-hf
     name: llama2:7b
     parameters:
@@ -2085,7 +2085,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  medgemma-27b-it:
+  medgemma-27b:
     hf_name: google/medgemma-27b-it
     name: NA
     parameters:
@@ -2119,7 +2119,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  medgemma-4b-it:
+  medgemma-4b:
     hf_name: Google/medgemma-4b-it
     name: NA
     parameters:
@@ -2221,7 +2221,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  meta-llama-3.1-405b:
+  llama-3.1-405b:
     hf_name: meta-llama/Llama-3.1-405B-Instruct
     name: llama3.1:405b
     parameters:
@@ -2255,7 +2255,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  meta-llama-3.1-70b:
+  llama-3.1-70b:
     hf_name: meta-llama/Llama-3.1-70B-Instruct
     name: llama3.1:70b
     parameters:
@@ -2289,7 +2289,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  meta-llama-3.1-8b:
+  llama-3.1-8b:
     hf_name: meta-llama/Llama-3.1-8B-Instruct
     name: llama3.1:8b
     parameters:
@@ -2323,7 +2323,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  molmo-7b-d-0924:
+  molmo-7b:
     hf_name: allenai/Molmo-7B-D-0924
     name: NA
     parameters:
@@ -2357,7 +2357,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  phi-3.5-vision-instruct:
+  phi-3.5-vision:
     hf_name: microsoft/Phi-3.5-vision-instruct
     name: NA
     parameters:
@@ -2527,7 +2527,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  qwen2.5-32b-instruct:
+  qwen2.5-32b:
     hf_name: Qwen/Qwen2.5-32B-Instruct
     name: qwen2.5:32b
     parameters:
@@ -2561,7 +2561,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  qwen2.5-3b-instruct:
+  qwen2.5-3b:
     hf_name: Qwen/Qwen2.5-3B-Instruct
     name: qwen2.5:3b
     parameters:
@@ -2629,7 +2629,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  qwen2.5-coder-7b-instruct:
+  qwen2.5-coder-7b:
     hf_name: Qwen/Qwen2.5-Coder-7B-Instruct
     name: qwen2.5-coder:7b
     parameters:
@@ -2731,7 +2731,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  qwen2.5-math-7b-instruct:
+  qwen2.5-math-7b:
     hf_name: Qwen/Qwen2.5-Math-7B-Instruct
     name: NA
     parameters:
@@ -2833,7 +2833,7 @@ models:
       temperature_range:
       - 0.0
       - 1.0
-  qwen2.5-vl-7b-instruct:
+  qwen2.5-vl-7b:
     hf_name: Qwen/Qwen2.5-VL-7B-Instruct
     name: NA
     parameters:

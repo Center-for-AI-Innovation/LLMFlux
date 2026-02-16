@@ -310,24 +310,33 @@ class SlurmRunner:
         # Use ConfigManager for consistent parameter prioritization
         
         # Load the full model configuration from the user's input
-        model_identifier = kwargs.get('model', 'llama3.2:3b')
+        model_identifier = kwargs.get('model', 'llama3.2-3b')
         custom_config_path = kwargs.get('custom_config_path')
-        
-        try:
-            model_type, model_size = model_identifier.split(':', 1)
-        except ValueError:
-            logger.error(f"Invalid model format: '{model_identifier}'. Expected format 'type:size'.")
-            return "1"
 
         model_config = self.config_manager.get_config().load_model_config(
-            model_type,
-            model_size,
+            model_identifier,
             custom_config_path=custom_config_path
         )
 
         if not model_config:
-            logger.error(f"Failed to load model configuration for '{model_identifier}'.")
-            # Exit gracefully if model config is not found
+            logger.error(f"Model '{model_identifier}' not found. Check available models in models.yaml.")
+            return "1"
+
+        # Validate engine compatibility with model
+        if self.engine.engine == 'ollama' and (model_config.name is None or model_config.name == 'NA'):
+            logger.error(
+                f"Model '{model_identifier}' is not available for Ollama engine. "
+                f"This model only supports vLLM engine. "
+                f"Please use --engine vllm to run this model."
+            )
+            return "1"
+        
+        if self.engine.engine == 'vllm' and (model_config.hf_name is None or model_config.hf_name == 'NA'):
+            logger.error(
+                f"Model '{model_identifier}' is not available for vLLM engine. "
+                f"This model only supports Ollama engine. "
+                f"Please use --engine ollama to run this model."
+            )
             return "1"
 
         # Select the appropriate model name based on the engine

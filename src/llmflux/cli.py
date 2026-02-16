@@ -75,7 +75,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         Process exit code
     """
     # Generate or use provided dataset
-    name = args.name or f"benchmark_{args.model.replace(':', '_')}"
+    name = args.name or f"benchmark_{args.model}"
     num_prompts = getattr(args, "num_prompts", 50)
 
     if args.input:
@@ -300,7 +300,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # run subcommand
     run_parser = subparsers.add_parser("run", help="Submit a batch processing job")
-    run_parser.add_argument("--model", required=True, help="Model name, e.g., llama3.2:3b")
+    run_parser.add_argument("--model", required=True, help="Model key from models.yaml, e.g., llama3.2-3b")
     run_parser.add_argument("--input", required=True, help="Path to input JSONL file")
     run_parser.add_argument("--output", required=False, help="Path to output JSON file")
 
@@ -355,7 +355,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # benchmark subcommand
     benchmark_parser = subparsers.add_parser("benchmark", help="Run a benchmark job")
-    benchmark_parser.add_argument("--model", required=True, help="Model name, e.g., llama3.2:3b")
+    benchmark_parser.add_argument("--model", required=True, help="Model key from models.yaml, e.g., llama3.2-3b, phi3-small, deepseek-vl2")
     benchmark_parser.add_argument("--name", type=str, help="Benchmark run name (default: benchmark_{model})")
     benchmark_parser.add_argument("--num-prompts", type=int, default=50, help="Number of prompts to generate (default: 50)")
     benchmark_parser.add_argument("--input", type=str, help="Use existing prompts file instead of generating")
