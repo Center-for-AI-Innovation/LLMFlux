@@ -879,8 +879,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -913,8 +913,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -947,8 +947,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -981,8 +981,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1015,8 +1015,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1049,8 +1049,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1083,8 +1083,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1117,8 +1117,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1151,8 +1151,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1185,8 +1185,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1219,8 +1219,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1253,8 +1253,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1287,8 +1287,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1321,8 +1321,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1355,8 +1355,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1389,8 +1389,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1423,8 +1423,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1457,8 +1457,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1491,8 +1491,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1525,8 +1525,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1559,8 +1559,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1593,8 +1593,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1627,8 +1627,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1661,8 +1661,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1695,8 +1695,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1729,8 +1729,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1763,8 +1763,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1797,8 +1797,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1831,8 +1831,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1865,8 +1865,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1899,8 +1899,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1933,8 +1933,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1967,8 +1967,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2001,8 +2001,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2035,8 +2035,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2069,8 +2069,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2103,8 +2103,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2137,8 +2137,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2171,8 +2171,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2205,8 +2205,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2239,8 +2239,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2273,8 +2273,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2307,8 +2307,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2341,8 +2341,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2375,8 +2375,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2409,8 +2409,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2443,8 +2443,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2477,8 +2477,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2511,8 +2511,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2545,8 +2545,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2579,8 +2579,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2613,8 +2613,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2647,8 +2647,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2681,8 +2681,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2715,8 +2715,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2749,8 +2749,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2783,8 +2783,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2817,8 +2817,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2851,8 +2851,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2885,8 +2885,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2919,8 +2919,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2953,8 +2953,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2987,8 +2987,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -3021,8 +3021,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -3055,8 +3055,8 @@ models:
       recommended_gpu: A100
     resources:
       batch_size: 1
-      gpu_layers: -1
-      gpu_memory: N/A
+      gpu_layers: 1
+      gpu_memory: 1GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
