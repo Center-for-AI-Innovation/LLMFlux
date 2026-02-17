@@ -447,7 +447,7 @@ class Config:
         """Load and validate model configuration.
         
         Args:
-            model_key: Key of the model in models.yaml (e.g., 'llama3.2-3b', 'phi3-small', 'deepseek-vl2')
+            model_key: Key of the model in models.yaml (e.g., 'Llama-3.2-3B-Instruct', 'Qwen2.5-32B-Instruct')
             custom_config_path: Optional path to custom config
         Returns:
             Validated ModelConfig

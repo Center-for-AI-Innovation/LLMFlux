@@ -310,7 +310,7 @@ class SlurmRunner:
         # Use ConfigManager for consistent parameter prioritization
         
         # Load the full model configuration from the user's input
-        model_identifier = kwargs.get('model', 'llama3.2-3b')
+        model_identifier = kwargs.get('model', 'Llama-3.2-3B-Instruct')
         custom_config_path = kwargs.get('custom_config_path')
 
         model_config = self.config_manager.get_config().load_model_config(
