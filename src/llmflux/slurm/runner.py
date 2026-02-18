@@ -88,6 +88,14 @@ class SlurmRunner:
         
         # Use workspace if provided, otherwise use the default
         workspace_path = Path(workspace) if workspace else self.workspace
+
+        # Ensure HuggingFace cache directory exists so vLLM does not fail on first run.
+        hf_home_raw = os.getenv('HF_HOME') or str(Path.home() / ".cache" / "huggingface")
+        hf_home_path = Path(hf_home_raw).expanduser()
+        try:
+            hf_home_path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning(f"Unable to create HF_HOME directory '{hf_home_path}': {exc}")
         
         # Calculate GPU configuration values
         cuda_visible_devices = '0'  # Default to single GPU
@@ -122,6 +130,7 @@ class SlurmRunner:
             'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),  # Used for mkdir
             'VLLM_HOME': str(self.workspace / ".vllm"),
             'VLLM_MODELS': str(self.workspace / ".vllm" / "models"),
+            'HF_HOME': str(hf_home_path),
             'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
         }
 
@@ -140,6 +149,7 @@ class SlurmRunner:
             'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
             'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
             'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
+            'APPTAINERENV_HF_HOME': str(hf_home_path),
         }
         
         # Add HuggingFace token if available (for accessing gated models)
@@ -147,11 +157,6 @@ class SlurmRunner:
         if hf_token:
             container_vars['APPTAINERENV_HF_TOKEN'] = hf_token
         
-        # Pass through HF_HOME if set (for controlling HuggingFace model cache location)
-        hf_home = os.getenv('HF_HOME')
-        if hf_home:
-            container_vars['APPTAINERENV_HF_HOME'] = hf_home
-
         # Get base environment
         env = dict(os.environ)
         
