@@ -294,6 +294,44 @@ def _run_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _show_models_command(args: argparse.Namespace) -> int:
+    """Handle the `show-models` subcommand.
+
+    Lists all model keys defined in models.yaml.
+    """
+    import yaml
+
+    templates_dir = Path(__file__).parent / "templates"
+    models_yaml = templates_dir / "models.yaml"
+
+    if not models_yaml.exists():
+        print(f"Error: models.yaml not found at {models_yaml}", file=sys.stderr)
+        return 1
+
+    with open(models_yaml) as f:
+        data = yaml.safe_load(f)
+
+    models = data.get("models", {})
+    if not models:
+        print("No models found in models.yaml.")
+        return 0
+
+    print(f"Available models ({len(models)} total):\n")
+    for key in models:
+        entry = models[key]
+        name = entry.get("name", "")
+        hf_name = entry.get("hf_name", "")
+        engines = []
+        if name and name != "NA":
+            engines.append("ollama")
+        if hf_name and hf_name != "NA":
+            engines.append("vllm")
+        engine_str = f"  [{', '.join(engines)}]" if engines else "  [no engine]"
+        print(f"  {key}{engine_str}")
+
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llmflux", description="LLMFlux CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -399,6 +437,14 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
 
     benchmark_parser.set_defaults(func=_benchmark_command)
+
+    # show-models subcommand
+    show_models_parser = subparsers.add_parser(
+        "show-models",
+        help="List all available model keys from models.yaml",
+    )
+    show_models_parser.set_defaults(func=_show_models_command)
+
     return parser
 
 

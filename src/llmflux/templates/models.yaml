@@ -847,12 +847,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -886,7 +886,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -915,12 +915,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -954,7 +954,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -983,12 +983,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 80GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 80GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1017,12 +1017,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1056,7 +1056,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1085,12 +1085,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 40GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 40GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1119,12 +1119,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1153,12 +1153,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 40GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 40GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1187,12 +1187,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1221,12 +1221,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1255,12 +1255,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1294,7 +1294,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1323,12 +1323,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1362,7 +1362,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1391,12 +1391,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 8GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 8GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1430,7 +1430,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1459,12 +1459,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1498,7 +1498,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1527,12 +1527,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1561,12 +1561,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 80GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 80GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1600,7 +1600,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1634,7 +1634,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1663,12 +1663,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1702,7 +1702,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1731,12 +1731,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 80GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 80GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1765,12 +1765,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1799,12 +1799,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 40GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 40GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1833,12 +1833,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1867,12 +1867,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1906,7 +1906,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1935,12 +1935,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -1969,12 +1969,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2008,7 +2008,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2042,7 +2042,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2071,12 +2071,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 8GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 8GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2105,12 +2105,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 40GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 40GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2139,12 +2139,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2173,12 +2173,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 80GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 80GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2207,12 +2207,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 40GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 40GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2241,12 +2241,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2275,12 +2275,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2309,12 +2309,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 8GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 8GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2343,12 +2343,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2377,12 +2377,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2411,12 +2411,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2445,12 +2445,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2484,7 +2484,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2513,12 +2513,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 8GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 8GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2547,12 +2547,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 8GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 8GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2581,12 +2581,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2615,12 +2615,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2649,12 +2649,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 40GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 40GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2683,12 +2683,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 8GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 8GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2717,12 +2717,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 8GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 8GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2751,12 +2751,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 40GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 40GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2785,12 +2785,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 8GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 8GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2819,12 +2819,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 2GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 2GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2853,12 +2853,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2892,7 +2892,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2926,7 +2926,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2955,12 +2955,12 @@ models:
       cpu_threads: 8
       cuda_version: '>=11.8'
       gpu_memory_utilization: 0.9
-      min_gpu_memory: 24GB
+      min_gpu_memory: 16GB
       recommended_gpu: A100
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 16GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
@@ -2994,7 +2994,7 @@ models:
     resources:
       batch_size: 1
       gpu_layers: 1
-      gpu_memory: 1GB
+      gpu_memory: 24GB
       max_concurrent: 1
     system:
       prompt: You are a helpful AI assistant.
