@@ -40,6 +40,7 @@ def create_vllm_batch_script(
         "",
         "# Start vLLM server",
         "",
+        "echo hf_home: random_hf_home",
         "echo vllm home: $VLLM_HOME",
         "echo vllm models: $VLLM_MODELS",
         "mkdir -p $VLLM_HOME $VLLM_MODELS",
