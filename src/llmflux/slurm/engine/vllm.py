@@ -36,11 +36,10 @@ def create_vllm_batch_script(
 
     job_script.extend([
         "# Create all necessary directories",
-        "mkdir -p $DATA_INPUT_DIR $DATA_OUTPUT_DIR $MODELS_DIR $LOGS_DIR $CONTAINERS_DIR $APPTAINER_TMPDIR $APPTAINER_CACHEDIR",
+        "mkdir -p $DATA_INPUT_DIR $DATA_OUTPUT_DIR $MODELS_DIR $LOGS_DIR $CONTAINERS_DIR $APPTAINER_TMPDIR $APPTAINER_CACHEDIR $HF_HOME",
         "",
         "# Start vLLM server",
         "",
-        "echo hf_home random: random_hf_home",
         "echo hf_home: $HF_HOME",
         "echo vllm home: $VLLM_HOME",
         "echo vllm models: $VLLM_MODELS",

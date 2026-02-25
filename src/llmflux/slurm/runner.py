@@ -106,6 +106,9 @@ class SlurmRunner:
         # - Host-only vars: Used by bash script on host (not passed to container)
         # - APPTAINERENV_ vars: Automatically passed to container with --cleanenv
 
+        # Resolve HuggingFace cache directory with a default under workspace.
+        hf_home = os.getenv('HF_HOME') or str(workspace_path / ".cache" / "huggingface")
+
         # HOST-ONLY variables (used by bash script, NOT passed to container)
         host_vars = {
             'DATA_INPUT_DIR': str(self.data_input_dir),
@@ -122,6 +125,7 @@ class SlurmRunner:
             'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),  # Used for mkdir
             'VLLM_HOME': str(self.workspace / ".vllm"),
             'VLLM_MODELS': str(self.workspace / ".vllm" / "models"),
+            'HF_HOME': hf_home,  # Used for mkdir and --bind
             'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
         }
 
@@ -140,6 +144,7 @@ class SlurmRunner:
             'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
             'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
             'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
+            'APPTAINERENV_HF_HOME': hf_home,
         }
         
         # Add HuggingFace token if available (for accessing gated models)
@@ -147,10 +152,6 @@ class SlurmRunner:
         if hf_token:
             container_vars['APPTAINERENV_HF_TOKEN'] = hf_token
         
-        # Pass through HF_HOME if set (for controlling HuggingFace model cache location)
-        hf_home = os.getenv('HF_HOME')
-        if hf_home:
-            container_vars['APPTAINERENV_HF_HOME'] = hf_home
 
         # Get base environment
         env = dict(os.environ)
