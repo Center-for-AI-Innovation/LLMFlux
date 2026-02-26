@@ -441,17 +441,13 @@ class Config:
     
     def load_model_config(
         self,
-        model_type: str,
-        model_size: str = None,
-        engine: str = "ollama",
+        model_key: str,
         custom_config_path: Optional[str] = None,
     ) -> ModelConfig:
         """Load and validate model configuration.
         
         Args:
-            model_type: Type of model (e.g., 'qwen', 'llama')
-            model_size: Size of model (e.g., '7b', '70b')
-            engine: Engine to use for this run, either 'ollama' or 'vllm'
+            model_key: Key of the model in models.yaml (e.g., 'Llama-3.2-3B-Instruct', 'Qwen2.5-32B-Instruct')
             custom_config_path: Optional path to custom config
         Returns:
             Validated ModelConfig
@@ -467,7 +463,6 @@ class Config:
                 with open(self.templates_dir / 'models.yaml', 'r') as f:
                     all_models_data = yaml.safe_load(f)
 
-                model_key = f"{model_type}-{model_size}"
                 models = all_models_data.get('models', {})
 
                 if model_key in models:
@@ -475,17 +470,11 @@ class Config:
                 else:
                     raise FileNotFoundError(f"Model '{model_key}' not found in models.yaml")
 
-            if model_size:
-                model_name = f"{model_type}:{model_size}"
-            else:
-                model_name = f"{model_type}"
             # Create basic model config
             model_config = ModelConfig(
-                name=model_name,
+                name=config_data.get("name"),
                 hf_name=config_data.get("hf_name"),
-                engine=engine,
-                type=model_type,
-                size=model_size,
+                type=model_key,
                 parameters=ModelParameters(**config_data.get("parameters", {})),
                 resources=ResourceConfig(**config_data.get("resources", {})) if "resources" in config_data else None,
                 system=SystemConfig(**config_data.get("system", {})) if "system" in config_data else None,
@@ -495,13 +484,8 @@ class Config:
             return model_config
             
         except (FileNotFoundError, KeyError, TypeError) as e:
-            logging.warning(f"Could not load config for {model_type}:{model_size}. Using default. Reason: {e}")
-            return ModelConfig(
-                name=f"{model_type}:{model_size}",
-                hf_name=f"{model_type}",
-                type=model_type,
-                size=model_size
-            )
+            logging.warning(f"Could not load config for '{model_key}'. Reason: {e}")
+            return None
     
     def get_slurm_config(
         self,

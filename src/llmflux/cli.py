@@ -84,7 +84,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         Process exit code
     """
     # Generate or use provided dataset
-    name = args.name or f"benchmark_{args.model.replace(':', '_')}"
+    name = args.name or f"benchmark_{args.model}"
     num_prompts = getattr(args, "num_prompts", 50)
 
     if args.input:
@@ -303,6 +303,44 @@ def _run_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _show_models_command(args: argparse.Namespace) -> int:
+    """Handle the `show-models` subcommand.
+
+    Lists all model keys defined in models.yaml.
+    """
+    import yaml
+
+    templates_dir = Path(__file__).parent / "templates"
+    models_yaml = templates_dir / "models.yaml"
+
+    if not models_yaml.exists():
+        print(f"Error: models.yaml not found at {models_yaml}", file=sys.stderr)
+        return 1
+
+    with open(models_yaml) as f:
+        data = yaml.safe_load(f)
+
+    models = data.get("models", {})
+    if not models:
+        print("No models found in models.yaml.")
+        return 0
+
+    print(f"Available models ({len(models)} total):\n")
+    for key in models:
+        entry = models[key]
+        name = entry.get("name", "")
+        hf_name = entry.get("hf_name", "")
+        engines = []
+        if name and name != "NA":
+            engines.append("ollama")
+        if hf_name and hf_name != "NA":
+            engines.append("vllm")
+        engine_str = f"  [{', '.join(engines)}]" if engines else "  [no engine]"
+        print(f"  {key}{engine_str}")
+
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llmflux", description="LLMFlux CLI")
     parser.add_argument(
@@ -316,7 +354,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # run subcommand
     run_parser = subparsers.add_parser("run", help="Submit a batch processing job")
-    run_parser.add_argument("--model", required=True, help="Model name, e.g., llama3.2:3b")
+    run_parser.add_argument("--model", required=True, help="Model key from models.yaml, e.g., Llama-3.2-3B-Instruct, Qwen2.5-32B-Instruct")
     run_parser.add_argument("--input", required=True, help="Path to input JSONL file")
     run_parser.add_argument("--output", required=False, help="Path to output JSON file")
 
@@ -371,7 +409,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # benchmark subcommand
     benchmark_parser = subparsers.add_parser("benchmark", help="Run a benchmark job")
-    benchmark_parser.add_argument("--model", required=True, help="Model name, e.g., llama3.2:3b")
+    benchmark_parser.add_argument("--model", required=True, help="Model key from list (use command llmflux show-models to see available models)")
     benchmark_parser.add_argument("--name", type=str, help="Benchmark run name (default: benchmark_{model})")
     benchmark_parser.add_argument("--num-prompts", type=int, default=50, help="Number of prompts to generate (default: 50)")
     benchmark_parser.add_argument("--input", type=str, help="Use existing prompts file instead of generating")
@@ -415,6 +453,14 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
 
     benchmark_parser.set_defaults(func=_benchmark_command)
+
+    # show-models subcommand
+    show_models_parser = subparsers.add_parser(
+        "show-models",
+        help="List all available model keys from models.yaml",
+    )
+    show_models_parser.set_defaults(func=_show_models_command)
+
     return parser
 
 

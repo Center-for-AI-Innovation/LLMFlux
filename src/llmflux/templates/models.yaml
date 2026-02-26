@@ -1,7 +1,5 @@
-# Combined Model Configurations
-
 models:
-  gemma3-1b:
+  gemma-3-1b-it:
     name: gemma3:1b
     hf_name: google/gemma-3-1b-it
     resources:
@@ -16,8 +14,7 @@ models:
       stop_sequences:
       - <end_of_turn>
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -35,7 +32,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 2
       gpu_memory_utilization: 0.9
-  gemma3-4b:
+  gemma-3-4b-it:
     name: gemma3:4b
     hf_name: google/gemma-3-4b-it
     resources:
@@ -50,9 +47,8 @@ models:
       stop_sequences:
       - <end_of_turn>
     system:
-      prompt: You are a helpful AI assistant. You can understand both text and images
-        provided by the user. Answer accurately and helpfully based on the visual
-        and textual information.
+      prompt: You are a helpful AI assistant. You can understand both text and images provided by the user. Answer accurately
+        and helpfully based on the visual and textual information.
     validation:
       temperature_range:
       - 0.0
@@ -70,7 +66,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 4
       gpu_memory_utilization: 0.9
-  gemma3-12b:
+  gemma-3-12b-it:
     name: gemma3:12b
     hf_name: google/gemma-3-12b-it
     resources:
@@ -85,9 +81,8 @@ models:
       stop_sequences:
       - <end_of_turn>
     system:
-      prompt: You are a helpful AI assistant. You can understand both text and images
-        provided by the user. Answer accurately and helpfully based on the visual
-        and textual information.
+      prompt: You are a helpful AI assistant. You can understand both text and images provided by the user. Answer accurately
+        and helpfully based on the visual and textual information.
     validation:
       temperature_range:
       - 0.0
@@ -105,7 +100,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 6
       gpu_memory_utilization: 0.9
-  gemma3-27b:
+  gemma-3-27b-it:
     name: gemma3:27b
     hf_name: google/gemma-3-27b-it
     resources:
@@ -120,9 +115,8 @@ models:
       stop_sequences:
       - <end_of_turn>
     system:
-      prompt: You are a helpful AI assistant. You can understand both text and images
-        provided by the user. Answer accurately and helpfully based on the visual
-        and textual information.
+      prompt: You are a helpful AI assistant. You can understand both text and images provided by the user. Answer accurately
+        and helpfully based on the visual and textual information.
     validation:
       temperature_range:
       - 0.0
@@ -140,7 +134,7 @@ models:
       cuda_version: '>=12.0'
       cpu_threads: 8
       gpu_memory_utilization: 0.9
-  llama3.2-1b:
+  Llama-3.2-1B-Instruct:
     name: llama3.2:1b
     hf_name: meta-llama/Llama-3.2-1B-Instruct
     resources:
@@ -155,8 +149,7 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -174,7 +167,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 2
       gpu_memory_utilization: 0.9
-  llama3.2-3b:
+  Llama-3.2-3B-Instruct:
     name: llama3.2:3b
     hf_name: meta-llama/Llama-3.2-3B-Instruct
     resources:
@@ -189,8 +182,7 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -208,7 +200,7 @@ models:
       cuda_version: '>=12.0'
       cpu_threads: 4
       gpu_memory_utilization: 0.9
-  llama3.2-vision-11b:
+  Llama-3.2-11B-Vision-Instruct:
     name: llama3.2-vision:11b
     hf_name: meta-llama/Llama-3.2-11B-Vision-Instruct
     resources:
@@ -223,9 +215,8 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are a helpful AI assistant with vision capabilities. You can understand
-        both text and images provided by the user. Answer accurately and helpfully
-        based on the visual and textual information.
+      prompt: You are a helpful AI assistant with vision capabilities. You can understand both text and images provided by
+        the user. Answer accurately and helpfully based on the visual and textual information.
     validation:
       temperature_range:
       - 0.0
@@ -243,7 +234,7 @@ models:
       cuda_version: '>=12.0'
       cpu_threads: 8
       gpu_memory_utilization: 0.9
-  llama3.2-vision-90b:
+  Llama-3.2-90B-Vision-Instruct:
     name: llama3.2-vision:90b
     hf_name: meta-llama/Llama-3.2-90B-Vision-Instruct
     resources:
@@ -258,9 +249,8 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are a helpful AI assistant with vision capabilities. You can understand
-        both text and images provided by the user. Answer accurately and helpfully
-        based on the visual and textual information.
+      prompt: You are a helpful AI assistant with vision capabilities. You can understand both text and images provided by
+        the user. Answer accurately and helpfully based on the visual and textual information.
     validation:
       temperature_range:
       - 0.0
@@ -278,8 +268,8 @@ models:
       cuda_version: '>=12.0'
       cpu_threads: 16
       gpu_memory_utilization: 0.9
-  llama3.3-70b-instruct:
-    name: llama3.3:70b-instruct
+  Llama-3.3-70B-Instruct:
+    name: llama3.3:70b
     hf_name: meta-llama/Llama-3.3-70B-Instruct
     resources:
       gpu_layers: 80
@@ -293,8 +283,7 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -312,7 +301,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 8
       gpu_memory_utilization: 0.9
-  mistral-7b:
+  Mistral-7B-Instruct-v0.3:
     name: mistral:7b
     hf_name: mistralai/Mistral-7B-Instruct-v0.3
     resources:
@@ -328,8 +317,7 @@ models:
       - '[INST]'
       - '[/INST]'
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -347,9 +335,9 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 4
       gpu_memory_utilization: 0.9
-  mistral-large-123b:
+  Mistral-Large-Instruct-2411:
     name: mistral-large:123b
-    hf_name: mistralai/Mistral-Large-Instruct-2407
+    hf_name: mistralai/Mistral-Large-Instruct-2411
     resources:
       gpu_layers: 48
       gpu_memory: 80GB
@@ -364,8 +352,7 @@ models:
       - '[/INST]'
       - </s>
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -383,7 +370,7 @@ models:
       cuda_version: '>=12.0'
       cpu_threads: 16
       gpu_memory_utilization: 0.9
-  mistral-nemo-12b:
+  Mistral-Nemo-Instruct-2407:
     name: mistral-nemo:12b
     hf_name: mistralai/Mistral-Nemo-Instruct-2407
     resources:
@@ -399,8 +386,7 @@ models:
       - '[INST]'
       - '[/INST]'
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -418,7 +404,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 6
       gpu_memory_utilization: 0.9
-  mistral-openorca-7b:
+  Mistral-7B-OpenOrca:
     name: mistral-openorca:7b
     hf_name: Open-Orca/Mistral-7B-OpenOrca
     resources:
@@ -434,8 +420,7 @@ models:
       - <|im_start|>
       - <|im_end|>
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -453,7 +438,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 4
       gpu_memory_utilization: 0.9
-  mistral-small-22b:
+  Mistral-Small-Instruct-2409:
     name: mistral-small:22b
     hf_name: mistralai/Mistral-Small-Instruct-2409
     resources:
@@ -470,12 +455,10 @@ models:
       - '[/INST]'
       - </s>
     system:
-      prompt: You are Mistral Small 22B, a Large Language Model (LLM) created by Mistral
-        AI, a French startup headquartered in Paris. Your knowledge base was last
-        updated on 2023-10-01. When you're not sure about some information, you say
-        that you don't have the information and don't make up anything. If the user's
-        question is not clear, ambiguous, or does not provide enough context for you
-        to accurately answer the question, you do not try to answer it right away
+      prompt: You are Mistral Small 22B, a Large Language Model (LLM) created by Mistral AI, a French startup headquartered
+        in Paris. Your knowledge base was last updated on 2023-10-01. When you're not sure about some information, you say
+        that you don't have the information and don't make up anything. If the user's question is not clear, ambiguous, or
+        does not provide enough context for you to accurately answer the question, you do not try to answer it right away
         and you rather ask the user to clarify their request.
     validation:
       temperature_range:
@@ -499,7 +482,7 @@ models:
       cuda_version: '>=11.8'
       cpu_threads: 8
       gpu_memory_utilization: 0.9
-  mistral-small-24b:
+  Mistral-Small-24B-Instruct-2501:
     name: mistral-small:24b
     hf_name: mistralai/Mistral-Small-24B-Instruct-2501
     resources:
@@ -516,12 +499,10 @@ models:
       - '[/INST]'
       - </s>
     system:
-      prompt: You are Mistral Small 3, a Large Language Model (LLM) created by Mistral
-        AI, a French startup headquartered in Paris. Your knowledge base was last
-        updated on 2023-10-01. When you're not sure about some information, you say
-        that you don't have the information and don't make up anything. If the user's
-        question is not clear, ambiguous, or does not provide enough context for you
-        to accurately answer the question, you do not try to answer it right away
+      prompt: You are Mistral Small 3, a Large Language Model (LLM) created by Mistral AI, a French startup headquartered
+        in Paris. Your knowledge base was last updated on 2023-10-01. When you're not sure about some information, you say
+        that you don't have the information and don't make up anything. If the user's question is not clear, ambiguous, or
+        does not provide enough context for you to accurately answer the question, you do not try to answer it right away
         and you rather ask the user to clarify their request.
     validation:
       temperature_range:
@@ -547,7 +528,7 @@ models:
       cuda_version: '>=11.8'
       cpu_threads: 8
       gpu_memory_utilization: 0.9
-  mistrallite-7b:
+  MistralLite:
     name: mistrallite:7b
     hf_name: amazon/MistralLite
     resources:
@@ -564,8 +545,7 @@ models:
       - <|assistant|>
       - </s>
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -583,7 +563,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 4
       gpu_memory_utilization: 0.9
-  mixtral-8x7b:
+  Mixtral-8x7B-Instruct-v0.1:
     name: mixtral:8x7b
     hf_name: mistralai/Mixtral-8x7B-Instruct-v0.1
     resources:
@@ -599,8 +579,7 @@ models:
       - '[INST]'
       - '[/INST]'
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -618,7 +597,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 8
       gpu_memory_utilization: 0.9
-  mixtral-8x22b:
+  Mixtral-8x22B-Instruct-v0.1:
     name: mixtral:8x22b
     hf_name: mistralai/Mixtral-8x22B-Instruct-v0.1
     resources:
@@ -634,8 +613,7 @@ models:
       - '[INST]'
       - '[/INST]'
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -653,9 +631,9 @@ models:
       cuda_version: '>=12.0'
       cpu_threads: 16
       gpu_memory_utilization: 0.9
-  phi3-medium:
+  Phi-3-medium-128k-instruct:
     name: phi3:medium
-    hf_name: microsoft/Phi-3-medium-4k-instruct
+    hf_name: microsoft/Phi-3-medium-128k-instruct
     resources:
       gpu_layers: 36
       gpu_memory: 24GB
@@ -670,8 +648,7 @@ models:
       - <|user|>
       - <|assistant|>
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -689,7 +666,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 4
       gpu_memory_utilization: 0.9
-  phi3-mini:
+  Phi-3-mini-4k-instruct:
     name: phi3:mini
     hf_name: microsoft/Phi-3-mini-4k-instruct
     resources:
@@ -706,8 +683,7 @@ models:
       - <|user|>
       - <|assistant|>
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -725,8 +701,8 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 2
       gpu_memory_utilization: 0.9
-  phi3-small:
-    name: phi3:small
+  Phi-3-small-8k-instruct:
+    name: NA
     hf_name: microsoft/Phi-3-small-8k-instruct
     resources:
       gpu_layers: 28
@@ -740,8 +716,7 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful
-        in your responses.
+      prompt: You are a helpful AI assistant. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -759,8 +734,8 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 3
       gpu_memory_utilization: 0.9
-  phi3-vision:
-    name: phi3:vision
+  Phi-3-vision-128k-instruct:
+    name: NA
     hf_name: microsoft/Phi-3-vision-128k-instruct
     resources:
       gpu_layers: 40
@@ -774,8 +749,7 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are a helpful AI assistant with vision capabilities. You are direct,
-        accurate, and helpful in your responses.
+      prompt: You are a helpful AI assistant with vision capabilities. You are direct, accurate, and helpful in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -793,7 +767,7 @@ models:
       cuda_version: '>=11.7'
       cpu_threads: 6
       gpu_memory_utilization: 0.9
-  qwen2.5-7b:
+  Qwen2.5-7B-Instruct:
     name: qwen2.5:7b
     hf_name: Qwen/Qwen2.5-7B-Instruct
     resources:
@@ -808,8 +782,7 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are Qwen, a large language model trained by Alibaba Cloud. You are
-        direct and concise in your responses.
+      prompt: You are Qwen, a large language model trained by Alibaba Cloud. You are direct and concise in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -827,7 +800,7 @@ models:
       cuda_version: '>=12.0'
       cpu_threads: 4
       gpu_memory_utilization: 0.9
-  qwen2.5-72b:
+  Qwen2.5-72B-Instruct:
     name: qwen2.5:72b
     hf_name: Qwen/Qwen2.5-72B-Instruct
     resources:
@@ -842,8 +815,7 @@ models:
       stop_sequences:
       - '###'
     system:
-      prompt: You are Qwen, a large language model trained by Alibaba Cloud. You are
-        direct and concise in your responses.
+      prompt: You are Qwen, a large language model trained by Alibaba Cloud. You are direct and concise in your responses.
     validation:
       temperature_range:
       - 0.0
@@ -861,3 +833,2179 @@ models:
       cuda_version: '>=12.0'
       cpu_threads: 4
       gpu_memory_utilization: 0.9
+  all-MiniLM-L6-v2:
+    hf_name: sentence-transformers/all-MiniLM-L6-v2
+    name: all-minilm:22m
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  aya-expanse-32b:
+    hf_name: CohereLabs/aya-expanse-32b
+    name: aya-expanse:32b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  bge-base-en-v1.5:
+    hf_name: BAAI/bge-base-en-v1.5
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  c4ai-command-r-v01:
+    hf_name: CohereLabs/c4ai-command-r-v01
+    name: command-r:35b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  c4ai-command-r-plus:
+    hf_name: CohereLabs/c4ai-command-r-plus
+    name: command-r-plus:104b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 80GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 80GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  CodeLlama-13b-Instruct-hf:
+    hf_name: codellama/CodeLlama-13b-Instruct-hf
+    name: codellama:13b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  CodeLlama-34b-Instruct-hf:
+    hf_name: codellama/CodeLlama-34b-Instruct-hf
+    name: codellama:34b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  CodeLlama-70b-Instruct-hf:
+    hf_name: codellama/CodeLlama-70b-Instruct-hf
+    name: codellama:70b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 40GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 40GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  CodeLlama-7b-Instruct-hf:
+    hf_name: codellama/CodeLlama-7b-Instruct-hf
+    name: codellama:7b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  DeepSeek-R1-Distill-Llama-70B:
+    hf_name: deepseek-ai/DeepSeek-R1-Distill-Llama-70B
+    name: deepseek-r1:70b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 40GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 40GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  DeepSeek-R1-Distill-Llama-8B:
+    hf_name: deepseek-ai/DeepSeek-R1-Distill-Llama-8B
+    name: deepseek-r1:8b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  DeepSeek-R1-Distill-Qwen-1.5B:
+    hf_name: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+    name: deepseek-r1:1.5b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  DeepSeek-R1-Distill-Qwen-14B:
+    hf_name: deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
+    name: deepseek-r1:14b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  DeepSeek-R1-Distill-Qwen-32B:
+    hf_name: deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
+    name: deepseek-r1:32b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  DeepSeek-R1-Distill-Qwen-7B:
+    hf_name: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+    name: deepseek-r1:7b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  deepseek-vl2:
+    hf_name: deepseek-ai/deepseek-vl2
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  deepseek-vl2-small:
+    hf_name: deepseek-ai/deepseek-vl2-small
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 8GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 8GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  gemma-2-27b-it:
+    hf_name: google/gemma-2-27b-it
+    name: gemma2:27b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  gemma-2-2b-it:
+    hf_name: google/gemma-2-2b-it
+    name: gemma2:2b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  gemma-2-9b-it:
+    hf_name: google/gemma-2-9b-it
+    name: gemma2:9b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  glm-4-9b-chat-hf:
+    hf_name: zai-org/glm-4-9b-chat-hf
+    name: glm4:9b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  gpt-oss-120b:
+    hf_name: openai/gpt-oss-120b
+    name: gpt-oss:120b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 80GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 80GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  InternVL2_5-26B:
+    hf_name: OpenGVLab/InternVL2_5-26B
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  InternVL2_5-38B:
+    hf_name: OpenGVLab/InternVL2_5-38B
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  InternVL2_5-8B:
+    hf_name: OpenGVLab/InternVL2_5-8B
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Kimi-K2-Instruct:
+    hf_name: Moonshot/Kimi-K2-Instruct
+    name: kimi-k2:1t-cloud
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Kimi-K2.5:
+    hf_name: Moonshot/Kimi-K2.5
+    name: kimi-k2.5:cloud
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 80GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 80GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Llama-2-13b-chat-hf:
+    hf_name: meta-llama/Llama-2-13b-chat-hf
+    name: llama2:13b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Llama-2-70b-chat-hf:
+    hf_name: meta-llama/Llama-2-70b-chat-hf
+    name: llama2:70b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 40GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 40GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Llama-2-7b-chat-hf:
+    hf_name: meta-llama/Llama-2-7b-chat-hf
+    name: llama2:7b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Llama-3.2-1B:
+    hf_name: meta-llama/Llama-3.2-1B
+    name: llama3.2:1b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Llama-4-Maverick-17B-128E-Instruct:
+    hf_name: meta-llama/Llama-4-Maverick-17B-128E-Instruct
+    name: llama4:128x17b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  llava-1.5-13b-hf:
+    hf_name: llava-hf/llava-1.5-13b-hf
+    name: llava:13b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  llava-v1.6-mistral-7b-hf:
+    hf_name: llava-hf/llava-v1.6-mistral-7b-hf
+    name: llava:7b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  llava-v1.6-34b-hf:
+    hf_name: llava-hf/llava-v1.6-34b-hf
+    name: llava:34b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  medgemma-27b-it:
+    hf_name: google/medgemma-27b-it
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  medgemma-4b-it:
+    hf_name: google/medgemma-4b-it
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 8GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 8GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Meta-Llama-3-70B-Instruct:
+    hf_name: meta-llama/Meta-Llama-3-70B-Instruct
+    name: llama3:70b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 40GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 40GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Meta-Llama-3-8B-Instruct:
+    hf_name: meta-llama/Meta-Llama-3-8B-Instruct
+    name: llama3:8b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Llama-3.1-405B-Instruct:
+    hf_name: meta-llama/Llama-3.1-405B-Instruct
+    name: llama3.1:405b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 80GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 80GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Llama-3.1-70B-Instruct:
+    hf_name: meta-llama/Llama-3.1-70B-Instruct
+    name: llama3.1:70b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 40GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 40GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Llama-3.1-8B-Instruct:
+    hf_name: meta-llama/Llama-3.1-8B-Instruct
+    name: llama3.1:8b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Molmo-7B-D-0924:
+    hf_name: allenai/Molmo-7B-D-0924
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Phi-3.5-vision-instruct:
+    hf_name: microsoft/Phi-3.5-vision-instruct
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 8GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 8GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Pixtral-12B-2409:
+    hf_name: mistralai/Pixtral-12B-2409
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-0.5B-Instruct:
+    hf_name: Qwen/Qwen2.5-0.5B-Instruct
+    name: qwen2.5:0.5b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-1.5B-Instruct:
+    hf_name: Qwen/Qwen2.5-1.5B-Instruct
+    name: qwen2.5:1.5b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-14B-Instruct:
+    hf_name: Qwen/Qwen2.5-14B-Instruct
+    name: qwen2.5:14b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-32B-Instruct:
+    hf_name: Qwen/Qwen2.5-32B-Instruct
+    name: qwen2.5:32b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-3B-Instruct:
+    hf_name: Qwen/Qwen2.5-3B-Instruct
+    name: qwen2.5:3b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 8GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 8GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-Coder-3B-Instruct:
+    hf_name: Qwen/Qwen2.5-Coder-3B-Instruct
+    name: qwen2.5-coder:3b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 8GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 8GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-Coder-7B-Instruct:
+    hf_name: Qwen/Qwen2.5-Coder-7B-Instruct
+    name: qwen2.5-coder:7b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-Math-1.5B-Instruct:
+    hf_name: Qwen/Qwen2.5-Math-1.5B-Instruct
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-Math-72B-Instruct:
+    hf_name: Qwen/Qwen2.5-Math-72B-Instruct
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 40GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 40GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-Math-7B-Instruct:
+    hf_name: Qwen/Qwen2.5-Math-7B-Instruct
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 8GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 8GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-Math-PRM-7B:
+    hf_name: Qwen/Qwen2.5-Math-PRM-7B
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 8GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 8GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-Math-RM-72B:
+    hf_name: Qwen/Qwen2.5-Math-RM-72B
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 40GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 40GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen2.5-VL-7B-Instruct:
+    hf_name: Qwen/Qwen2.5-VL-7B-Instruct
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 8GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 8GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen3-0.6B:
+    hf_name: Qwen/Qwen3-0.6B
+    name: qwen3:0.6b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 2GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 2GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen3-14B:
+    hf_name: Qwen/Qwen3-14B
+    name: qwen3:14b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen3-32B:
+    hf_name: Qwen/Qwen3-32B
+    name: qwen3:32b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  Qwen3-8B:
+    hf_name: Qwen/Qwen3-8B
+    name: qwen3:8b
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  QwQ-32B:
+    hf_name: Qwen/QwQ-32B
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 16GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 16GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
+  whisper-large-v3:
+    hf_name: openai/whisper-large-v3
+    name: NA
+    parameters:
+      max_tokens: 2048
+      stop_sequences:
+      - <|endoftext|>
+      - <|im_end|>
+      temperature: 0.7
+      top_p: 0.9
+    requirements:
+      cpu_threads: 8
+      cuda_version: '>=11.8'
+      gpu_memory_utilization: 0.9
+      min_gpu_memory: 24GB
+      recommended_gpu: A100
+    resources:
+      batch_size: 1
+      gpu_layers: 1
+      gpu_memory: 24GB
+      max_concurrent: 1
+    system:
+      prompt: You are a helpful AI assistant.
+    validation:
+      batch_size_range:
+      - 1
+      - 32
+      concurrent_range:
+      - 1
+      - 8
+      max_tokens_limit: 8192
+      temperature_range:
+      - 0.0
+      - 1.0
