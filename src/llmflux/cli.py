@@ -393,7 +393,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # benchmark subcommand
     benchmark_parser = subparsers.add_parser("benchmark", help="Run a benchmark job")
-    benchmark_parser.add_argument("--model", required=True, help="Model key from models.yaml, e.g., Llama-3.2-3B-Instruct, Qwen2.5-32B-Instruct")
+    benchmark_parser.add_argument("--model", required=True, help="Model key from list (use command llmflux show-models to see available models)")
     benchmark_parser.add_argument("--name", type=str, help="Benchmark run name (default: benchmark_{model})")
     benchmark_parser.add_argument("--num-prompts", type=int, default=50, help="Number of prompts to generate (default: 50)")
     benchmark_parser.add_argument("--input", type=str, help="Use existing prompts file instead of generating")
