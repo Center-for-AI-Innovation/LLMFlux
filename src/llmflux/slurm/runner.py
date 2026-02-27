@@ -142,8 +142,10 @@ class SlurmRunner:
             'APPTAINERENV_CUDA_VISIBLE_DEVICES': cuda_visible_devices,
             'APPTAINERENV_OLLAMA_SCHED_SPREAD': ollama_sched_spread,
             'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
-            'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
-            'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
+            # Use system CA bundle for HTTPS (e.g. HuggingFace model downloads).
+            # Empty values break downloads with "No CA certificates were loaded".
+            'APPTAINERENV_CURL_CA_BUNDLE': '/etc/ssl/certs/ca-certificates.crt',
+            'APPTAINERENV_SSL_CERT_FILE': '/etc/ssl/certs/ca-certificates.crt',
             'APPTAINERENV_HF_HOME': hf_home,
         }
         
