@@ -13,12 +13,13 @@ def create_ollama_batch_script(
     logs_dir: Path,
     input_file: Path,
     output_file: Path,
+    job_name: str,
     slurm_config,
 ) -> list[str]:
     # Create SLURM job script
     job_script = [
         "#!/bin/bash",
-        f"#SBATCH --job-name=llm_processor",
+        f"#SBATCH --job-name={job_name}",
         f"#SBATCH --account={account}",
         f"#SBATCH --partition={partition}",
         f"#SBATCH --nodes={nodes}",

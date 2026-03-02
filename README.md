@@ -109,6 +109,38 @@ For detailed command options:
 llmflux --help
 ```
 
+### Job Control Commands
+
+LLMFlux tracks submitted jobs in a local registry (`~/.llmflux/jobs.json`) and
+combines that metadata with Slurm state.
+
+```bash
+# List tracked jobs (default: active states only)
+llmflux jobs
+
+# Include historical states
+llmflux jobs --all
+
+# Filter by one or more states
+llmflux jobs --state RUNNING --state FAILED
+
+# Show detailed merged status for one job
+llmflux status <job-id>
+
+# Tail logs (default: 100 lines)
+llmflux logs <job-id>
+llmflux logs <job-id> --tail 200
+llmflux logs <job-id> -f
+
+# Cancel a tracked job
+llmflux cancel <job-id>
+llmflux cancel <job-id> --force
+```
+
+Notes:
+- `jobs` and `status` derive live state from Slurm JSON output.
+- `logs` and `cancel` only operate on jobs present in the LLMFlux registry.
+
 ## Output Format
 
 Results are saved in the user's workspace:
