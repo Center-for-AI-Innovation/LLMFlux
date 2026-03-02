@@ -125,7 +125,7 @@ def create_vllm_batch_script(
         "    model_config.engine = engine",
         "except Exception as e:",
         "    print(f'Error loading model config for {model_identifier}: {e}')",
-        "    model_config = config.load_model_config('Qwen2.5-7B-Instruct')",
+        "    model_config = config.load_model_config('Llama-3.2-3B-Instruct')",
         "    model_config.engine = engine",
         "",
         "print('Create batch processor with JSONL input')",
