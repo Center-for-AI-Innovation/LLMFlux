@@ -27,6 +27,7 @@ Advanced general-purpose model from Meta.
 
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
+| 1b (base) | 2GB | Any CUDA GPU | Base model without instruction tuning |
 | 1b | 8GB | Any CUDA GPU | Lightweight, good for basic tasks |
 | 3b | 16GB | A40/A100 | Best balance of performance/resource usage |
 
@@ -64,7 +65,12 @@ Production-quality models from Alibaba.
 
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
+| 0.5b | 2GB | Any CUDA GPU | Ultra-lightweight model |
+| 1.5b | 2GB | Any CUDA GPU | Lightweight model |
+| 3b | 8GB | Any CUDA GPU | Good for basic tasks |
 | 7b | 16GB | A40/A100 | Default setup, good general model |
+| 14b | 16GB | A40/A100 | Mid-range option |
+| 32b | 24GB | A100 | High performance |
 | 72b | 40GB | A100 80GB | High performance, high resource usage |
 
 ### Phi 3
@@ -166,6 +172,7 @@ Alibaba's math-specialized models (vLLM only).
 | 1.5b | 2GB | Any CUDA GPU | Lightweight math model |
 | 7b | 8GB | Any CUDA GPU | Good math reasoning |
 | 72b | 40GB | A100 80GB | High performance math |
+| 72b | 40GB | A100 80GB | Reward model |
 
 ### Qwen 2.5 Vision
 
