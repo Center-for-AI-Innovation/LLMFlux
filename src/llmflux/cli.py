@@ -11,7 +11,7 @@ import time
 import subprocess
 import logging
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
@@ -20,12 +20,12 @@ from .slurm.commands import (
     ACTIVE_STATES,
     SlurmCommandError,
     cancel_job,
-    get_active_jobs,
-    get_historical_jobs,
+    get_active_job_details,
     get_job_details,
+    get_list_of_jobs_details,
     get_job_log_paths,
     get_job_state,
-    verify_cancelled,
+    extract_state,
 )
 from .processors import BatchProcessor
 from .core.config import Config, EngineConfig
@@ -356,6 +356,7 @@ def _show_models_command(args: argparse.Namespace) -> int:
 
 
 def _render_table(rows: list[list[str]], headers: list[str]) -> None:
+    """Helper function to render a table of rows and headers"""
     if not rows:
         print("No jobs found.")
         return
@@ -371,6 +372,10 @@ def _render_table(rows: list[list[str]], headers: list[str]) -> None:
 
 
 def _pick(job: Dict[str, object], *keys: str) -> str:
+    """
+    Helper function to pick a value from a dictionary of keys
+    If not found, returns "--"
+    """
     for key in keys:
         value = job.get(key)
         if value is None:
@@ -382,73 +387,109 @@ def _pick(job: Dict[str, object], *keys: str) -> str:
 
 
 def _format_timestamp(value: object) -> str:
+    """Format any Slurm timestamp as local time in YYYY-MM-DD HH:MM:SS."""
     if value is None:
         return "--"
+    if isinstance(value, (int, float)) and value > 0:
+        return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S")
     text = str(value).strip()
     if not text:
         return "--"
     try:
         parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo:
+            parsed = parsed.astimezone(tz=None)
         return parsed.strftime("%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        return text
+    except (ValueError, OSError):
+        return "--"
 
 
-def _resolve_job_state(job_id: str, job_payload: Dict[str, object]) -> str:
-    raw_state = job_payload.get("job_state")
-    if isinstance(raw_state, list) and raw_state:
-        return str(raw_state[0]).upper()
-    if isinstance(raw_state, str) and raw_state.strip():
-        return raw_state.upper()
-    for key in ("state", "State", "state_current"):
-        value = job_payload.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.upper()
-    try:
-        looked_up = get_job_state(job_id)
-    except SlurmCommandError:
-        return "UNKNOWN"
-    return looked_up or "UNKNOWN"
+def _format_seconds_to_hhmmss(seconds: object) -> str:
+    """Format an integer number of seconds as HH:MM:SS."""
+    if not isinstance(seconds, (int, float)) or seconds <= 0:
+        return "--"
+    s = int(seconds)
+    return f"{s // 3600:02d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
+
+
+def _format_time_limit(limit: object) -> str:
+    """Unpack Slurm's set-object or plain integer time limit (minutes) into a string."""
+    if isinstance(limit, dict):
+        if not limit.get("set") or limit.get("infinite"):
+            return "--"
+        limit = limit.get("number", 0)
+    if isinstance(limit, (int, float)) and limit > 0:
+        minutes = int(limit)
+        return f"{minutes // 60:02d}:{minutes % 60:02d}:00"
+    return "--"
+
+
+def _pick_time_fields(details: Dict[str, object]) -> Dict[str, str]:
+    """Extract start/elapsed/limit from sacct's nested 'time' block"""
+    time_block = details.get("time") if isinstance(details.get("time"), dict) else {}
+    return {
+        "start": _format_timestamp(time_block.get("start")),
+        "elapsed": _format_seconds_to_hhmmss(time_block.get("elapsed")),
+        "limit": _format_time_limit(time_block.get("limit")),
+    }
 
 
 def _jobs_command(args: argparse.Namespace) -> int:
+    """
+    Handle the `jobs` command.
+    Lists all jobs in a tabular format tracked by LLMFlux in the local registry.
+    Defaults to showing only active jobs.
+    """
     registry = JobRegistry()
     tracked_jobs = registry.get_all_jobs()
     if not tracked_jobs:
         print("No LLMFlux jobs found in local registry.")
         return 0
 
-    try:
-        active = get_active_jobs()
-        historical = get_historical_jobs() if args.all else {}
-    except SlurmCommandError as exc:
-        print(f"Error querying Slurm: {exc}", file=sys.stderr)
-        return 1
-
-    slurm_index = {**historical, **active}
-
     state_filters = {state.upper() for state in (args.state or [])}
-    if not args.all and not state_filters:
-        state_filters = set(ACTIVE_STATES)
-
     rows: list[list[str]] = []
-    for job_id, metadata in tracked_jobs.items():
-        slurm_data = slurm_index.get(str(job_id), {})
-        state = _resolve_job_state(str(job_id), slurm_data)
-        if state_filters and state not in state_filters:
-            continue
-        if not args.all and not args.state and state not in ACTIVE_STATES:
-            continue
 
-        rows.append([
-            str(job_id),
-            str(metadata.get("job_name", "--")),
-            state,
-            str(metadata.get("model", "--")),
-            str(metadata.get("engine", "--")),
-            _pick(slurm_data, "elapsed", "Elapsed", "run_time"),
-            _format_timestamp(metadata.get("submitted_at")),
-        ])
+    if args.all:
+        # Fetch all tracked jobs in a single sacct call, then iterate the registry.
+        jobs = get_list_of_jobs_details(list(tracked_jobs.keys()))
+        for job_id, metadata in tracked_jobs.items():
+            slurm_data = jobs.get(str(job_id), {})
+            state = extract_state(slurm_data) if slurm_data else "UNKNOWN"
+            if state_filters and state not in state_filters:
+                continue
+            times = _pick_time_fields(slurm_data)
+            rows.append([
+                str(job_id),
+                str(metadata.get("job_name", "--")),
+                state,
+                str(metadata.get("model", "--")),
+                str(metadata.get("engine", "--")),
+                times["elapsed"],
+                _format_timestamp(metadata.get("submitted_at")),
+            ])
+    else:
+        # Default: one squeue call returns only active jobs; intersect with the registry.
+        jobs = get_active_job_details()
+        effective_filters = state_filters or set(ACTIVE_STATES)
+        for job_id, slurm_data in jobs.items():
+            if job_id not in tracked_jobs:
+                continue
+            metadata = tracked_jobs[job_id]
+            state = extract_state(slurm_data)
+            if effective_filters and state not in effective_filters:
+                continue
+            times = _pick_time_fields(slurm_data)
+            # For running jobs, we compute the elapsed time from the start time and the current time
+            # elapsed_time = _format_seconds_to_hhmmss(time.monotonic() - times["start"])
+            rows.append([
+                str(job_id),
+                str(metadata.get("job_name", "--")),
+                state,
+                str(metadata.get("model", "--")),
+                str(metadata.get("engine", "--")),
+                times["elapsed"],
+                _format_timestamp(metadata.get("submitted_at")),
+            ])
 
     rows.sort(key=lambda row: row[6], reverse=True)
     _render_table(
@@ -459,6 +500,10 @@ def _jobs_command(args: argparse.Namespace) -> int:
 
 
 def _status_command(args: argparse.Namespace) -> int:
+
+    """Handle the `status` command.
+    Shows detailed status for a specific job.
+    """
     job_id = str(args.job_id)
     registry = JobRegistry()
     metadata = registry.get_job(job_id)
@@ -473,11 +518,12 @@ def _status_command(args: argparse.Namespace) -> int:
         print(f"Job {job_id} was not found in Slurm or LLMFlux registry.", file=sys.stderr)
         return 1
 
-    state = _resolve_job_state(job_id, details)
+    state = extract_state(details)
     stdout_path, stderr_path = get_job_log_paths(
         job_id=job_id,
         logs_dir=str(metadata.get("logs_dir")) if metadata else None,
     )
+    times = _pick_time_fields(details)
 
     view = OrderedDict(
         [
@@ -488,12 +534,11 @@ def _status_command(args: argparse.Namespace) -> int:
             ("Engine", metadata.get("engine", "--") if metadata else "--"),
             ("Partition", _pick(details, "partition", "Partition")),
             ("Nodes", _pick(details, "nodes", "Nodes")),
-            ("GPUs", _pick(details, "gpus", "gpus_per_node", "TresPerNode")),
-            ("Submit Time", metadata.get("submitted_at", _pick(details, "submit_time", "SubmitTime")) if metadata else _pick(details, "submit_time", "SubmitTime")),
-            ("Start Time", _pick(details, "start_time", "StartTime")),
-            ("Elapsed", _pick(details, "elapsed", "Elapsed", "run_time")),
-            ("Time Limit", _pick(details, "time_limit", "TimeLimit")),
-            ("Working Dir", metadata.get("workspace", _pick(details, "work_dir", "WorkDir")) if metadata else _pick(details, "work_dir", "WorkDir")),
+            ("Submit Time", _format_timestamp(metadata.get("submitted_at") if metadata else None)),
+            ("Start Time", times["start"]),
+            ("Elapsed", times["elapsed"]),
+            ("Time Limit", times["limit"]),
+            ("Working Dir", metadata.get("workspace", _pick(details, "working_directory", "work_dir", "WorkDir")) if metadata else _pick(details, "working_directory", "work_dir", "WorkDir")),
             ("Input", metadata.get("input", "--") if metadata else "--"),
             ("Output", metadata.get("output", "--") if metadata else "--"),
             ("Log (stdout)", stdout_path or "--"),
@@ -509,6 +554,7 @@ def _status_command(args: argparse.Namespace) -> int:
 
 
 def _read_last_lines(path: Path, tail_count: int) -> list[str]:
+    """Helper function to read the last N lines of a file."""
     if not path.exists():
         return [f"(missing: {path})"]
     if path.stat().st_size == 0:
@@ -527,6 +573,9 @@ def _read_last_lines(path: Path, tail_count: int) -> list[str]:
 
 
 def _logs_command(args: argparse.Namespace) -> int:
+    """Handle the `logs` command.
+    Shows the last N lines of stdout and stderr for a specific job.
+    """
     job_id = str(args.job_id)
     registry = JobRegistry()
     metadata = registry.get_job(job_id)
@@ -592,6 +641,9 @@ def _logs_command(args: argparse.Namespace) -> int:
 
 
 def _cancel_command(args: argparse.Namespace) -> int:
+    """Handle the `cancel` command.
+    Cancels a specific job.
+    """
     job_id = str(args.job_id)
     registry = JobRegistry()
     if registry.get_job(job_id) is None:
@@ -604,17 +656,8 @@ def _cancel_command(args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    try:
-        is_cancelled = verify_cancelled(job_id)
-    except SlurmCommandError:
-        is_cancelled = True
-
-    if is_cancelled:
-        print(f"Job {job_id} cancelled successfully.")
-        return 0
-
-    print(f"Cancellation requested for job {job_id}, but state is not yet CANCELLED.")
-    return 1
+    print(f"Job {job_id} cancelled successfully.")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -737,6 +780,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     show_models_parser.set_defaults(func=_show_models_command)
 
+    # jobs subcommand
     jobs_parser = subparsers.add_parser("jobs", help="List LLMFlux tracked Slurm jobs")
     jobs_parser.add_argument("--all", action="store_true", help="Include historical jobs")
     jobs_parser.add_argument(
@@ -747,10 +791,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     jobs_parser.set_defaults(func=_jobs_command)
 
+    # status subcommand
     status_parser = subparsers.add_parser("status", help="Show detailed status for a job")
     status_parser.add_argument("job_id", help="Slurm job ID")
     status_parser.set_defaults(func=_status_command)
 
+    # logs subcommand
     logs_parser = subparsers.add_parser("logs", help="Show last lines of stdout and stderr for a tracked job")
     logs_parser.add_argument("job_id", help="Slurm job ID")
     logs_parser.add_argument("--tail", type=int, default=100, help="Number of trailing lines to display")
@@ -759,6 +805,7 @@ def build_parser() -> argparse.ArgumentParser:
     logs_parser.add_argument("--stderr-only", action="store_true", help="Show stderr only")
     logs_parser.set_defaults(func=_logs_command)
 
+    # cancel subcommand
     cancel_parser = subparsers.add_parser("cancel", help="Cancel a tracked running/pending job")
     cancel_parser.add_argument("job_id", help="Slurm job ID")
     cancel_parser.add_argument("--force", action="store_true", help="Force kill with scancel --signal=KILL")

@@ -17,18 +17,20 @@ class _FakeRegistry:
 
 
 class TestCliJobs(unittest.TestCase):
-    @patch("llmflux.cli.get_historical_jobs")
-    @patch("llmflux.cli.get_active_jobs")
+    @patch("llmflux.cli.get_active_job_details")
     @patch("llmflux.cli.JobRegistry")
     @patch("sys.stdout", new_callable=io.StringIO)
-    def test_jobs_defaults_to_active_states(self, mock_stdout, mock_registry_cls, mock_get_active_jobs, mock_get_historical_jobs):
+    def test_jobs_defaults_to_active_states(
+        self, mock_stdout, mock_registry_cls, mock_get_active_job_details
+    ):
         tracked_jobs = {
             "100": {"job_name": "llmflux_a_ollama", "model": "a", "engine": "ollama", "submitted_at": "2026-01-01T00:00:00"},
             "200": {"job_name": "llmflux_b_vllm", "model": "b", "engine": "vllm", "submitted_at": "2026-01-02T00:00:00"},
         }
         mock_registry_cls.return_value = _FakeRegistry(tracked_jobs)
-        mock_get_active_jobs.return_value = {"100": {"job_state": "RUNNING", "elapsed": "00:01:00"}}
-        mock_get_historical_jobs.return_value = {"200": {"job_state": "COMPLETED", "elapsed": "00:10:00"}}
+        # squeue only returns job 100 (active); job 200 is absent — it should not appear in output.
+        # State is derived by extract_state() directly from this squeue data, not from get_job_state.
+        mock_get_active_job_details.return_value = {"100": {"job_state": "RUNNING"}}
 
         exit_code = cli.main(["jobs"])
         self.assertEqual(exit_code, 0)
@@ -57,7 +59,9 @@ class TestCliJobs(unittest.TestCase):
     @patch("llmflux.cli.get_job_details")
     @patch("llmflux.cli.JobRegistry")
     @patch("sys.stdout", new_callable=io.StringIO)
-    def test_status_prints_details_for_tracked_job(self, mock_stdout, mock_registry_cls, mock_get_job_details, mock_get_job_log_paths):
+    def test_status_prints_details_for_tracked_job(
+        self, mock_stdout, mock_registry_cls, mock_get_job_details, mock_get_job_log_paths
+    ):
         tracked_jobs = {
             "300": {
                 "job_name": "llmflux_model_ollama",
