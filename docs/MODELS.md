@@ -14,7 +14,14 @@ This will print every model key along with which engines (`ollama`, `vllm`, or b
 
 ## Model Naming Convention
 
-Models in LLMFlux use the HuggingFace name, for example:
+LLMFlux identifies models by a **model key**. This is the name you pass to `llmflux` commands and the name shown by `llmflux show-models`. Model keys are case-sensitive and usually correspond to the HuggingFace repository name **without** the organization prefix.
+
+In `models.yaml`, each entry typically has:
+- a **model key** (e.g. `Llama-3.2-3B-Instruct`),
+- an associated **`hf_name`** (e.g. `meta-llama/Llama-3.2-3B-Instruct`), which is the full HuggingFace repo name.
+-an associated **`name`** (e.g. `llama3.2:3b`), which is the ollama name.
+
+Some example model keys are:
 - `Llama-3.2-3B-Instruct` - Llama 3.2 model with 3 billion parameters
 - `gemma-3-27b-it` - Gemma 3 model with 27 billion parameters
 - `Qwen2.5-32B-Instruct` - Qwen 2.5 model with 32 billion parameters
