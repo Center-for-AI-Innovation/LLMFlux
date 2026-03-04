@@ -19,7 +19,7 @@ LLMFlux identifies models by a **model key**. This is the name you pass to `llmf
 In `models.yaml`, each entry typically has:
 - a **model key** (e.g. `Llama-3.2-3B-Instruct`),
 - an associated **`hf_name`** (e.g. `meta-llama/Llama-3.2-3B-Instruct`), which is the full HuggingFace repo name.
--an associated **`name`** (e.g. `llama3.2:3b`), which is the ollama name.
+- an associated **`name`** (e.g. `llama3.2:3b`), which is the ollama name.
 
 Some example model keys are:
 - `Llama-3.2-3B-Instruct` - Llama 3.2 model with 3 billion parameters
