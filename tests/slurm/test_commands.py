@@ -27,16 +27,12 @@ class TestSlurmCommands(unittest.TestCase):
 
     @patch("llmflux.slurm.commands.subprocess.run")
     def test_get_job_details_filters_batch_step(self, mock_run):
-        # First call is squeue (empty), second is sacct with base + batch entries
-        mock_run.side_effect = [
-            _completed('{"jobs":[]}'),
-            _completed(
-                '{"jobs":['
-                '{"job_id":11111,"state":"COMPLETED"},'
-                '{"job_id":"11111.batch","state":"COMPLETED"}'
-                ']}'
-            ),
-        ]
+        mock_run.return_value = _completed(
+            '{"jobs":['
+            '{"job_id":11111,"state":"COMPLETED"},'
+            '{"job_id":"11111.batch","state":"COMPLETED"}'
+            ']}'
+        )
         job = get_job_details("11111")
         # Only the base job (integer job_id) should be returned
         self.assertEqual(job.get("job_id"), 11111)

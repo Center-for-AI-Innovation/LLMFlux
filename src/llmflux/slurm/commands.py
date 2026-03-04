@@ -101,7 +101,9 @@ def get_active_job_details(user: Optional[str] = None) -> dict[str, dict[str, An
     user_name = user if user else os.environ.get("USER")
     if not user_name:
         raise SlurmCommandError("Could not determine current user from USER env var.")
-    payload = _run_json_command(["squeue", "--json", "-u", user_name])
+    payload = _run_json_command(
+        ["sacct", "--json", "-u", user_name, "--state=RUNNING,PENDING"]
+    )
     jobs = _extract_jobs(payload)
     return _build_job_index(jobs)
 
@@ -131,15 +133,9 @@ def _try_job_source(command: list[str], job_id: str) -> dict[str, Any]:
 
 
 def get_job_details(job_id: str) -> dict[str, Any]:
-    """Queries the Slurm queue or accounting history for a specific job ID.
-    Checks the queue first, then falls back to accounting history.
+    """Queries the Slurm accounting history for a specific job ID.
     """
     normalized_job_id = str(job_id)
-    squeue_job = _try_job_source(["squeue", "--json", "-j", normalized_job_id], normalized_job_id)
-    if squeue_job:
-        return squeue_job
-
-    # Job is no longer in the queue — fall back to accounting history
     return _try_job_source(["sacct", "--json", "-j", normalized_job_id], normalized_job_id)
 
 

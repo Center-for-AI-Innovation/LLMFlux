@@ -478,7 +478,7 @@ def _jobs_command(args: argparse.Namespace) -> int:
             state = extract_state(slurm_data)
             if effective_filters and state not in effective_filters:
                 continue
-            times = _pick_time_fields(slurm_data)
+            times = _pick_time_fields(jobs[job_id])
             # For running jobs, we compute the elapsed time from the start time and the current time
             # elapsed_time = _format_seconds_to_hhmmss(time.monotonic() - times["start"])
             rows.append([
