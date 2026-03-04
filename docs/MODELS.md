@@ -2,12 +2,22 @@
 
 This document lists all models supported by LLMFlux, along with their hardware requirements and configuration details.
 
+## Listing Available Models
+
+To see all available models at any time, run:
+
+```bash
+llmflux show-models
+```
+
+This will print every model key along with which engines (`ollama`, `vllm`, or both) it supports.
+
 ## Model Naming Convention
 
-Models in LLMFlux follow the naming convention `family:size`, for example:
-- `llama3.2:3b` - Llama 3.2 model with 3 billion parameters
-- `gemma3:27b` - Gemma 3 model with 27 billion parameters
-- `phi3:small` - Phi-3 Small model
+Models in LLMFlux use the HuggingFace name, for example:
+- `Llama-3.2-3B-Instruct` - Llama 3.2 model with 3 billion parameters
+- `gemma-3-27b-it` - Gemma 3 model with 27 billion parameters
+- `Qwen2.5-32B-Instruct` - Qwen 2.5 model with 32 billion parameters
 
 ## Supported Models
 
@@ -15,83 +25,284 @@ Models in LLMFlux follow the naming convention `family:size`, for example:
 
 Advanced general-purpose model from Meta.
 
-| Size | Config File | Min GPU Memory | Recommended | Notes |
-|------|-------------|----------------|-------------|-------|
-| 3b | llama3.2/3b.yaml | 8GB | Any CUDA GPU | Best balance of performance/resource usage |
-| 7b | llama3.2/7b.yaml | 13GB | A40/A100 | Good for general use |
-| 70b | llama3.2/70b.yaml | 35GB | A100 80GB | High-performance, requires high-end GPU |
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 3b | 8GB | Any CUDA GPU | Best balance of performance/resource usage |
+| 7b | 13GB | A40/A100 | Good for general use |
+| 70b | 35GB | A100 80GB | High-performance, requires high-end GPU |
 
 ### Llama 3.2 Vision
 
 Vision-capable variant of Llama 3.2.
 
-| Size | Config File | Min GPU Memory | Recommended | Notes |
-|------|-------------|----------------|-------------|-------|
-| 8b | llama3.2-vision/8b.yaml | 16GB | A40/A100 | Vision capabilities require more memory |
-| 70b | llama3.2-vision/70b.yaml | 40GB | A100 80GB | Handles complex images and reasoning |
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 8b | 16GB | A40/A100 | Vision capabilities require more memory |
+| 70b | 40GB | A100 80GB | Handles complex images and reasoning |
 
 ### Llama 3.3
 
 Latest generation of Llama optimized for reasoning.
 
-| Size | Config File | Min GPU Memory | Recommended | Notes |
-|------|-------------|----------------|-------------|-------|
-| 8b | llama3.3/8b.yaml | 14GB | A40/A100 | Good general-purpose reasoner |
-| 70b | llama3.3/70b.yaml | 38GB | A100 80GB | State-of-the-art reasoning capabilities |
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 8b | 14GB | A40/A100 | Good general-purpose reasoner |
+| 70b | 38GB | A100 80GB | State-of-the-art reasoning capabilities |
 
 ### Gemma 3
 
 Google's efficient and high-quality models.
 
-| Size | Config File | Min GPU Memory | Recommended | Notes |
-|------|-------------|----------------|-------------|-------|
-| 1b | gemma3/1b.yaml | 6GB | Any CUDA GPU | Extremely efficient, good for basic tasks |
-| 4b | gemma3/4b.yaml | 10GB | Any CUDA GPU | Good performance/resource balance |
-| 12b | gemma3/12b.yaml | 16GB | A40/A100 | High quality mid-range option |
-| 27b | gemma3/27b.yaml | 24GB | A100 | High performance, vision-capable |
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 1b | 6GB | Any CUDA GPU | Extremely efficient, good for basic tasks |
+| 4b | 10GB | Any CUDA GPU | Good performance/resource balance |
+| 12b | 16GB | A40/A100 | High quality mid-range option |
+| 27b | 24GB | A100 | High performance, vision-capable |
 
 ### Qwen 2.5
 
 Production-quality models from Alibaba.
 
-| Size | Config File | Min GPU Memory | Recommended | Notes |
-|------|-------------|----------------|-------------|-------|
-| 7b | qwen2.5/7b.yaml | 15GB | A40/A100 | Default setup, good general model |
-| 72b | qwen2.5/72b.yaml | 35GB | A100 80GB | High performance, high resource usage |
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 7b | 15GB | A40/A100 | Default setup, good general model |
+| 72b | 35GB | A100 80GB | High performance, high resource usage |
 
 ### Phi 3
 
 Microsoft's efficient models with strong reasoning capabilities.
 
-| Size | Config File | Min GPU Memory | Recommended | Notes |
-|------|-------------|----------------|-------------|-------|
-| mini | phi3/mini.yaml | 6GB | Any CUDA GPU | Extremely efficient 3.8B model |
-| small | phi3/small.yaml | 12GB | Any CUDA GPU | 7B parameters, good performance |
-| medium | phi3/medium.yaml | 16GB | A40/A100 | 14B parameters, balanced option |
-| vision | phi3/vision.yaml | 18GB | A40/A100 | Vision-capable 14B parameter model |
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| mini | 6GB | Any CUDA GPU | Extremely efficient 3.8B model |
+| small | 12GB | Any CUDA GPU | 7B parameters, good performance |
+| medium | 16GB | A40/A100 | 14B parameters, balanced option |
+| vision | 18GB | A40/A100 | Vision-capable 14B parameter model |
 
 ### Mistral Models
 
 Family of high-quality open source models.
 
-| Model | Size | Config File | Min GPU Memory | Notes |
-|-------|------|-------------|----------------|-------|
-| Mistral | 7b | mistral/7b.yaml | 13GB | Original Mistral model |
-| Mistral | 8x7b | mistral/8x7b.yaml | 36GB | Mixture of experts model |
-| Mistral-Small | 7b | mistral-small/7b.yaml | 12GB | Optimized for inference speed |
-| Mistral-Large | 33b | mistral-large/33b.yaml | 28GB | Large capacity model |
-| Mistral-Lite | 3b | mistral-lite/3b.yaml | 8GB | Small footprint model |
-| Mistral-NeMo | 12b | mistral-nemo/12b.yaml | 16GB | NVIDIA optimized model |
-| Mistral-OpenOrca | 7b | mistral-openorca/7b.yaml | 14GB | Research tuned version |
+| Model | Size | Min GPU Memory | Notes |
+|-------|------|----------------|-------|
+| Mistral | 7b | 13GB | Original Mistral model |
+| Mistral | 8x7b | 36GB | Mixture of experts model |
+| Mistral-Small | 7b | 12GB | Optimized for inference speed |
+| Mistral-Large | 33b | 28GB | Large capacity model |
+| Mistral-Lite | 3b | 8GB | Small footprint model |
+| Mistral-NeMo | 12b | 16GB | NVIDIA optimized model |
+| Mistral-OpenOrca | 7b | 14GB | Research tuned version |
 
 ### Mixtral
 
 Mixture-of-experts models with strong performance.
 
-| Size | Config File | Min GPU Memory | Recommended | Notes |
-|------|-------------|----------------|-------------|-------|
-| 8x7b | mixtral/8x7b.yaml | 24GB | A100 | Original MoE model |
-| 8x22b | mixtral/8x22b.yaml | 40GB | A100 80GB | Higher parameter version |
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 8x7b | 24GB | A100 | Original MoE model |
+| 8x22b | 40GB | A100 80GB | Higher parameter version |
+
+### Gemma 2
+
+Google's second generation efficient models.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 2b | 2GB | Any CUDA GPU | Lightweight model |
+| 9b | 24GB | A100 | Mid-range option |
+| 27b | 24GB | A100 | High performance |
+
+### Llama 2
+
+Meta's second generation LLM.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 7b | 16GB | A40/A100 | Entry-level Llama 2 |
+| 13b | 16GB | A40/A100 | Good general use |
+| 70b | 40GB | A100 80GB | High performance |
+
+### Llama 3
+
+Meta's third generation LLM.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 8b | 16GB | A40/A100 | Good general-purpose model |
+| 70b | 40GB | A100 80GB | High performance |
+
+### Llama 3.1
+
+Meta's Llama 3.1 family with extended context.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 8b | 16GB | A40/A100 | Good general-purpose model |
+| 70b | 40GB | A100 80GB | High performance |
+| 405b | 80GB | Multi-GPU A100 | Largest open model |
+
+### Llama 4
+
+Meta's latest generation model.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 17b-128e | 24GB | A100 | Maverick mixture-of-experts |
+
+### Qwen 2.5 Coder
+
+Alibaba's code-specialized models.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 3b | 8GB | Any CUDA GPU | Lightweight coder |
+| 7b | 16GB | A40/A100 | Good code generation |
+
+### Qwen 2.5 Math
+
+Alibaba's math-specialized models (vLLM only).
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 1.5b | 2GB | Any CUDA GPU | Lightweight math model |
+| 7b | 8GB | Any CUDA GPU | Good math reasoning |
+| 72b | 40GB | A100 80GB | High performance math |
+
+### Qwen 2.5 Vision
+
+Alibaba's vision-language model (vLLM only).
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 7b | 8GB | Any CUDA GPU | Vision-language model |
+
+### Qwen 3
+
+Alibaba's latest generation models.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 0.6b | 2GB | Any CUDA GPU | Ultra-lightweight |
+| 8b | 24GB | A100 | Good general model |
+| 14b | 16GB | A40/A100 | Mid-range option |
+| 32b | 24GB | A100 | High performance |
+
+### QwQ
+
+Alibaba's reasoning model (vLLM only).
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 32b | 16GB | A40/A100 | Strong reasoning capabilities |
+
+### DeepSeek R1
+
+DeepSeek's reasoning-focused distilled models.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 1.5b (Qwen) | 2GB | Any CUDA GPU | Ultra-lightweight reasoning |
+| 7b (Qwen) | 16GB | A40/A100 | Good reasoning model |
+| 8b (Llama) | 16GB | A40/A100 | Llama-based distillation |
+| 14b (Qwen) | 16GB | A40/A100 | Mid-range reasoning |
+| 32b (Qwen) | 24GB | A100 | High quality reasoning |
+| 70b (Llama) | 40GB | A100 80GB | Highest quality distillation |
+
+### DeepSeek Vision
+
+DeepSeek's vision-language models (vLLM only).
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| vl2-small | 8GB | Any CUDA GPU | Smaller vision model |
+| vl2 | 24GB | A100 | Full vision-language model |
+
+### CodeLlama
+
+Meta's code-specialized Llama models.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 7b | 16GB | A40/A100 | Lightweight code model |
+| 13b | 16GB | A40/A100 | Good code generation |
+| 34b | 24GB | A100 | Strong code capabilities |
+| 70b | 40GB | A100 80GB | Highest quality code model |
+
+### LLaVA
+
+Vision-language models.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 7b (v1.6-mistral) | 16GB | A40/A100 | Mistral-based vision |
+| 13b (v1.5) | 16GB | A40/A100 | Original LLaVA |
+| 34b (v1.6) | 24GB | A100 | Large vision model |
+
+### InternVL 2.5
+
+OpenGVLab's vision-language models (vLLM only).
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 8b | 16GB | A40/A100 | Lightweight vision model |
+| 26b | 24GB | A100 | Mid-range vision model |
+| 38b | 24GB | A100 | Large vision model |
+
+### Phi 3.5
+
+Microsoft's updated Phi model (vLLM only).
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| vision | 8GB | Any CUDA GPU | Vision-capable model |
+
+### Cohere Command R
+
+Cohere's instruction-following models.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 35b (command-r) | 24GB | A100 | Strong instruction following |
+| 104b (command-r-plus) | 80GB | A100 80GB | Highest quality |
+| 32b (aya-expanse) | 24GB | A100 | Multilingual model |
+
+### MedGemma
+
+Google's medical domain models (vLLM only).
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 4b | 8GB | Any CUDA GPU | Lightweight medical model |
+| 27b | 24GB | A100 | Full medical model |
+
+### Kimi
+
+Moonshot's large-scale models.
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| K2 (1T) | 24GB | A100 | Trillion-parameter cloud model |
+| K2.5 | 80GB | A100 80GB | Latest generation |
+
+### Pixtral
+
+Mistral AI's vision model (vLLM only).
+
+| Size | Min GPU Memory | Recommended | Notes |
+|------|----------------|-------------|-------|
+| 12b | 16GB | A40/A100 | Vision-capable Mistral model |
+
+### Other Models
+
+| Model | Min GPU Memory | Recommended | Notes |
+|-------|----------------|-------------|-------|
+| GLM-4-9B | 16GB | A40/A100 | ZAI chatbot model |
+| GPT-OSS-120B | 80GB | A100 80GB | OpenAI open-source model |
+| Molmo-7B (vLLM only) | 16GB | A40/A100 | Allen AI vision model |
+| all-MiniLM-L6-v2 | 2GB | Any CUDA GPU | Sentence embedding model |
+| bge-base-en-v1.5 (vLLM only) | 2GB | Any CUDA GPU | Embedding model |
+| whisper-large-v3 (vLLM only) | 24GB | A100 | Speech-to-text model |
 
 ## GPU Memory Requirements
 
@@ -123,13 +334,13 @@ When using a smaller GPU or a large model:
 runner.run(
     input_path="prompts.jsonl",
     output_path="results.json",
-    model="llama3.2:7b",
+    model="Llama-3.2-3B-Instruct",
     batch_size=2  # Reduced from default 4 to use less memory
 )
 
 # Or using environment variables
 # In .env file:
-# MODEL_NAME=llama3.2:7b
+# MODEL_NAME=Llama-3.2-3B-Instruct
 # BATCH_SIZE=2
 ```
 
@@ -152,13 +363,13 @@ runner = SlurmRunner(config=slurm_config)
 job_id = runner.run(
     input_path="prompts.jsonl",
     output_path="results.json",
-    model="llama3.2:7b",
+    model="Llama-3.2-3B-Instruct",
     batch_size=16     # 4x default for much higher throughput
 )
 
 # Or using environment variables
 # In .env file:
-# MODEL_NAME=llama3.2:7b
+# MODEL_NAME=Llama-3.2-3B-Instruct
 # BATCH_SIZE=16
 # SLURM_MEM=80G
 # SLURM_PARTITION=a100
@@ -194,13 +405,13 @@ runner = SlurmRunner(config=slurm_config)
 job_id = runner.run(
     input_path="prompts.jsonl",
     output_path="results.json",
-    model="llama3.3:70b",
+    model="Llama-3.3-70B-Instruct",
     batch_size=2               # Even a batch size of 2 is significant for 70B models
 )
 
 # Or using environment variables
 # In .env file:
-# MODEL_NAME=llama3.3:70b
+# MODEL_NAME=Llama-3.3-70B-Instruct
 # BATCH_SIZE=2
 # SLURM_MEM=80G
 # SLURM_CPUS_PER_TASK=16
@@ -225,13 +436,13 @@ runner = SlurmRunner(config=slurm_config)
 job_id = runner.run(
     input_path="prompts.jsonl",
     output_path="results.jsonl",
-    model="llama3.3:70b",
+    model="Llama-3.3-70B-Instruct",
     batch_size=4                # Higher batch size possible with multiple GPUs
 )
 
 # Or using environment variables
 # In .env file:
-# MODEL_NAME=llama3.3:70b
+# MODEL_NAME=Llama-3.3-70B-Instruct
 # BATCH_SIZE=4
 # SLURM_MEM=160G
 # SLURM_CPUS_PER_TASK=32
@@ -245,7 +456,7 @@ You can customize model parameters by creating your own YAML configuration files
 
 ```yaml
 # custom/my-model.yaml
-name: "custom:my-model"
+name: "my-custom-model"
 
 resources:
   gpu_layers: 32
@@ -265,7 +476,6 @@ from llmflux.core.config import Config
 
 config = Config()
 model_config = config.load_model_config(
-    model_type="custom",
-    model_size="my-model",
+    model_key="my-custom-model",
     custom_config_path="path/to/custom/my-model.yaml"
 ) 
