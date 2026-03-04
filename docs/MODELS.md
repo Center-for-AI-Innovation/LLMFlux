@@ -27,9 +27,8 @@ Advanced general-purpose model from Meta.
 
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
-| 3b | 8GB | Any CUDA GPU | Best balance of performance/resource usage |
-| 7b | 13GB | A40/A100 | Good for general use |
-| 70b | 35GB | A100 80GB | High-performance, requires high-end GPU |
+| 1b | 8GB | Any CUDA GPU | Lightweight, good for basic tasks |
+| 3b | 16GB | A40/A100 | Best balance of performance/resource usage |
 
 ### Llama 3.2 Vision
 
@@ -37,8 +36,8 @@ Vision-capable variant of Llama 3.2.
 
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
-| 8b | 16GB | A40/A100 | Vision capabilities require more memory |
-| 70b | 40GB | A100 80GB | Handles complex images and reasoning |
+| 11b | 24GB | A100 | Vision capabilities require more memory |
+| 90b | 40GB | A100 80GB | Handles complex images and reasoning |
 
 ### Llama 3.3
 
@@ -46,8 +45,7 @@ Latest generation of Llama optimized for reasoning.
 
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
-| 8b | 14GB | A40/A100 | Good general-purpose reasoner |
-| 70b | 38GB | A100 80GB | State-of-the-art reasoning capabilities |
+| 70b | 80GB | A100 80GB | State-of-the-art reasoning capabilities |
 
 ### Gemma 3
 
@@ -55,8 +53,8 @@ Google's efficient and high-quality models.
 
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
-| 1b | 6GB | Any CUDA GPU | Extremely efficient, good for basic tasks |
-| 4b | 10GB | Any CUDA GPU | Good performance/resource balance |
+| 1b | 2GB | Any CUDA GPU | Extremely efficient, good for basic tasks |
+| 4b | 8GB | Any CUDA GPU | Good performance/resource balance |
 | 12b | 16GB | A40/A100 | High quality mid-range option |
 | 27b | 24GB | A100 | High performance, vision-capable |
 
@@ -66,8 +64,8 @@ Production-quality models from Alibaba.
 
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
-| 7b | 15GB | A40/A100 | Default setup, good general model |
-| 72b | 35GB | A100 80GB | High performance, high resource usage |
+| 7b | 16GB | A40/A100 | Default setup, good general model |
+| 72b | 40GB | A100 80GB | High performance, high resource usage |
 
 ### Phi 3
 
@@ -75,10 +73,10 @@ Microsoft's efficient models with strong reasoning capabilities.
 
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
-| mini | 6GB | Any CUDA GPU | Extremely efficient 3.8B model |
+| mini | 8GB | Any CUDA GPU | Extremely efficient 3.8B model |
 | small | 12GB | Any CUDA GPU | 7B parameters, good performance |
-| medium | 16GB | A40/A100 | 14B parameters, balanced option |
-| vision | 18GB | A40/A100 | Vision-capable 14B parameter model |
+| medium | 24GB | A100 | 14B parameters, balanced option |
+| vision | 32GB | A100 | Vision-capable 14B parameter model |
 
 ### Mistral Models
 
@@ -86,13 +84,13 @@ Family of high-quality open source models.
 
 | Model | Size | Min GPU Memory | Notes |
 |-------|------|----------------|-------|
-| Mistral | 7b | 13GB | Original Mistral model |
-| Mistral | 8x7b | 36GB | Mixture of experts model |
-| Mistral-Small | 7b | 12GB | Optimized for inference speed |
-| Mistral-Large | 33b | 28GB | Large capacity model |
-| Mistral-Lite | 3b | 8GB | Small footprint model |
+| Mistral | 7b | 16GB | Original Mistral model |
+| Mistral-Small | 22b | 16GB | Optimized for inference speed |
+| Mistral-Small | 24b | 16GB | Latest small model |
+| Mistral-Large | 123b | 80GB | Large capacity model |
+| Mistral-Lite | 7b | 16GB | Small footprint model |
 | Mistral-NeMo | 12b | 16GB | NVIDIA optimized model |
-| Mistral-OpenOrca | 7b | 14GB | Research tuned version |
+| Mistral-OpenOrca | 7b | 16GB | Research tuned version |
 
 ### Mixtral
 
@@ -101,7 +99,7 @@ Mixture-of-experts models with strong performance.
 | Size | Min GPU Memory | Recommended | Notes |
 |------|----------------|-------------|-------|
 | 8x7b | 24GB | A100 | Original MoE model |
-| 8x22b | 40GB | A100 80GB | Higher parameter version |
+| 8x22b | 48GB | A100 80GB | Higher parameter version |
 
 ### Gemma 2
 
