@@ -7,36 +7,40 @@ This document explains the organization of the LLMFlux codebase to help you unde
 ```
 llmflux/
 ├── src/
-│   └── llmflux/                 
-│       ├── core/              
-│       │   ├── processor.py   # Base processor interface
-│       │   ├── config.py      # Configuration management
-│       │   ├── config_manager.py # Configuration priority system
-│       │   └── client.py      # LLM client interface
-│       ├── processors/        # Built-in processors
-│       │   └── batch.py       # JSONL batch processor
-│       ├── slurm/             # SLURM integration
-│       │   ├── runner.py      # SLURM job management
-│       │   └── scripts/       # SLURM scripts
-│       ├── converters/        # Format converters (utilities)
-│       │   ├── csv.py         # CSV to JSONL converter
-│       │   ├── json.py        # JSON to JSONL converter
-│       │   ├── directory.py   # Directory to JSONL converter
-│       │   ├── vision.py      # Vision to JSONL converter
-│       │   └── utils.py       # JSONL utilities
-│       ├── io/                # Input/Output handling
-│       │   ├── base.py        # Base output classes
-│       │   └── output/        # Output handlers
-│       │       └── json_output.py # JSON output handler
-│       ├── templates/         # Model templates
-│       │   ├── llama3.2/
-│       │   ├── llama3.3/
-│       │   └── qwen2.5/
-│       └── utils/            
-│           └── env.py         # Environment utilities
-├── examples/                  # Example implementations
-├── tests/                    
-└── pyproject.toml
+│   └── llmflux/
+│       ├── benchmark_utils.py      # Tools for benchmarking LLMFlux
+│       ├── cli.py                  # main command line interface
+│       ├── container/              # Definition file for container to run LLM
+│       ├── converters/             # Format converters (utilities)
+│       │   ├── csv.py              # CSV to JSONL converter
+│       │   ├── directory.py        # Directory to JSONL converter
+│       │   ├── json.py             # JSON to JSONL converter
+│       │   ├── utils.py            # JSONL utilities
+│       │   └── vision.py           # Vision to JSONL converter
+│       ├── core/                    
+│       │   ├── client.py           # LLM client interface
+│       │   ├── config_manager.py   # Configuration priority system
+│       │   ├── config.py           # Configuration management
+│       │   └── processor.py        # Base processor interface
+│       ├── io/                     # Input/Output handling
+│       │   ├── base.py             # Base output classes
+│       │   ├── input/              # Input handlers
+│       │   └── output/             # Output handlers
+│       │       └── json_output.py  # JSON output handler
+│       ├── processors              # Built-in processors
+│       │   └── batch.py            # JSONL batch processor
+│       ├── slurm                   # SLURM integration
+│       │   ├── engine              # Submission scripts for each engine option
+│       │   │   ├── ollama.py       # OLLAMA engine submitter
+│       │   │   └── vllm.py         # vLLM engine submitter
+│       │   └── runner.py           # SLURM job management
+│       └── templates               # Models yaml file
+│           └── models.yaml
+├── docs/                           # LLMFlux documentation
+├── examples/                       # LLMFlux examples
+├── LICENSE
+├── pyproject.toml
+└── tests/
 ```
 
 ## Key Components
@@ -61,7 +65,7 @@ The `processors` module contains implementations of batch processors:
 The `slurm` module handles integration with SLURM for HPC systems:
 
 - `runner.py`: SLURM job submission and management
-- `scripts/`: SLURM batch scripts for job execution
+- `engine/`: SLURM batch scripts customized to the engine choice
 
 ### Converters Module
 
@@ -86,12 +90,6 @@ The `templates` module contains YAML configuration files for supported models:
 
 - Organization is by model family (e.g., `llama3.2/`) then size (e.g., `7b.yaml`)
 
-### Utils Module
-
-The `utils` module contains utility functions used throughout the codebase:
-
-- `env.py`: Environment variable utilities
-
 ## Other Directories
 
 - `examples/`: Example scripts demonstrating usage of the library
@@ -107,3 +105,5 @@ The `utils` module contains utility functions used throughout the codebase:
 - `pyproject.toml`: Package configuration and dependencies
 - `.env.example`: Example environment configuration
 - `README.md`: Main project documentation 
+
+[Back](README.md) to LLMFlux home.
