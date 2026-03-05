@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmflux"
-version = "0.1.2"
+version = "0.1.3rc2"
 description = "CLI tool for running LLM batch processing jobs on HPC systems"
 readme = "README.md"
 license = {text = "MIT"}
@@ -50,7 +50,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "llmflux" = [
-    "templates/models/*/*.yaml",
+    "templates/models.yaml",
     "container/*.def",
     "slurm/*.sh"
 ]
