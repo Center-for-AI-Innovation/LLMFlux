@@ -229,7 +229,7 @@ LLMFlux ships with a benchmarking workflow that can source prompts, submit the S
 
 ```bash
 llmflux benchmark \
-    --model llama3.2:3b \
+    --model Llama-3.2-3B-Instruct \
     --name nightly \
     --num-prompts 60 \
     --account ACCOUNT_NAME \
