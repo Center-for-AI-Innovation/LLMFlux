@@ -34,21 +34,8 @@ llmflux/
 │       │   │   ├── ollama.py       # OLLAMA engine submitter
 │       │   │   └── vllm.py         # vLLM engine submitter
 │       │   └── runner.py           # SLURM job management
-│       └── templates               # Model templates
-│           ├── gemma3/
-│           ├── llama3.2/
-│           ├── llama3.2-vision/
-│           ├── llama3.3/
-│           ├── mistral/
-│           ├── mistral-large/
-│           ├── mistral-lite/
-│           ├── mistral-nemo/
-│           ├── mistral-openorca/
-│           ├── mistral-small/
-│           ├── mixtral/
-│           ├── models.yaml
-│           ├── phi3/
-│           └── qwen2.5/
+│       └── templates               # Models yaml file
+│           └── models.yaml
 ├── docs/                           # LLMFlux documentation
 ├── examples/                       # LLMFlux examples
 ├── LICENSE
