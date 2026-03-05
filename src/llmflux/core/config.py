@@ -524,4 +524,4 @@ class Config:
             'SLURM_CPUS_PER_TASK': str(slurm_config.cpus_per_task)
         }
         
-        return {k: v for k, v in env_dict.items() if v is not None} 
+        return {k: v for k, v in env_dict.items() if v is not None}
