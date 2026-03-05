@@ -58,19 +58,23 @@ Confirm the installation by running a base command and ensuring your system give
 
 ```bash
 $llmflux -h
-usage: llmflux [-h] {run,benchmark} ...
+usage: llmflux [-h] [--version] {run,benchmark,show-models,jobs,status,logs,cancel} ...
 
 LLMFlux CLI
 
 positional arguments:
-  {run,benchmark}
-    run            Submit a batch processing job
-    benchmark      Run a benchmark job
+  {run,benchmark,show-models,jobs,status,logs,cancel}
+    run                 Submit a batch processing job
+    benchmark           Run a benchmark job
+    show-models         List all available model keys from models.yaml
+    jobs                List LLMFlux tracked Slurm jobs
+    status              Show detailed status for a job
+    logs                Show last lines of stdout and stderr for a tracked job
+    cancel              Cancel a tracked running/pending job
 
 options:
-  -h, --help       show this help message and exit
-$llmflux -v
-llmflux 0.1.2
+  -h, --help            show this help message and exit
+  --version, -V         Show llmflux version and exit
 ```
 
 ## Quick Start
