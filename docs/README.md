@@ -5,6 +5,8 @@ A streamlined solution for running Large Language Models (LLMs) in batch mode on
 [![PyPI version](https://badge.fury.io/py/llmflux.svg)](https://pypi.org/project/llmflux/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+Current release: `0.1.4`
+
 ## Architecture
 
 ```
@@ -32,7 +34,7 @@ LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API form
 ## Installation
 
 ```bash
-pip install llmflux
+pip install llmflux==0.1.4
 ```
 
 Or for development:
