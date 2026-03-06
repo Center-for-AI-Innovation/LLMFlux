@@ -407,7 +407,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--custom-config-path",
         type=str,
-        help="Path to a custom model config YAML or models.yaml-style file",
+        help="Path to a custom model config YAML or models.yaml-style file (vLLM only)",
     )
 
     # Local execution toggle
@@ -463,7 +463,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument(
         "--custom-config-path",
         type=str,
-        help="Path to a custom model config YAML or models.yaml-style file",
+        help="Path to a custom model config YAML or models.yaml-style file (vLLM only)",
     )
 
     benchmark_parser.set_defaults(func=_benchmark_command)

@@ -152,6 +152,40 @@ class TestCustomConfigPath(unittest.TestCase):
         self.assertIn("Bind-mounting local model path: $VLLM_MODEL_NAME", job_script)
         self.assertIn('--bind "$APPTAINER_BIND_PATHS"', job_script)
 
+    @patch("llmflux.slurm.runner.subprocess.run")
+    @patch("llmflux.slurm.runner.ConfigManager")
+    def test_runner_rejects_custom_config_path_for_ollama(
+        self,
+        mock_config_manager_cls,
+        mock_subprocess_run,
+    ):
+        config = Config(
+            data_dir=str(self.data_dir),
+            models_dir=str(self.models_dir),
+            logs_dir=str(self.logs_dir),
+            containers_dir=str(self.containers_dir),
+            slurm=SlurmConfig(account="project1", partition="gpu"),
+        )
+
+        config_manager = mock_config_manager_cls.return_value
+        config_manager.get_config.return_value = config
+
+        runner = SlurmRunner(
+            config=config.get_slurm_config(),
+            workspace=str(self.workspace),
+            engine_config=EngineConfig(engine="ollama", home=str(self.workspace / ".ollama")),
+        )
+
+        job_id = runner.run(
+            input_path=str(self.input_path),
+            output_path=str(self.output_dir / "results.json"),
+            model="my-custom-qwen",
+            custom_config_path=str(self.custom_config_path),
+        )
+
+        self.assertEqual(job_id, "1")
+        mock_subprocess_run.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
