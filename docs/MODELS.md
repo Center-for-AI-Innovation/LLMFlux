@@ -473,8 +473,8 @@ Custom model config files are supported for the **vLLM engine only**. This is us
 # custom-models.yaml
 models:
   my-custom-qwen:
-    name: NA
-    hf_name: /scratch/bcrc/hxie6/output
+    name: my-custom-qwen
+    hf_name: /custom_qwen/output_dir
     resources:
       gpu_layers: 24
       gpu_memory: "16GB"
