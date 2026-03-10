@@ -467,33 +467,56 @@ job_id = runner.run(
 
 ## Custom Model Configuration
 
-You can customize model parameters by creating your own YAML configuration files:
+Custom model config files are supported for the **vLLM engine only**. This is useful when you want to keep the runtime settings in a custom `models.yaml` and point `hf_name` at a local fine-tuned model directory on the cluster.
 
 ```yaml
-# custom/my-model.yaml
-name: "my-custom-model"
-
-resources:
-  gpu_layers: 32
-  gpu_memory: "16GB"
-  batch_size: 8
-  max_concurrent: 2
-
-parameters:
-  temperature: 0.5
-  top_p: 0.9
-  max_tokens: 4096
+# custom-models.yaml
+models:
+  my-custom-qwen:
+    name: my-custom-qwen
+    hf_name: /custom_qwen/output_dir
+    resources:
+      gpu_layers: 24
+      gpu_memory: "16GB"
+      batch_size: 4
+      max_concurrent: 1
+    parameters:
+      temperature: 0.7
+      top_p: 0.9
+      max_tokens: 2048
+      stop_sequences: []
 ```
 
-Then load it in your code:
+### Python example
+
 ```python
 from llmflux.core.config import Config
+from llmflux.slurm.runner import SlurmRunner
 
 config = Config()
-model_config = config.load_model_config(
-    model_key="my-custom-model",
-    custom_config_path="path/to/custom/my-model.yaml"
-) 
+slurm_config = config.get_slurm_config()
+
+runner = SlurmRunner(config=slurm_config, workspace=".")
+job_id = runner.run(
+    input_path="data/input/prompts.jsonl",
+    output_path="data/output/results.json",
+    model="my-custom-qwen",
+    custom_config_path="custom-models.yaml",
+    batch_size=4,
+)
+
+print(job_id)
+```
+
+### CLI example
+
+```bash
+llmflux run \
+  --engine vllm \
+  --model my-custom-qwen \
+  --custom-config-path custom-models.yaml \
+  --input data/input/prompts.jsonl \
+  --output data/output/results.json
 ```
 
 [Back](README.md) to LLMFlux home.

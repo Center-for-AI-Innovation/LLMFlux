@@ -317,6 +317,14 @@ class SlurmRunner:
         # Load the full model configuration from the user's input
         model_identifier = kwargs.get('model', 'Llama-3.2-3B-Instruct')
         custom_config_path = kwargs.get('custom_config_path')
+        if custom_config_path:
+            custom_config_path = str(Path(custom_config_path).expanduser().resolve())
+            if self.engine.engine != 'vllm':
+                logger.error(
+                    "Custom config path is only supported with the vLLM engine. "
+                    "Please rerun with --engine vllm."
+                )
+                return "1"
 
         model_config = self.config_manager.get_config().load_model_config(
             model_identifier,
@@ -375,6 +383,8 @@ class SlurmRunner:
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
         # Always set ENGINE so the container knows which engine it's running
         env['APPTAINERENV_ENGINE'] = str(self.engine.engine)
+        if custom_config_path and self.engine.engine == 'vllm':
+            env['APPTAINERENV_CUSTOM_CONFIG_PATH'] = str(custom_config_path)
         
         # Set engine-specific model names for the container
         if self.engine.engine == 'ollama':

@@ -458,7 +458,22 @@ class Config:
 
             if custom_config_path:
                 with open(custom_config_path, 'r') as f:
-                    config_data = yaml.safe_load(f)
+                    raw_config_data = yaml.safe_load(f) or {}
+
+                if not isinstance(raw_config_data, dict):
+                    raise TypeError(f"Custom config file '{custom_config_path}' must contain a YAML mapping")
+
+                if 'models' in raw_config_data:
+                    models = raw_config_data.get('models', {})
+                    if not isinstance(models, dict):
+                        raise TypeError(f"Custom config file '{custom_config_path}' has invalid 'models' structure")
+                    if model_key not in models:
+                        raise FileNotFoundError(f"Model '{model_key}' not found in custom config: {custom_config_path}")
+                    config_data = models[model_key]
+                elif model_key in raw_config_data and isinstance(raw_config_data[model_key], dict):
+                    config_data = raw_config_data[model_key]
+                else:
+                    config_data = raw_config_data
             else:
                 with open(self.templates_dir / 'models.yaml', 'r') as f:
                     all_models_data = yaml.safe_load(f)
@@ -469,6 +484,9 @@ class Config:
                     config_data = models[model_key]
                 else:
                     raise FileNotFoundError(f"Model '{model_key}' not found in models.yaml")
+
+            if not isinstance(config_data, dict):
+                raise TypeError(f"Model '{model_key}' config must be a mapping")
 
             # Create basic model config
             model_config = ModelConfig(
