@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llmflux"
-version = "0.1.4rc1"
+version = "0.1.5rc1"
 description = "CLI tool for running LLM batch processing jobs on HPC systems"
 readme = "docs/README.md"
 license = {text = "MIT"}
