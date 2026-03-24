@@ -86,9 +86,7 @@ The `io` module handles input and output operations:
 
 ### Templates Module
 
-The `templates` module contains YAML configuration files for supported models:
-
-- Organization is by model family (e.g., `llama3.2/`) then size (e.g., `7b.yaml`)
+The `templates` module contains a YAML configuration file for supported models:
 
 ## Other Directories
 
