@@ -108,6 +108,9 @@ class SlurmRunner:
         # - Host-only vars: Used by bash script on host (not passed to container)
         # - APPTAINERENV_ vars: Automatically passed to container with --cleanenv
 
+        # Resolve HuggingFace cache directory with a default under workspace.
+        hf_home = os.getenv('HF_HOME') or str(workspace_path / ".cache" / "huggingface")
+
         # HOST-ONLY variables (used by bash script, NOT passed to container)
         host_vars = {
             'DATA_INPUT_DIR': str(self.data_input_dir),
@@ -124,6 +127,7 @@ class SlurmRunner:
             'OLLAMA_MODELS': str(self.workspace / ".ollama" / "models"),  # Used for mkdir
             'VLLM_HOME': str(self.workspace / ".vllm"),
             'VLLM_MODELS': str(self.workspace / ".vllm" / "models"),
+            'HF_HOME': hf_home,  # Used for mkdir and --bind
             'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
         }
 
@@ -140,8 +144,13 @@ class SlurmRunner:
             'APPTAINERENV_CUDA_VISIBLE_DEVICES': cuda_visible_devices,
             'APPTAINERENV_OLLAMA_SCHED_SPREAD': ollama_sched_spread,
             'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
-            'APPTAINERENV_CURL_CA_BUNDLE': '',  # Disable SSL cert checking
-            'APPTAINERENV_SSL_CERT_FILE': '',   # Disable SSL cert checking
+            'APPTAINERENV_HF_HOME': hf_home,
+            'APPTAINERENV_XDG_CACHE_HOME': str(workspace_path / ".cache"),
+            'APPTAINERENV_FLASHINFER_WORKSPACE_BASE': str(workspace_path),
+            # Use system CA bundle for HTTPS (e.g. HuggingFace model downloads).
+            # Empty values break downloads with "No CA certificates were loaded".
+            'APPTAINERENV_CURL_CA_BUNDLE': '/etc/ssl/certs/ca-certificates.crt',
+            'APPTAINERENV_SSL_CERT_FILE': '/etc/ssl/certs/ca-certificates.crt',
         }
         
         # Add HuggingFace token if available (for accessing gated models)
@@ -149,10 +158,6 @@ class SlurmRunner:
         if hf_token:
             container_vars['APPTAINERENV_HF_TOKEN'] = hf_token
         
-        # Pass through HF_HOME if set (for controlling HuggingFace model cache location)
-        hf_home = os.getenv('HF_HOME')
-        if hf_home:
-            container_vars['APPTAINERENV_HF_HOME'] = hf_home
 
         # Get base environment
         env = dict(os.environ)
@@ -324,6 +329,14 @@ class SlurmRunner:
         # Load the full model configuration from the user's input
         model_identifier = kwargs.get('model', 'Llama-3.2-3B-Instruct')
         custom_config_path = kwargs.get('custom_config_path')
+        if custom_config_path:
+            custom_config_path = str(Path(custom_config_path).expanduser().resolve())
+            if self.engine.engine != 'vllm':
+                logger.error(
+                    "Custom config path is only supported with the vLLM engine. "
+                    "Please rerun with --engine vllm."
+                )
+                return "1"
 
         model_config = self.config_manager.get_config().load_model_config(
             model_identifier,
@@ -382,6 +395,8 @@ class SlurmRunner:
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
         # Always set ENGINE so the container knows which engine it's running
         env['APPTAINERENV_ENGINE'] = str(self.engine.engine)
+        if custom_config_path and self.engine.engine == 'vllm':
+            env['APPTAINERENV_CUSTOM_CONFIG_PATH'] = str(custom_config_path)
         
         # Set engine-specific model names for the container
         if self.engine.engine == 'ollama':
@@ -483,7 +498,6 @@ class SlurmRunner:
             raise NotImplementedError
 
         job_script_text = "\n".join(job_script)
-        print(f'Job script:\n{job_script_text}')
         logging.debug(f'Job script:\n{job_script_text}')
         job_script_path = self.workspace / "job.sh"
         debug_mode = kwargs.get('debug', False)

@@ -25,9 +25,9 @@ LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API form
 
 ## Documentation
 
-- [Configuration Guide](docs/CONFIGURATION.md) - How to configure LLMFlux
-- [Models Guide](docs/MODELS.md) - Supported models and requirements
-- [Repository Structure](docs/REPOSITORY_STRUCTURE.md) - Codebase organization
+- [Configuration Guide](CONFIGURATION.md) - How to configure LLMFlux
+- [Models Guide](MODELS.md) - Supported models and requirements
+- [Repository Structure](REPOSITORY_STRUCTURE.md) - Codebase organization
 
 ## Installation
 
@@ -53,6 +53,29 @@ Or for development:
    cp .env.example .env
    # Edit .env with your SLURM account and model details
    ```
+   
+Confirm the installation by running a base command and ensuring your system gives the correct output:
+
+```bash
+$llmflux -h
+usage: llmflux [-h] [--version] {run,benchmark,show-models,jobs,status,logs,cancel} ...
+
+LLMFlux CLI
+
+positional arguments:
+  {run,benchmark,show-models,jobs,status,logs,cancel}
+    run                 Submit a batch processing job
+    benchmark           Run a benchmark job
+    show-models         List all available model keys from models.yaml
+    jobs                List LLMFlux tracked Slurm jobs
+    status              Show detailed status for a job
+    logs                Show last lines of stdout and stderr for a tracked job
+    cancel              Cancel a tracked running/pending job
+
+options:
+  -h, --help            show this help message and exit
+  --version, -V         Show llmflux version and exit
+```
 
 ## Quick Start
 
@@ -87,22 +110,50 @@ print(f"Job submitted with ID: {job_id}")
 JSONL input format follows the OpenAI Batch API specification:
 
 ```jsonl
-{"custom_id":"request1","method":"POST","url":"/v1/chat/completions","body":{"model":"llama3.2:3b","messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"Explain quantum computing"}],"temperature":0.7,"max_tokens":500}}
-{"custom_id":"request2","method":"POST","url":"/v1/chat/completions","body":{"model":"llama3.2:3b","messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"What is machine learning?"}],"temperature":0.7,"max_tokens":500}}
+{"custom_id":"request1","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"Explain quantum computing"}],"temperature":0.7,"max_tokens":500}}
+{"custom_id":"request2","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"What is machine learning?"}],"temperature":0.7,"max_tokens":500}}
 ```
 
-For advanced options like custom batch sizes, processing settings, or SLURM configuration, see the [Configuration Guide](docs/CONFIGURATION.md).
+For advanced options like custom batch sizes, processing settings, or SLURM configuration, see the [Configuration Guide](CONFIGURATION.md).
 
-For advanced model configuration, see the [Models Guide](docs/MODELS.md).
+For advanced model configuration, see the [Models Guide](MODELS.md).
 
 ## Command-Line Interface
 
-LLMFlux includes a command-line interface for submitting batch processing jobs:
+LLMFlux includes a command-line interface for submitting batch processing jobs. It uses Ollama as it's default engine, and model configurations rely on the Ollama naming scheme. To process your prompts.jsonl file using the Ollama engine running the llama3.2 model with 3b parameters, you would run the command:
 
 ```bash
 # Process JSONL file directly (core functionality)
-llmflux run --model llama3.2:3b --input data/prompts.jsonl --output results/output.json
+llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json
 ```
+
+In addition to the default OLLAMA engine, LLMFlux can also be run using vLLM, to take advantage of HuggingFace models. In order to use a model that requires a HuggingFace key, you will first need to update the default .env parameter to use your personal token. You then can call using the names as established in the templates dir:
+
+```bash
+# Process JSONL file using VLLM backend
+llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json --engine=vllm
+```
+
+This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file mistral-lite/7b.yaml reveals the name: "mistrallite:7b". Update to the appropriate HuggingFace key and run 
+```bash
+# Process JSONL file using VLLM backend
+llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json --engine=vllm
+```
+this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`. You will
+need to check an existing model file from the folder src/llmflux/templates to find a configuration that matches what you want
+and use the name as the argument for the --model argument.
+
+Note that in order to use some HuggingFace models, you will need a key from HF. Once you have a token, update your
+local copy of the .env file and add or change this line:
+
+```bash
+HUGGINGFACE_TOKEN=hf_XXXXXXXXXXXXXXX
+```
+to use the token, replace the hf_XXXX piece with your token. For some gated repos, you will have to visit the huggingface repository directly and activate access (often by accepting a terms and conditions agreement). You may also need to adjust settings on your HF token to ensure that LLMFlux has proper rights to access the model. In addition, the model will by default be stored in your base directory: `~/.cache/huggingfacel/hub`. To change this, you can add the following parameter to your `.env` file:
+```bash
+HF_HOME=/path/to/dir
+```
+llmflux will automatically download the appropriate models for both OLLAMA and vLLM.
 
 For detailed command options:
 ```bash
@@ -209,8 +260,13 @@ For code examples of converters, see the [examples directory](examples/).
 LLMFlux ships with a benchmarking workflow that can source prompts, submit the SLURM job, and collect results/metrics for you.
 
 ```bash
-llmflux benchmark --model llama3.2:3b --name nightly --num-prompts 60 \
-  --account ACCOUNT_NAME --partition PARTITION_NAME --nodes 1
+llmflux benchmark \
+    --model Llama-3.2-3B-Instruct \
+    --name nightly \
+    --num-prompts 60 \
+    --account ACCOUNT_NAME \
+    --partition PARTITION_NAME \
+    --nodes 1
 ```
 
 - **Prompt sources**: omit `--input` to automatically download and cache LiveBench categories (``benchmark_data/``). Provide `--input path/to/prompts.jsonl` to reuse an existing JSONL file instead. Use `--num-prompts`, `--temperature`, and `--max-tokens` to control synthetic dataset generation.
@@ -231,4 +287,4 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## License
 
-[MIT License](LICENSE) 
+[MIT License](../LICENSE)

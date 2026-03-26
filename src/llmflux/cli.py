@@ -165,6 +165,8 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         kwargs["debug"] = True
     if getattr(args, "vllm_engine_args", None) is not None:
         kwargs["vllm_engine_args"] = args.vllm_engine_args
+    if getattr(args, "custom_config_path", None):
+        kwargs["custom_config_path"] = args.custom_config_path
 
     print(f"Submitting benchmark job...")
     print(f"  Model: {args.model}")
@@ -311,6 +313,8 @@ def _run_command(args: argparse.Namespace) -> int:
 
     if getattr(args, "vllm_engine_args", None) is not None:
         kwargs["vllm_engine_args"] = args.vllm_engine_args
+    if getattr(args, "custom_config_path", None):
+        kwargs["custom_config_path"] = args.custom_config_path
 
     job_id = runner.run(input_path=input_path, output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
@@ -719,6 +723,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     # VLLM specific options
     run_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    run_parser.add_argument(
+        "--custom-config-path",
+        type=str,
+        help="Path to a custom model config YAML or models.yaml-style file (vLLM only)",
+    )
 
     # Local execution toggle
     # Add support for this in the future - Can be directly used on the compute node
@@ -770,6 +779,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     # VLLM specific options
     benchmark_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    benchmark_parser.add_argument(
+        "--custom-config-path",
+        type=str,
+        help="Path to a custom model config YAML or models.yaml-style file (vLLM only)",
+    )
 
     benchmark_parser.set_defaults(func=_benchmark_command)
 
