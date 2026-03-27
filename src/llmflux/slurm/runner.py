@@ -6,6 +6,7 @@ import socket
 import shutil
 import time
 import shlex
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional, Any
 import json
@@ -16,6 +17,7 @@ from .engine import create_ollama_batch_script
 from ..core.config import SlurmConfig, EngineConfig
 from ..core.config_manager import ConfigManager
 from ..core.processor import BaseProcessor
+from ..core.registry import JobRegistry
 
 # Configure logging
 logging.basicConfig(
@@ -236,6 +238,16 @@ class SlurmRunner:
             )
 
         return " ".join(parts)
+
+    def _build_job_name(self, model_identifier: str) -> str:
+        """Generate a Slurm-safe, identifiable job name."""
+        safe_model = "".join(
+            char if char.isalnum() else "_"
+            for char in str(model_identifier).strip()
+        ).strip("_")
+        if not safe_model:
+            safe_model = "model"
+        return f"llmflux_{safe_model}_{self.engine.engine}"[:120]
     
     def run(
         self,
@@ -446,6 +458,8 @@ class SlurmRunner:
         env['APPTAINERENV_VLLM_PORT'] = str(port)
         env['APPTAINERENV_VLLM_HOST'] = f"0.0.0.0"
 
+        job_name = self._build_job_name(model_identifier)
+
         # Get LLM Engine
         # Create SLURM job script
         logger.info(f"engine: {self.engine.engine}")
@@ -461,6 +475,7 @@ class SlurmRunner:
                 self.logs_dir,
                 input_file,
                 output_file,
+                job_name,
                 self.slurm_config,
             )
         elif self.engine.engine == "vllm":
@@ -475,6 +490,7 @@ class SlurmRunner:
                 self.logs_dir,
                 input_file,
                 output_file,
+                job_name,
                 self.slurm_config
             )
         else:
@@ -507,6 +523,23 @@ class SlurmRunner:
                 # Extract job ID from output
                 output = result.stdout.strip()
                 job_id = output.split()[-1] if output else "unknown"
+                if job_id != "unknown":
+                    registry = JobRegistry()
+                    try:
+                        registry.create_job(
+                            job_id=job_id,
+                            metadata={
+                                "job_name": job_name,
+                                "model": str(model_identifier),
+                                "engine": str(self.engine.engine),
+                                "input": str(input_file),
+                                "output": str(output_file.resolve()),
+                                "logs_dir": str(self.logs_dir),
+                                "submitted_at": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                    except ValueError:
+                        logger.warning(f"Job {job_id} is already tracked in registry; skipping duplicate write.")
                 return job_id
                 
             except subprocess.CalledProcessError as e:

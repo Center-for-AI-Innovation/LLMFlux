@@ -10,12 +10,26 @@ from pathlib import Path
 import time
 import subprocess
 import logging
+from collections import OrderedDict
+from datetime import datetime, timezone
 from typing import Optional, List, Dict
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
 from .slurm.runner import SlurmRunner
+from .slurm.commands import (
+    ACTIVE_STATES,
+    SlurmCommandError,
+    cancel_job,
+    get_active_job_details,
+    get_job_details,
+    get_list_of_jobs_details,
+    get_job_log_paths,
+    get_job_state,
+    extract_state,
+)
 from .processors import BatchProcessor
 from .core.config import Config, EngineConfig
+from .core.registry import JobRegistry
 from .benchmark_utils import create_test_prompts_file
 
 
@@ -345,6 +359,311 @@ def _show_models_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _render_table(rows: list[list[str]], headers: list[str]) -> None:
+    """Helper function to render a table of rows and headers"""
+    if not rows:
+        print("No jobs found.")
+        return
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for index, value in enumerate(row):
+            widths[index] = max(widths[index], len(value))
+
+    header_line = "  ".join(header.ljust(widths[idx]) for idx, header in enumerate(headers))
+    print(header_line)
+    for row in rows:
+        print("  ".join(value.ljust(widths[idx]) for idx, value in enumerate(row)))
+
+
+def _pick(job: Dict[str, object], *keys: str) -> str:
+    """
+    Helper function to pick a value from a dictionary of keys
+    If not found, returns "--"
+    """
+    for key in keys:
+        value = job.get(key)
+        if value is None:
+            continue
+        value_str = str(value).strip()
+        if value_str:
+            return value_str
+    return "--"
+
+
+def _format_timestamp(value: object) -> str:
+    """Format any Slurm timestamp as local time in YYYY-MM-DD HH:MM:SS."""
+    if value is None:
+        return "--"
+    if isinstance(value, (int, float)) and value > 0:
+        return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S")
+    text = str(value).strip()
+    if not text:
+        return "--"
+    try:
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo:
+            parsed = parsed.astimezone(tz=None)
+        return parsed.strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, OSError):
+        return "--"
+
+
+def _format_seconds_to_hhmmss(seconds: object) -> str:
+    """Format an integer number of seconds as HH:MM:SS."""
+    if not isinstance(seconds, (int, float)) or seconds <= 0:
+        return "--"
+    s = int(seconds)
+    return f"{s // 3600:02d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
+
+
+def _format_time_limit(limit: object) -> str:
+    """Unpack Slurm's set-object or plain integer time limit (minutes) into a string."""
+    if isinstance(limit, dict):
+        if not limit.get("set") or limit.get("infinite"):
+            return "--"
+        limit = limit.get("number", 0)
+    if isinstance(limit, (int, float)) and limit > 0:
+        minutes = int(limit)
+        return f"{minutes // 60:02d}:{minutes % 60:02d}:00"
+    return "--"
+
+
+def _pick_time_fields(details: Dict[str, object]) -> Dict[str, str]:
+    """Extract start/elapsed/limit from sacct's nested 'time' block"""
+    time_block = details.get("time") if isinstance(details.get("time"), dict) else {}
+    return {
+        "start": _format_timestamp(time_block.get("start")),
+        "elapsed": _format_seconds_to_hhmmss(time_block.get("elapsed")),
+        "limit": _format_time_limit(time_block.get("limit")),
+    }
+
+
+def _jobs_command(args: argparse.Namespace) -> int:
+    """
+    Handle the `jobs` command.
+    Lists all jobs in a tabular format tracked by LLMFlux in the local registry.
+    Defaults to showing only active jobs.
+    """
+    registry = JobRegistry()
+    tracked_jobs = registry.get_all_jobs()
+    if not tracked_jobs:
+        print("No LLMFlux jobs found in local registry.")
+        return 0
+
+    state_filters = {state.upper() for state in (args.state or [])}
+    rows: list[list[str]] = []
+
+    if args.all:
+        # Fetch all tracked jobs in a single sacct call, then iterate the registry.
+        jobs = get_list_of_jobs_details(list(tracked_jobs.keys()))
+        for job_id, metadata in tracked_jobs.items():
+            slurm_data = jobs.get(str(job_id), {})
+            state = extract_state(slurm_data) if slurm_data else "UNKNOWN"
+            if state_filters and state not in state_filters:
+                continue
+            times = _pick_time_fields(slurm_data)
+            rows.append([
+                str(job_id),
+                str(metadata.get("job_name", "--")),
+                state,
+                str(metadata.get("model", "--")),
+                str(metadata.get("engine", "--")),
+                times["elapsed"],
+                _format_timestamp(metadata.get("submitted_at")),
+            ])
+    else:
+        # Default: one squeue call returns only active jobs; intersect with the registry.
+        jobs = get_active_job_details()
+        effective_filters = state_filters or set(ACTIVE_STATES)
+        for job_id, slurm_data in jobs.items():
+            if job_id not in tracked_jobs:
+                continue
+            metadata = tracked_jobs[job_id]
+            state = extract_state(slurm_data)
+            if effective_filters and state not in effective_filters:
+                continue
+            times = _pick_time_fields(jobs[job_id])
+            # For running jobs, we compute the elapsed time from the start time and the current time
+            # elapsed_time = _format_seconds_to_hhmmss(time.monotonic() - times["start"])
+            rows.append([
+                str(job_id),
+                str(metadata.get("job_name", "--")),
+                state,
+                str(metadata.get("model", "--")),
+                str(metadata.get("engine", "--")),
+                times["elapsed"],
+                _format_timestamp(metadata.get("submitted_at")),
+            ])
+
+    rows.sort(key=lambda row: row[6], reverse=True)
+    _render_table(
+        rows,
+        ["JOB ID", "NAME", "STATE", "MODEL", "ENGINE", "ELAPSED", "SUBMITTED"],
+    )
+    return 0
+
+
+def _status_command(args: argparse.Namespace) -> int:
+
+    """Handle the `status` command.
+    Shows detailed status for a specific job.
+    """
+    job_id = str(args.job_id)
+    registry = JobRegistry()
+    metadata = registry.get_job(job_id)
+
+    try:
+        details = get_job_details(job_id)
+    except SlurmCommandError as exc:
+        print(f"Error querying Slurm for job {job_id}: {exc}", file=sys.stderr)
+        return 1
+
+    if not details and metadata is None:
+        print(f"Job {job_id} was not found in Slurm or LLMFlux registry.", file=sys.stderr)
+        return 1
+
+    state = extract_state(details)
+    stdout_path, stderr_path = get_job_log_paths(
+        job_id=job_id,
+        logs_dir=str(metadata.get("logs_dir")) if metadata else None,
+    )
+    times = _pick_time_fields(details)
+
+    view = OrderedDict(
+        [
+            ("Job ID", job_id),
+            ("Job Name", metadata.get("job_name", _pick(details, "name", "job_name")) if metadata else _pick(details, "name", "job_name")),
+            ("State", state),
+            ("Model", metadata.get("model", "--") if metadata else "--"),
+            ("Engine", metadata.get("engine", "--") if metadata else "--"),
+            ("Partition", _pick(details, "partition", "Partition")),
+            ("Nodes", _pick(details, "nodes", "Nodes")),
+            ("Submit Time", _format_timestamp(metadata.get("submitted_at") if metadata else None)),
+            ("Start Time", times["start"]),
+            ("Elapsed", times["elapsed"]),
+            ("Time Limit", times["limit"]),
+            ("Working Dir", metadata.get("workspace", _pick(details, "working_directory", "work_dir", "WorkDir")) if metadata else _pick(details, "working_directory", "work_dir", "WorkDir")),
+            ("Input", metadata.get("input", "--") if metadata else "--"),
+            ("Output", metadata.get("output", "--") if metadata else "--"),
+            ("Log (stdout)", stdout_path or "--"),
+            ("Log (stderr)", stderr_path or "--"),
+        ]
+    )
+
+    pad = max(len(key) for key in view)
+    for key, value in view.items():
+        print(f"{key + ':':<{pad + 1}} {value}")
+    print(f"\nTip: Run `llmflux logs {job_id}` to view job logs (stdout and stderr).")
+    return 0
+
+
+def _read_last_lines(path: Path, tail_count: int) -> list[str]:
+    """Helper function to read the last N lines of a file."""
+    if not path.exists():
+        return [f"(missing: {path})"]
+    if path.stat().st_size == 0:
+        return ["(empty)"]
+    tail_arg = str(tail_count) if tail_count > 0 else "+1"
+    result = subprocess.run(
+        ["tail", "-n", tail_arg, str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error = result.stderr.strip() or result.stdout.strip() or "unknown tail error"
+        return [f"(error reading {path}: {error})"]
+    return result.stdout.splitlines()
+
+
+def _logs_command(args: argparse.Namespace) -> int:
+    """Handle the `logs` command.
+    Shows the last N lines of stdout and stderr for a specific job.
+    """
+    job_id = str(args.job_id)
+    registry = JobRegistry()
+    metadata = registry.get_job(job_id)
+    if metadata is None:
+        print(f"Job {job_id} is not tracked by LLMFlux registry.", file=sys.stderr)
+        return 1
+
+    if args.stdout_only and args.stderr_only:
+        print("Choose only one of --stdout-only or --stderr-only.", file=sys.stderr)
+        return 2
+
+    try:
+        stdout_path, stderr_path = get_job_log_paths(job_id, str(metadata.get("logs_dir")))
+    except SlurmCommandError as exc:
+        print(f"Error resolving logs for job {job_id}: {exc}", file=sys.stderr)
+        return 1
+
+    selected_logs: list[tuple[str, Optional[str]]] = []
+    if not args.stderr_only:
+        selected_logs.append(("stdout", stdout_path))
+    if not args.stdout_only:
+        selected_logs.append(("stderr", stderr_path))
+
+    resolved_files = [path for _, path in selected_logs if path]
+    if not resolved_files:
+        print(f"No log files resolved for job {job_id}.", file=sys.stderr)
+        return 1
+
+    missing_files = [
+        (stream_name, file_path)
+        for stream_name, file_path in selected_logs
+        if file_path and not Path(file_path).exists()
+    ]
+    if missing_files:
+        try:
+            job_state = get_job_state(job_id)
+        except SlurmCommandError:
+            job_state = None
+
+        if job_state == "PENDING":
+            missing_streams = ", ".join(stream_name for stream_name, _ in missing_files)
+            print(
+                f"Job {job_id} is PENDING. {missing_streams} log file(s) are not created yet. "
+                "Try again after the job starts running."
+            )
+            return 0
+
+    if args.follow:
+        command = ["tail", "-n", str(args.tail), "-f", *resolved_files]
+        return subprocess.call(command)
+
+    for stream_name, file_path in selected_logs:
+        print(f"=== {stream_name} ({file_path or 'missing'}) ===")
+        if not file_path:
+            print("(unavailable)")
+            print()
+            continue
+        for line in _read_last_lines(Path(file_path), args.tail):
+            print(line)
+        print()
+
+    return 0
+
+
+def _cancel_command(args: argparse.Namespace) -> int:
+    """Handle the `cancel` command.
+    Cancels a specific job.
+    """
+    job_id = str(args.job_id)
+    registry = JobRegistry()
+    if registry.get_job(job_id) is None:
+        print(f"Job {job_id} is not tracked by LLMFlux registry.", file=sys.stderr)
+        return 1
+
+    try:
+        cancel_job(job_id, force=bool(args.force))
+    except SlurmCommandError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    print(f"Job {job_id} cancelled successfully.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llmflux", description="LLMFlux CLI")
     parser.add_argument(
@@ -474,6 +793,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="List all available model keys from models.yaml",
     )
     show_models_parser.set_defaults(func=_show_models_command)
+
+    # jobs subcommand
+    jobs_parser = subparsers.add_parser("jobs", help="List LLMFlux tracked Slurm jobs")
+    jobs_parser.add_argument("--all", action="store_true", help="Include historical jobs")
+    jobs_parser.add_argument(
+        "--state",
+        action="append",
+        choices=["RUNNING", "PENDING", "COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"],
+        help="Filter by Slurm state (can be repeated)",
+    )
+    jobs_parser.set_defaults(func=_jobs_command)
+
+    # status subcommand
+    status_parser = subparsers.add_parser("status", help="Show detailed status for a job")
+    status_parser.add_argument("job_id", help="Slurm job ID")
+    status_parser.set_defaults(func=_status_command)
+
+    # logs subcommand
+    logs_parser = subparsers.add_parser("logs", help="Show last lines of stdout and stderr for a tracked job")
+    logs_parser.add_argument("job_id", help="Slurm job ID")
+    logs_parser.add_argument("--tail", type=int, default=100, help="Number of trailing lines to display")
+    logs_parser.add_argument("-f", "--follow", action="store_true", help="Follow logs continuously")
+    logs_parser.add_argument("--stdout-only", action="store_true", help="Show stdout only")
+    logs_parser.add_argument("--stderr-only", action="store_true", help="Show stderr only")
+    logs_parser.set_defaults(func=_logs_command)
+
+    # cancel subcommand
+    cancel_parser = subparsers.add_parser("cancel", help="Cancel a tracked running/pending job")
+    cancel_parser.add_argument("job_id", help="Slurm job ID")
+    cancel_parser.add_argument("--force", action="store_true", help="Force kill with scancel --signal=KILL")
+    cancel_parser.set_defaults(func=_cancel_command)
 
     return parser
 
