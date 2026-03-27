@@ -1,0 +1,32 @@
+# Llama 3.2 1B Configuration
+name: "llama3.2:1b"
+hf_name: "meta-llama/Llama-3.2-1B-Instruct"
+
+resources:
+  gpu_layers: 24
+  gpu_memory: "8GB"
+  batch_size: 12
+  max_concurrent: 4
+
+parameters:
+  temperature: 0.7
+  top_p: 0.9
+  max_tokens: 2048
+  stop_sequences: ["###"]  # Default stop sequence from test_prompts.json
+
+system:
+  prompt: "You are a helpful AI assistant. You are direct, accurate, and helpful in your responses."
+
+validation:
+  temperature_range: [0.0, 1.0]
+  max_tokens_limit: 4096
+  batch_size_range: [1, 24]
+  concurrent_range: [1, 8]
+
+# Resource Requirements
+requirements:
+  min_gpu_memory: "8GB"  # Minimum required for safe operation
+  recommended_gpu: "A100"  # Can run on smaller GPUs too
+  cuda_version: ">=11.7"
+  cpu_threads: 2
+  gpu_memory_utilization: 0.9 

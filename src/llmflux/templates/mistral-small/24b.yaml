@@ -1,0 +1,39 @@
+# Mistral Small 24B Configuration
+name: "mistral-small:24b"
+hf_name: "mistralai/Mistral-Small-24B-Instruct-2501"
+
+resources:
+  gpu_layers: 48  # Based on 24B parameters
+  gpu_memory: "14GB"  # Based on Ollama's specification
+  batch_size: 4
+  max_concurrent: 2
+
+parameters:
+  temperature: 0.15  # Recommended lower temperature from Hugging Face
+  top_p: 0.9
+  max_tokens: 2048
+  stop_sequences: ["[INST]", "[/INST]", "</s>"]  # Stop sequences from Ollama
+
+system:
+  prompt: "You are Mistral Small 3, a Large Language Model (LLM) created by Mistral AI, a French startup headquartered in Paris. Your knowledge base was last updated on 2023-10-01. When you're not sure about some information, you say that you don't have the information and don't make up anything. If the user's question is not clear, ambiguous, or does not provide enough context for you to accurately answer the question, you do not try to answer it right away and you rather ask the user to clarify their request."
+
+validation:
+  temperature_range: [0.0, 1.0]
+  max_tokens_limit: 4096
+  batch_size_range: [1, 8]
+  concurrent_range: [1, 4]
+
+model_info:
+  parameters: "23.6B"
+  quantization: "BF16"  # Default format from Hugging Face
+  architecture: "llama"
+  template_format: "mistral"  # Uses Mistral's templating format
+  template: "<s>[SYSTEM_PROMPT]{{system_prompt}}[/SYSTEM_PROMPT][INST]{{prompt}}[/INST]{{response}}</s>[INST]{{prompt}}[/INST]"  # V7-Tekken template format
+
+requirements:
+  min_gpu_memory: "16GB"
+  recommended_gpu: "A100"
+  context_window: 32768  # 32k context window
+  cuda_version: ">=11.8"
+  cpu_threads: 8
+  gpu_memory_utilization: 0.9 

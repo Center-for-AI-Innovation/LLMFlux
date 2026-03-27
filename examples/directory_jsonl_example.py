@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example for processing a directory of files with the JSONL-first approach in AI-Flux."""
+"""Example for processing a directory of files with the JSONL-first approach in LLMFlux."""
 
 import os
 import sys
@@ -11,10 +11,10 @@ parent_dir = str(Path(__file__).resolve().parent.parent)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-from src.aiflux.core.config import Config
-from src.aiflux.processors.batch import BatchProcessor
-from src.aiflux.converters import directory_to_jsonl
-from src.aiflux.slurm.runner import SlurmRunner
+from llmflux.core.config import Config
+from llmflux.processors.batch import BatchProcessor
+from llmflux.converters import directory_to_jsonl
+from llmflux.slurm.runner import SlurmRunner
 from examples.utils import get_timestamped_filename, ensure_results_dir
 
 def process_directory_with_jsonl():
@@ -37,7 +37,7 @@ def process_directory_with_jsonl():
     jsonl_path = get_timestamped_filename('data/directory_content.jsonl')
     output_path = get_timestamped_filename('results/directory_results.json')
     
-    print("\n===== AI-FLUX DIRECTORY TO JSONL PROCESSING DEMO =====")
+    print("\n===== LLMFLUX DIRECTORY TO JSONL PROCESSING DEMO =====")
     print(f"Input directory: {input_dir}")
     print(f"Intermediate JSONL: {jsonl_path}")
     print(f"Output path: {output_path}")

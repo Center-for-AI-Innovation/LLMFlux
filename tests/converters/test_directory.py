@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aiflux.converters.directory import directory_to_jsonl
+from llmflux.converters.directory import directory_to_jsonl
 
 class TestDirectoryToJSONL(unittest.TestCase):
     """Test suite for the directory_to_jsonl function."""
