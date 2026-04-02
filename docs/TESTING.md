@@ -32,7 +32,7 @@ python -m pytest
 python -m pytest -v
 
 # With coverage report
-python -m pytest --cov=aiflux --cov-report=html --cov-report=term-missing
+python -m pytest --cov=llmflux --cov-report=html --cov-report=term-missing
 
 # Using specific Python version
 python3.11 -m pytest -v
@@ -271,7 +271,7 @@ pytest -n 4
 
 ```bash
 # Terminal output
-pytest --cov=aiflux --cov-report=term-missing
+pytest --cov=llmflux --cov-report=term-missing
 
 # HTML report (opens in browser)
 pytest --cov=llmflux --cov-report=html

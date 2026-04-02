@@ -75,8 +75,8 @@ class ModelConfig(BaseModel):
     # name: str = Field(..., pattern=r"^[a-zA-Z0-9.-]+([-][a-zA-Z0-9.]+)*:((8x)?\d+b|mini|medium|small|vision|large|tiny|instruct)$")
     name: str = None
     hf_name: Optional[str] = None
-    engine: str = Field("ollama", pattern=r"^ollama|vllm$")    
-    type: str = Field("ollama")
+    engine: str = Field("vllm", pattern=r"^ollama|vllm$")
+    type: str = Field("vllm")
     size: Optional[str] = None
     parameters: ModelParameters = Field(default_factory=ModelParameters)
     path: Optional[str] = None
@@ -163,7 +163,7 @@ class SlurmConfig(BaseModel):
         default_factory=lambda: int(os.getenv('SLURM_NTASKS_PER_NODE', '1'))
     )
     engine: str = Field(
-        default_factory=lambda: os.getenv('SLURM_ENGINE', 'ollama')
+        default_factory=lambda: os.getenv('SLURM_ENGINE', 'vllm')
     )
     extra_sbatch_args: Optional[Dict[str, str]] = Field(
         default_factory=_parse_extra_sbatch_args
@@ -220,16 +220,16 @@ class Config:
         self.models = models or []
 
         # Set engine configuration from environment variable
-        engine_value = os.getenv('SLURM_ENGINE', 'ollama')
-        if engine_value == "vllm":
-            self.engine = EngineConfig(
-                engine="vllm",
-                home=str(self.workspace / ".vllm")
-            )
-        else:
+        engine_value = os.getenv('SLURM_ENGINE', 'vllm')
+        if engine_value == "ollama":
             self.engine = EngineConfig(
                 engine="ollama",
                 home=str(self.workspace / ".ollama")
+            )
+        else:
+            self.engine = EngineConfig(
+                engine="vllm",
+                home=str(self.workspace / ".vllm")
             )
 
         # Define default paths

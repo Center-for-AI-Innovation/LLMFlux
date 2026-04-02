@@ -128,6 +128,8 @@ LLMFlux includes a command-line interface for submitting batch processing jobs. 
 llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json
 ```
 
+In addition to the default vLLM engine, LLMFlux can also be run using Ollama. You then can call using the names as established in the models.yaml file in the templates dir:
+
 # With SLURM account and partition
 ```bash
 llmflux run \
@@ -137,8 +139,6 @@ llmflux run \
    --input data/prompts.jsonl \
    --output results/output.json
 ```
-
-In addition to the default OLLAMA engine, LLMFlux can also be run using vLLM, to take advantage of HuggingFace models. In order to use a model that requires a HuggingFace key, you will first need to update the default .env parameter to use your personal token. You then can call using the names as established in the templates dir:
 
 ```bash
 # Process JSONL file using VLLM backend
@@ -170,6 +170,38 @@ For detailed command options:
 ```bash
 llmflux --help
 ```
+
+### Job Control Commands
+
+LLMFlux tracks submitted jobs in a local registry (`~/.llmflux/jobs.json`) and
+combines that metadata with Slurm state.
+
+```bash
+# List tracked jobs (default: active states only)
+llmflux jobs
+
+# Include historical states
+llmflux jobs --all
+
+# Filter by one or more states
+llmflux jobs --state RUNNING --state FAILED
+
+# Show detailed merged status for one job
+llmflux status <job-id>
+
+# Tail logs (default: 100 lines)
+llmflux logs <job-id>
+llmflux logs <job-id> --tail 200
+llmflux logs <job-id> -f
+
+# Cancel a tracked job
+llmflux cancel <job-id>
+llmflux cancel <job-id> --force
+```
+
+Notes:
+- `jobs` and `status` derive live state from Slurm JSON output.
+- `logs` and `cancel` only operate on jobs present in the LLMFlux registry.
 
 ## Output Format
 

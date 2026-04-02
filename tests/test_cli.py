@@ -12,9 +12,9 @@ from io import StringIO
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from aiflux.cli import main, _run_command, _benchmark_command, build_parser
-from aiflux.slurm.runner import SlurmRunner
-from aiflux.core.config import Config, SlurmConfig
+from llmflux.cli import main, _run_command, _benchmark_command, build_parser
+from llmflux.slurm.runner import SlurmRunner
+from llmflux.core.config import Config, SlurmConfig
 
 
 @pytest.fixture
@@ -35,7 +35,6 @@ def sample_jsonl(temp_dir):
             "method": "POST",
             "url": "/v1/chat/completions",
             "body": {
-                "model": "llama3.2:3b",
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": "Hello, world!"}
@@ -49,7 +48,6 @@ def sample_jsonl(temp_dir):
             "method": "POST",
             "url": "/v1/chat/completions",
             "body": {
-                "model": "llama3.2:3b",
                 "messages": [
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": "What is AI?"}
@@ -70,7 +68,7 @@ def sample_jsonl(temp_dir):
 @pytest.fixture
 def mock_slurm_runner():
     """Mock SlurmRunner for testing."""
-    with patch('aiflux.cli.SlurmRunner') as mock_runner_class:
+    with patch('llmflux.cli.SlurmRunner') as mock_runner_class:
         mock_runner = MagicMock()
         mock_runner.run.return_value = "12345"
         mock_runner_class.return_value = mock_runner
@@ -80,7 +78,7 @@ def mock_slurm_runner():
 @pytest.fixture
 def mock_config():
     """Mock Config for testing."""
-    with patch('aiflux.cli.Config') as mock_config_class:
+    with patch('llmflux.cli.Config') as mock_config_class:
         mock_config_instance = MagicMock()
         mock_slurm_config = MagicMock(spec=SlurmConfig)
         mock_slurm_config.account = "test-account"
@@ -97,23 +95,23 @@ class TestCLIParser:
         """Test that parser builds without errors."""
         parser = build_parser()
         assert parser is not None
-        assert parser.prog == "aiflux"
+        assert parser.prog == "llmflux"
     
     def test_parser_has_run_subcommand(self):
         """Test that run subcommand exists."""
         parser = build_parser()
         # Parse with run command
-        args = parser.parse_args(["run", "--model", "llama3.2:3b", "--input", "test.jsonl"])
+        args = parser.parse_args(["run", "--model", "Llama-3.2-3B-Instruct", "--input", "test.jsonl"])
         assert args.command == "run"
-        assert args.model == "llama3.2:3b"
+        assert args.model == "Llama-3.2-3B-Instruct"
         assert args.input == "test.jsonl"
     
     def test_parser_has_benchmark_subcommand(self):
         """Test that benchmark subcommand exists."""
         parser = build_parser()
-        args = parser.parse_args(["benchmark", "--model", "llama3.2:3b"])
+        args = parser.parse_args(["benchmark", "--model", "Llama-3.2-3B-Instruct"])
         assert args.command == "benchmark"
-        assert args.model == "llama3.2:3b"
+        assert args.model == "Llama-3.2-3B-Instruct"
     
     def test_run_command_required_args(self):
         """Test that run command requires model and input."""
@@ -127,7 +125,7 @@ class TestCLIParser:
         parser = build_parser()
         args = parser.parse_args([
             "run",
-            "--model", "llama3.2:3b",
+            "--model", "Llama-3.2-3B-Instruct",
             "--input", str(sample_jsonl),
             "--output", "results.json",
             "--batch-size", "8",
@@ -151,7 +149,7 @@ class TestCLIParser:
             "--debug"
         ])
         
-        assert args.model == "llama3.2:3b"
+        assert args.model == "Llama-3.2-3B-Instruct"
         assert args.input == str(sample_jsonl)
         assert args.output == "results.json"
         assert args.batch_size == 8
@@ -178,7 +176,7 @@ class TestCLIParser:
         parser = build_parser()
         args = parser.parse_args([
             "benchmark",
-            "--model", "llama3.2:3b",
+            "--model", "Llama-3.2-3B-Instruct",
             "--name", "my-benchmark",
             "--num-prompts", "100",
             "--batch-size", "8",
@@ -189,7 +187,7 @@ class TestCLIParser:
             "--debug"
         ])
         
-        assert args.model == "llama3.2:3b"
+        assert args.model == "Llama-3.2-3B-Instruct"
         assert args.name == "my-benchmark"
         assert args.num_prompts == 100
         assert args.batch_size == 8
@@ -203,8 +201,8 @@ class TestCLIParser:
 class TestRunCommand:
     """Test the run command functionality."""
     
-    @patch('aiflux.cli.SlurmRunner')
-    @patch('aiflux.cli.Config')
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
     def test_run_command_basic(self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl):
         """Test basic run command execution."""
         # Setup mocks
@@ -221,7 +219,7 @@ class TestRunCommand:
         args = MagicMock()
         args.input = str(sample_jsonl)
         args.output = str(temp_dir / "output.json")
-        args.model = "llama3.2:3b"
+        args.model = "Llama-3.2-3B-Instruct"
         args.batch_size = 4
         args.save_frequency = 50
         args.max_retries = 3
@@ -252,15 +250,15 @@ class TestRunCommand:
         call_kwargs = mock_runner.run.call_args[1]
         assert call_kwargs["input_path"] == str(sample_jsonl)
         assert call_kwargs["output_path"] == str(temp_dir / "output.json")
-        assert call_kwargs["model"] == "llama3.2:3b"
+        assert call_kwargs["model"] == "Llama-3.2-3B-Instructb"
         assert call_kwargs["batch_size"] == 4
         # Verify all expected kwargs are passed
         assert "save_frequency" in call_kwargs
         assert "max_retries" in call_kwargs
         assert "retry_delay" in call_kwargs
     
-    @patch('aiflux.cli.SlurmRunner')
-    @patch('aiflux.cli.Config')
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
     def test_run_command_with_slurm_config(self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl):
         """Test run command with SLURM configuration."""
         # Setup mocks
@@ -277,7 +275,7 @@ class TestRunCommand:
         args = MagicMock()
         args.input = str(sample_jsonl)
         args.output = str(temp_dir / "output.json")
-        args.model = "llama3.2:3b"
+        args.model = "Llama-3.2-3B-Instruct"
         args.batch_size = 8
         args.save_frequency = 100
         args.max_retries = 3
@@ -305,7 +303,7 @@ class TestRunCommand:
         assert result == 0
         mock_runner.run.assert_called_once()
         call_kwargs = mock_runner.run.call_args[1]
-        assert call_kwargs["model"] == "llama3.2:3b"
+        assert call_kwargs["model"] == "Llama-3.2-3B-Instruct"
         assert call_kwargs["batch_size"] == 8
         assert call_kwargs["save_frequency"] == 100
         assert call_kwargs["max_retries"] == 3
@@ -322,22 +320,22 @@ class TestRunCommand:
         args = MagicMock()
         args.input = None
         args.output = "results.json"
-        args.model = "llama3.2:3b"
+        args.model = "Llama-3.2-3B-Instruct"
         args.local = False
         
         with patch('sys.stderr', new=StringIO()):
             result = _run_command(args)
             assert result == 2  # Exit code for error
     
-    @patch('aiflux.cli.BatchProcessor')
-    @patch('aiflux.cli.Config')
+    @patch('llmflux.cli.BatchProcessor')
+    @patch('llmflux.cli.Config')
     def test_run_command_local_mode(self, mock_config_class, mock_processor_class, temp_dir, sample_jsonl):
         """Test run command in local mode (not implemented yet, but tests structure)."""
         # Note: Local mode is commented out in CLI, but we test the structure
         args = MagicMock()
         args.input = str(sample_jsonl)
         args.output = str(temp_dir / "output.json")
-        args.model = "llama3.2:3b"
+        args.model = "Llama-3.2-3B-Instruct"
         args.local = True  # This would enable local mode if implemented
         args.batch_size = 4
         args.save_frequency = 50
@@ -356,10 +354,10 @@ class TestRunCommand:
 class TestBenchmarkCommand:
     """Test the benchmark command functionality."""
     
-    @patch('aiflux.cli.save_prompts_to_jsonl')
-    @patch('aiflux.cli.generate_synthetic_prompts')
-    @patch('aiflux.cli.SlurmRunner')
-    @patch('aiflux.cli.Config')
+    @patch('llmflux.cli.save_prompts_to_jsonl')
+    @patch('llmflux.cli.generate_synthetic_prompts')
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
     def test_benchmark_command_generate_prompts(
         self, mock_config_class, mock_runner_class, 
         mock_generate_prompts, mock_save_jsonl, temp_dir
@@ -381,7 +379,7 @@ class TestBenchmarkCommand:
         
         # Create args
         args = MagicMock()
-        args.model = "llama3.2:3b"
+        args.model = "Llama-3.2-3B-Instruct"
         args.name = None
         args.num_prompts = 50
         args.input = None
@@ -406,12 +404,12 @@ class TestBenchmarkCommand:
         
         # Verify
         assert result == 0
-        mock_generate_prompts.assert_called_once_with(num_prompts=50, model="llama3.2:3b")
+        mock_generate_prompts.assert_called_once_with(num_prompts=50, model="Llama-3.2-3B-Instruct")
         mock_save_jsonl.assert_called_once()
         mock_runner.run.assert_called_once()
     
-    @patch('aiflux.cli.SlurmRunner')
-    @patch('aiflux.cli.Config')
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
     def test_benchmark_command_with_existing_input(
         self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl
     ):
@@ -428,7 +426,7 @@ class TestBenchmarkCommand:
         
         # Create args
         args = MagicMock()
-        args.model = "llama3.2:3b"
+        args.model = "Llama-3.2-3B-Instruct"
         args.name = None
         args.num_prompts = 50
         args.input = str(sample_jsonl)
@@ -456,7 +454,7 @@ class TestBenchmarkCommand:
         mock_runner.run.assert_called_once()
         call_kwargs = mock_runner.run.call_args[1]
         assert call_kwargs["input_path"] == str(sample_jsonl)
-        assert call_kwargs["model"] == "llama3.2:3b"
+        assert call_kwargs["model"] == "Llama-3.2-3B-Instruct"
         assert call_kwargs["batch_size"] == 8
         assert call_kwargs["max_tokens"] == 2048
         assert call_kwargs["temperature"] == 0.7
@@ -469,34 +467,34 @@ class TestMainFunction:
     
     def test_main_with_help(self):
         """Test main function with help flag."""
-        with patch('sys.argv', ['aiflux', '--help']):
+        with patch('sys.argv', ['llmflux', '--help']):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             # argparse exits with 0 for help
             assert exc_info.value.code == 0
     
-    @patch('aiflux.cli._run_command')
+    @patch('llmflux.cli._run_command')
     def test_main_with_run_command(self, mock_run_command, temp_dir, sample_jsonl):
         """Test main function with run command."""
         mock_run_command.return_value = 0
         
         with patch('sys.argv', [
-            'aiflux', 'run',
-            '--model', 'llama3.2:3b',
+            'llmflux', 'run',
+            '--model', 'Llama-3.2-3B-Instruct',
             '--input', str(sample_jsonl)
         ]):
             result = main()
             assert result == 0
             mock_run_command.assert_called_once()
     
-    @patch('aiflux.cli._benchmark_command')
+    @patch('llmflux.cli._benchmark_command')
     def test_main_with_benchmark_command(self, mock_benchmark_command):
         """Test main function with benchmark command."""
         mock_benchmark_command.return_value = 0
         
         with patch('sys.argv', [
-            'aiflux', 'benchmark',
-            '--model', 'llama3.2:3b'
+            'llmflux', 'benchmark',
+            '--model', 'Llama-3.2-3B-Instruct'
         ]):
             result = main()
             assert result == 0
@@ -504,7 +502,7 @@ class TestMainFunction:
     
     def test_main_with_invalid_command(self):
         """Test main function with invalid command."""
-        with patch('sys.argv', ['aiflux', 'invalid-command']):
+        with patch('sys.argv', ['llmflux', 'invalid-command']):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 2
@@ -513,9 +511,9 @@ class TestMainFunction:
 class TestRunnerEnvironmentVariables:
     """Test that environment variables are properly passed to runner.run()."""
     
-    @patch('aiflux.slurm.runner.subprocess.run')
-    @patch('aiflux.slurm.runner.socket.socket')
-    @patch('aiflux.slurm.runner.ConfigManager')
+    @patch('llmflux.slurm.runner.subprocess.run')
+    @patch('llmflux.slurm.runner.socket.socket')
+    @patch('llmflux.slurm.runner.ConfigManager')
     def test_runner_sets_apptainerenv_variables(
         self, mock_config_manager, mock_socket, mock_subprocess, temp_dir, sample_jsonl
     ):
@@ -564,7 +562,7 @@ class TestRunnerEnvironmentVariables:
         )
         
         # Create runner and call run()
-        from aiflux.slurm.runner import SlurmRunner
+        from llmflux.slurm.runner import SlurmRunner
         
         slurm_config = mock_config.get_slurm_config()
         runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
@@ -572,7 +570,7 @@ class TestRunnerEnvironmentVariables:
         job_id = runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
-            model="llama3.2:3b",
+            model="Llama-3.2-3B-Instruct",
             batch_size=8,
             save_frequency=100,
             max_tokens=4096,
@@ -591,7 +589,7 @@ class TestRunnerEnvironmentVariables:
         
         # Verify APPTAINERENV_ variables are set correctly
         assert 'APPTAINERENV_MODEL_NAME' in env_passed
-        assert env_passed['APPTAINERENV_MODEL_NAME'] == "llama3.2:3b"
+        assert env_passed['APPTAINERENV_MODEL_NAME'] == "Llama-3.2-3B-Instruct"
         
         assert 'APPTAINERENV_BATCH_SIZE' in env_passed
         assert env_passed['APPTAINERENV_BATCH_SIZE'] == "8"
@@ -617,8 +615,8 @@ class TestRunnerEnvironmentVariables:
         assert 'APPTAINERENV_OLLAMA_HOST' in env_passed
         
         # Verify rebuild flag
-        assert 'AIFLUX_FORCE_REBUILD' in env_passed
-        assert env_passed['AIFLUX_FORCE_REBUILD'] == "1"
+        assert 'LLMFLUX_FORCE_REBUILD' in env_passed
+        assert env_passed['LLMFLUX_FORCE_REBUILD'] == "1"
         
         # Verify workspace paths
         assert 'PROJECT_ROOT' in env_passed
@@ -627,9 +625,9 @@ class TestRunnerEnvironmentVariables:
         
         assert job_id == "12345"
     
-    @patch('aiflux.slurm.runner.subprocess.run')
-    @patch('aiflux.slurm.runner.socket.socket')
-    @patch('aiflux.slurm.runner.ConfigManager')
+    @patch('llmflux.slurm.runner.subprocess.run')
+    @patch('llmflux.slurm.runner.socket.socket')
+    @patch('llmflux.slurm.runner.ConfigManager')
     def test_runner_env_merges_with_existing_env(
         self, mock_config_manager, mock_socket, mock_subprocess, temp_dir, sample_jsonl
     ):
@@ -665,7 +663,7 @@ class TestRunnerEnvironmentVariables:
         import os
         os.environ['TEST_EXISTING_VAR'] = 'test_value'
         
-        from aiflux.slurm.runner import SlurmRunner
+        from llmflux.slurm.runner import SlurmRunner
         
         slurm_config = mock_config.get_slurm_config()
         runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
@@ -673,7 +671,7 @@ class TestRunnerEnvironmentVariables:
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
-            model="llama3.2:3b"
+            model="Llama-3.2-3B-Instruct"
         )
         
         # Verify existing environment is preserved
@@ -684,9 +682,9 @@ class TestRunnerEnvironmentVariables:
         assert 'TEST_EXISTING_VAR' in env_passed or 'TEST_EXISTING_VAR' in os.environ
         assert 'APPTAINERENV_MODEL_NAME' in env_passed
     
-    @patch('aiflux.slurm.runner.subprocess.run')
-    @patch('aiflux.slurm.runner.socket.socket')
-    @patch('aiflux.slurm.runner.ConfigManager')
+    @patch('llmflux.slurm.runner.subprocess.run')
+    @patch('llmflux.slurm.runner.socket.socket')
+    @patch('llmflux.slurm.runner.ConfigManager')
     def test_runner_sets_gpu_environment_variables(
         self, mock_config_manager, mock_socket, mock_subprocess, temp_dir, sample_jsonl
     ):
@@ -718,7 +716,7 @@ class TestRunnerEnvironmentVariables:
         # Mock subprocess
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
-        from aiflux.slurm.runner import SlurmRunner
+        from llmflux.slurm.runner import SlurmRunner
         
         slurm_config = mock_config.get_slurm_config()
         runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
@@ -726,7 +724,7 @@ class TestRunnerEnvironmentVariables:
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
-            model="llama3.2:3b"
+            model="Llama-3.2-3B-Instruct"
         )
         
         # Verify GPU environment variables
@@ -749,9 +747,9 @@ class TestEnvironmentVariablePrefixes:
     or forgets to add the prefix, the tests will fail.
     """
     
-    @patch('aiflux.slurm.runner.subprocess.run')
-    @patch('aiflux.slurm.runner.socket.socket')
-    @patch('aiflux.slurm.runner.ConfigManager')
+    @patch('llmflux.slurm.runner.subprocess.run')
+    @patch('llmflux.slurm.runner.socket.socket')
+    @patch('llmflux.slurm.runner.ConfigManager')
     def test_container_vars_must_have_apptainerenv_prefix(
         self, mock_config_manager, mock_socket, mock_subprocess, temp_dir, sample_jsonl
     ):
@@ -786,7 +784,7 @@ class TestEnvironmentVariablePrefixes:
         # Mock subprocess
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
-        from aiflux.slurm.runner import SlurmRunner
+        from llmflux.slurm.runner import SlurmRunner
         
         slurm_config = mock_config.get_slurm_config()
         runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
@@ -794,7 +792,7 @@ class TestEnvironmentVariablePrefixes:
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
-            model="llama3.2:3b",
+            model="Llama-3.2-3B-Instruct",
             batch_size=8,
             save_frequency=100,
             max_tokens=4096,
@@ -868,9 +866,9 @@ class TestEnvironmentVariablePrefixes:
                         f"If this is intentional (host + container var), add it to dual_purpose_vars."
                     )
     
-    @patch('aiflux.slurm.runner.subprocess.run')
-    @patch('aiflux.slurm.runner.socket.socket')
-    @patch('aiflux.slurm.runner.ConfigManager')
+    @patch('llmflux.slurm.runner.subprocess.run')
+    @patch('llmflux.slurm.runner.socket.socket')
+    @patch('llmflux.slurm.runner.ConfigManager')
     def test_no_incorrect_prefixes_allowed(
         self, mock_config_manager, mock_socket, mock_subprocess, temp_dir, sample_jsonl
     ):
@@ -902,7 +900,7 @@ class TestEnvironmentVariablePrefixes:
         # Mock subprocess
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
-        from aiflux.slurm.runner import SlurmRunner
+        from llmflux.slurm.runner import SlurmRunner
         
         slurm_config = mock_config.get_slurm_config()
         runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
@@ -910,7 +908,7 @@ class TestEnvironmentVariablePrefixes:
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
-            model="llama3.2:3b"
+            model="Llama-3.2-3B-Instruct"
         )
         
         # Get the environment
@@ -942,7 +940,7 @@ class TestEnvironmentVariablePrefixes:
             'APPTAINER_CACHEDIR',# Host: Apptainer config
             'SINGULARITY_TMPDIR',# Host: Singularity config
             'SINGULARITY_CACHEDIR',# Host: Singularity config
-            'AIFLUX_FORCE_REBUILD', # Host: bash script flag
+            'LLMFLUX_FORCE_REBUILD', # Host: bash script flag
         }
         
         # Check that container-passed variables don't use incorrect prefixes
@@ -972,9 +970,9 @@ class TestEnvironmentVariablePrefixes:
                             f"If this is a host-only variable, add it to host_only_allowed_vars."
                         )
     
-    @patch('aiflux.slurm.runner.subprocess.run')
-    @patch('aiflux.slurm.runner.socket.socket')
-    @patch('aiflux.slurm.runner.ConfigManager')
+    @patch('llmflux.slurm.runner.subprocess.run')
+    @patch('llmflux.slurm.runner.socket.socket')
+    @patch('llmflux.slurm.runner.ConfigManager')
     def test_all_apptainerenv_vars_are_container_vars(
         self, mock_config_manager, mock_socket, mock_subprocess, temp_dir, sample_jsonl
     ):
@@ -1010,7 +1008,7 @@ class TestEnvironmentVariablePrefixes:
         # Mock subprocess
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
-        from aiflux.slurm.runner import SlurmRunner
+        from llmflux.slurm.runner import SlurmRunner
         
         slurm_config = mock_config.get_slurm_config()
         runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
@@ -1018,7 +1016,7 @@ class TestEnvironmentVariablePrefixes:
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
-            model="llama3.2:3b",
+            model="Llama-3.2-3B-Instruct",
             batch_size=8,
             max_tokens=4096,
             temperature=0.8
@@ -1066,9 +1064,9 @@ class TestEnvironmentVariablePrefixes:
                 f"All environment variables should have string values."
             )
     
-    @patch('aiflux.slurm.runner.subprocess.run')
-    @patch('aiflux.slurm.runner.socket.socket')
-    @patch('aiflux.slurm.runner.ConfigManager')
+    @patch('llmflux.slurm.runner.subprocess.run')
+    @patch('llmflux.slurm.runner.socket.socket')
+    @patch('llmflux.slurm.runner.ConfigManager')
     def test_model_parameters_use_apptainerenv_prefix(
         self, mock_config_manager, mock_socket, mock_subprocess, temp_dir, sample_jsonl
     ):
@@ -1104,7 +1102,7 @@ class TestEnvironmentVariablePrefixes:
         # Mock subprocess
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
-        from aiflux.slurm.runner import SlurmRunner
+        from llmflux.slurm.runner import SlurmRunner
         
         slurm_config = mock_config.get_slurm_config()
         runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
@@ -1113,7 +1111,7 @@ class TestEnvironmentVariablePrefixes:
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
-            model="llama3.2:3b",
+            model="Llama-3.2-3B-Instruct",
             max_tokens=2048,
             temperature=0.7,
             top_p=0.9,
@@ -1148,8 +1146,8 @@ class TestEnvironmentVariablePrefixes:
 class TestCommandLineIntegration:
     """Integration tests for CLI commands."""
     
-    @patch('aiflux.cli.SlurmRunner')
-    @patch('aiflux.cli.Config')
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
     def test_cli_run_integration(
         self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl
     ):
@@ -1166,8 +1164,8 @@ class TestCommandLineIntegration:
         
         # Simulate CLI call
         with patch('sys.argv', [
-            'aiflux', 'run',
-            '--model', 'llama3.2:3b',
+            'llmflux', 'run',
+            '--model', 'Llama-3.2-3B-Instruct',
             '--input', str(sample_jsonl),
             '--output', str(temp_dir / 'output.json'),
             '--account', 'test-account',
@@ -1181,14 +1179,14 @@ class TestCommandLineIntegration:
         # Verify all parameters were passed to runner
         mock_runner.run.assert_called_once()
         call_kwargs = mock_runner.run.call_args[1]
-        assert call_kwargs["model"] == "llama3.2:3b"
+        assert call_kwargs["model"] == "Llama-3.2-3B-Instruct"
         assert call_kwargs["batch_size"] == 8
         assert call_kwargs["input_path"] == str(sample_jsonl)
     
-    @patch('aiflux.cli.save_prompts_to_jsonl')
-    @patch('aiflux.cli.generate_synthetic_prompts')
-    @patch('aiflux.cli.SlurmRunner')
-    @patch('aiflux.cli.Config')
+    @patch('llmflux.cli.save_prompts_to_jsonl')
+    @patch('llmflux.cli.generate_synthetic_prompts')
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
     def test_cli_benchmark_integration(
         self, mock_config_class, mock_runner_class,
         mock_generate_prompts, mock_save_jsonl
@@ -1208,8 +1206,8 @@ class TestCommandLineIntegration:
         
         # Simulate CLI call
         with patch('sys.argv', [
-            'aiflux', 'benchmark',
-            '--model', 'llama3.2:3b',
+            'llmflux', 'benchmark',
+            '--model', 'Llama-3.2-3B-Instruct',
             '--num-prompts', '100',
             '--batch-size', '8',
             '--account', 'test-account'
@@ -1218,7 +1216,7 @@ class TestCommandLineIntegration:
                 result = main()
         
         assert result == 0
-        mock_generate_prompts.assert_called_once_with(num_prompts=100, model="llama3.2:3b")
+        mock_generate_prompts.assert_called_once_with(num_prompts=100, model="Llama-3.2-3B-Instruct")
 
 
 if __name__ == "__main__":
