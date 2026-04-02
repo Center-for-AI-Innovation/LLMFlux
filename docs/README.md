@@ -130,7 +130,7 @@ llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output re
 In addition to the default vLLM engine, LLMFlux can also be run using Ollama. You then can call using the names as established in the models.yaml file in the templates dir:
 
 ```bash
-# Process JSONL file using VLLM backend
+# Process JSONL file using Ollama backend
 llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json --engine=ollama
 ```
 
