@@ -142,15 +142,15 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         slurm_overrides['extra_sbatch_args'] = extra_args
     # Merge CLI overrides with config from .env
     slurm_config = config.get_slurm_config(slurm_overrides)
-    if args.engine == "vllm":
-        engine_config = EngineConfig(
-            engine="vllm",
-            home=str(config.workspace / ".vllm")
-        )
-    else:
+    if args.engine == "ollama":
         engine_config = EngineConfig(
             engine="ollama",
             home=str(config.workspace / ".ollama")
+        )
+    else:
+        engine_config = EngineConfig(
+            engine="vllm",
+            home=str(config.workspace / ".vllm")
         )
     runner = SlurmRunner(config=slurm_config, engine_config=engine_config)
 
@@ -253,15 +253,15 @@ def _run_command(args: argparse.Namespace) -> int:
     # Override engine if provided via CLI
     if args.engine:
         engine_value = args.engine
-        if engine_value == "vllm":
-            config.engine = EngineConfig(
-                engine="vllm",
-                home=str(config.workspace / ".vllm")
-            )
-        else:
+        if engine_value == "ollama":
             config.engine = EngineConfig(
                 engine="ollama",
                 home=str(config.workspace / ".ollama")
+            )
+        else:
+            config.engine = EngineConfig(
+                engine="vllm",
+                home=str(config.workspace / ".vllm")
             )
 
     # Collect Slurm config from args (excluding engine)
@@ -699,7 +699,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--time", type=str)
     run_parser.add_argument("--mem", type=str)
     run_parser.add_argument("--cpus-per-task", type=int)
-    run_parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"])
+    run_parser.add_argument("--engine", type=str, default="vllm", choices=["ollama", "vllm"])
     run_parser.add_argument(
         "--sbatch-arg",
         action="append",
@@ -756,7 +756,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--time", type=str)
     benchmark_parser.add_argument("--mem", type=str)
     benchmark_parser.add_argument("--cpus-per-task", type=int)
-    benchmark_parser.add_argument("--engine", type=str, default="ollama", choices=["ollama", "vllm"])
+    benchmark_parser.add_argument("--engine", type=str, default="vllm", choices=["ollama", "vllm"])
     benchmark_parser.add_argument(
         "--sbatch-arg",
         action="append",
