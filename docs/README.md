@@ -136,7 +136,7 @@ llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output re
 
 This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file models.yaml reveals the name: "MistralLite". Update to the appropriate HuggingFace key and run 
 ```bash
-# Process JSONL file using VLLM backend
+# Process JSONL file using Ollama backend
 llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json --engine=ollama
 ```
 this will run the model, as noted in the config, by searching Ollama for `name: "mistrallite:7b"`. You will
