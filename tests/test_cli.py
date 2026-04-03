@@ -250,7 +250,7 @@ class TestRunCommand:
         call_kwargs = mock_runner.run.call_args[1]
         assert call_kwargs["input_path"] == str(sample_jsonl)
         assert call_kwargs["output_path"] == str(temp_dir / "output.json")
-        assert call_kwargs["model"] == "Llama-3.2-3B-Instructb"
+        assert call_kwargs["model"] == "Llama-3.2-3B-Instruct"
         assert call_kwargs["batch_size"] == 4
         # Verify all expected kwargs are passed
         assert "save_frequency" in call_kwargs

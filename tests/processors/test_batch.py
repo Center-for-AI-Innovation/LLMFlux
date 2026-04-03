@@ -29,13 +29,9 @@ class TestBatchProcessor(unittest.TestCase):
         )
         
         self.model_config = ModelConfig(
-            name="test-model",
-            type="test",
-            size="7b",
+            name="test:7b",
+            hf_name="test/test-model",
             parameters=self.model_params,
-            path=None,
-            description="Test model",
-            capabilities=["text"]
         )
         
         # Create a test JSONL file
@@ -48,7 +44,6 @@ class TestBatchProcessor(unittest.TestCase):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
-                    "model": "test-model",
                     "messages": [
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": "Hello, world!"}
@@ -62,7 +57,6 @@ class TestBatchProcessor(unittest.TestCase):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
-                    "model": "test-model",
                     "messages": [
                         {"role": "user", "content": "How are you?"}
                     ],
@@ -201,7 +195,6 @@ class TestBatchProcessor(unittest.TestCase):
             "method": "POST",
             "url": "/v1/completions",
             "body": {
-                "model": "test-model",
                 "prompt": "Complete this sentence: The sky is",
                 "temperature": 0.7,
                 "max_tokens": 500

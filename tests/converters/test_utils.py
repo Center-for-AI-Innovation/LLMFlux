@@ -141,17 +141,16 @@ class TestJSONLUtils(unittest.TestCase):
         # Create entry
         entry = create_jsonl_entry(
             messages=messages,
-            model="test-model",
             custom_id="test-id",
             temperature=0.5,
             max_tokens=100
         )
-        
+
         # Verify entry
         self.assertEqual(entry["custom_id"], "test-id")
         self.assertEqual(entry["method"], "POST")
         self.assertEqual(entry["url"], "/v1/chat/completions")
-        self.assertEqual(entry["body"]["model"], "test-model")
+        self.assertIsNone(entry["body"]["model"])
         self.assertEqual(entry["body"]["messages"], messages)
         self.assertEqual(entry["body"]["temperature"], 0.5)
         self.assertEqual(entry["body"]["max_tokens"], 100)
@@ -163,7 +162,6 @@ class TestJSONLUtils(unittest.TestCase):
             "method": "POST",
             "url": "/v1/chat/completions",
             "body": {
-                "model": "test-model",
                 "messages": [{"role": "user", "content": "Hello"}]
             }
         }
