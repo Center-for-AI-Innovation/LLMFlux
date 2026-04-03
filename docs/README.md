@@ -148,7 +148,7 @@ llmflux run --model MistralLite --input data/prompts.jsonl --output results/outp
 This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file mistral-lite/7b.yaml reveals the name: "mistrallite:7b". Update to the appropriate HuggingFace key and run 
 ```bash
 # Process JSONL file using VLLM backend
-llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json --engine=vllm
+llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
 ```
 this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`. You will
 need to check an existing model file from the folder src/llmflux/templates to find a configuration that matches what you want
