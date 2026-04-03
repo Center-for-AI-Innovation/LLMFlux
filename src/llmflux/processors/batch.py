@@ -200,30 +200,32 @@ class BatchProcessor:
             ]
         }
     
-    def _process_completion(self, body: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_completion(self, engine: str, body: Dict[str, Any]) -> Dict[str, Any]:
         """Process completion request.
-        
+
         Args:
+            engine: Engine used for this run
             body: Request body
-            
+
         Returns:
             Completion response
         """
         prompt = body.get('prompt', '')
-        model = body.get('model', model)
-        
+        model = body.get('model', self.model_config.get_model_name_for_engine())
+
         # Extract parameters with defaults from model config
         temperature = body.get('temperature', self.model_config.parameters.temperature)
         max_tokens = body.get('max_tokens', self.model_config.parameters.max_tokens)
         top_p = body.get('top_p', self.model_config.parameters.top_p)
         stop = body.get('stop', self.model_config.parameters.stop_sequences)
-        
+
         # Convert prompt to messages
         messages = [{"role": "user", "content": prompt}]
-        
+
         # Generate response
         response = self.client.chat(
             model=model,
+            engine=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,

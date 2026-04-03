@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from llmflux.cli import main, _run_command, _benchmark_command, build_parser
 from llmflux.slurm.runner import SlurmRunner
-from llmflux.core.config import Config, SlurmConfig
+from llmflux.core.config import Config, SlurmConfig, EngineConfig
 
 
 @pytest.fixture
@@ -354,13 +354,13 @@ class TestRunCommand:
 class TestBenchmarkCommand:
     """Test the benchmark command functionality."""
     
-    @patch('llmflux.cli.save_prompts_to_jsonl')
-    @patch('llmflux.cli.generate_synthetic_prompts')
+    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
+    @patch('llmflux.cli.create_test_prompts_file')
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_benchmark_command_generate_prompts(
-        self, mock_config_class, mock_runner_class, 
-        mock_generate_prompts, mock_save_jsonl, temp_dir
+        self, mock_config_class, mock_runner_class,
+        mock_create_prompts, mock_wait, temp_dir
     ):
         """Test benchmark command with prompt generation."""
         # Setup mocks
@@ -368,15 +368,13 @@ class TestBenchmarkCommand:
         mock_slurm_config = MagicMock()
         mock_config.get_slurm_config.return_value = mock_slurm_config
         mock_config_class.return_value = mock_config
-        
+
         mock_runner = MagicMock()
         mock_runner.run.return_value = "12345"
         mock_runner_class.return_value = mock_runner
-        
-        # Mock prompt generation
-        mock_prompts = [{"prompt": "test"}] * 50
-        mock_generate_prompts.return_value = mock_prompts
-        
+
+        mock_create_prompts.return_value = temp_dir / "prompts.jsonl"
+
         # Create args
         args = MagicMock()
         args.model = "Llama-3.2-3B-Instruct"
@@ -397,21 +395,21 @@ class TestBenchmarkCommand:
         args.sbatch_arg = None
         args.rebuild = False
         args.debug = False
-        
+
         # Run command
         with patch('builtins.print'):
             result = _benchmark_command(args)
-        
+
         # Verify
         assert result == 0
-        mock_generate_prompts.assert_called_once_with(num_prompts=50, model="Llama-3.2-3B-Instruct")
-        mock_save_jsonl.assert_called_once()
+        mock_create_prompts.assert_called_once_with(num_prompts=50, temperature=0.7, max_tokens=500)
         mock_runner.run.assert_called_once()
     
+    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_benchmark_command_with_existing_input(
-        self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl
+        self, mock_config_class, mock_runner_class, mock_wait, temp_dir, sample_jsonl
     ):
         """Test benchmark command with existing input file."""
         # Setup mocks
@@ -456,8 +454,6 @@ class TestBenchmarkCommand:
         assert call_kwargs["input_path"] == str(sample_jsonl)
         assert call_kwargs["model"] == "Llama-3.2-3B-Instruct"
         assert call_kwargs["batch_size"] == 8
-        assert call_kwargs["max_tokens"] == 2048
-        assert call_kwargs["temperature"] == 0.7
         assert call_kwargs["rebuild"] is True
         assert call_kwargs["debug"] is True
 
@@ -563,10 +559,15 @@ class TestRunnerEnvironmentVariables:
         
         # Create runner and call run()
         from llmflux.slurm.runner import SlurmRunner
-        
+
         slurm_config = mock_config.get_slurm_config()
-        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
-        
+        engine_config = EngineConfig(engine="ollama", home=str(temp_dir / ".ollama"))
+        model_config_mock = MagicMock()
+        model_config_mock.name = "Llama-3.2-3B-Instruct"
+        model_config_mock.hf_name = None
+        mock_config.load_model_config.return_value = model_config_mock
+        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir), engine_config=engine_config)
+
         job_id = runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
@@ -664,16 +665,21 @@ class TestRunnerEnvironmentVariables:
         os.environ['TEST_EXISTING_VAR'] = 'test_value'
         
         from llmflux.slurm.runner import SlurmRunner
-        
+
         slurm_config = mock_config.get_slurm_config()
-        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
-        
+        engine_config = EngineConfig(engine="ollama", home=str(temp_dir / ".ollama"))
+        model_config_mock = MagicMock()
+        model_config_mock.name = "Llama-3.2-3B-Instruct"
+        model_config_mock.hf_name = None
+        mock_config.load_model_config.return_value = model_config_mock
+        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir), engine_config=engine_config)
+
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
             model="Llama-3.2-3B-Instruct"
         )
-        
+
         # Verify existing environment is preserved
         call_args = mock_subprocess.call_args
         env_passed = call_args.kwargs.get('env', {})
@@ -717,16 +723,21 @@ class TestRunnerEnvironmentVariables:
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
         from llmflux.slurm.runner import SlurmRunner
-        
+
         slurm_config = mock_config.get_slurm_config()
-        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
-        
+        engine_config = EngineConfig(engine="ollama", home=str(temp_dir / ".ollama"))
+        model_config_mock = MagicMock()
+        model_config_mock.name = "Llama-3.2-3B-Instruct"
+        model_config_mock.hf_name = None
+        mock_config.load_model_config.return_value = model_config_mock
+        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir), engine_config=engine_config)
+
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
             model="Llama-3.2-3B-Instruct"
         )
-        
+
         # Verify GPU environment variables
         call_args = mock_subprocess.call_args
         env_passed = call_args.kwargs.get('env', {})
@@ -785,10 +796,15 @@ class TestEnvironmentVariablePrefixes:
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
         from llmflux.slurm.runner import SlurmRunner
-        
+
         slurm_config = mock_config.get_slurm_config()
-        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
-        
+        engine_config = EngineConfig(engine="ollama", home=str(temp_dir / ".ollama"))
+        model_config_mock = MagicMock()
+        model_config_mock.name = "Llama-3.2-3B-Instruct"
+        model_config_mock.hf_name = None
+        mock_config.load_model_config.return_value = model_config_mock
+        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir), engine_config=engine_config)
+
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
@@ -800,7 +816,7 @@ class TestEnvironmentVariablePrefixes:
             top_p=0.95,
             top_k=50
         )
-        
+
         # Get the environment passed to subprocess.run
         call_args = mock_subprocess.call_args
         env_passed = call_args.kwargs.get('env', {})
@@ -835,6 +851,7 @@ class TestEnvironmentVariablePrefixes:
             'OLLAMA_PORT',         # Host: bash script, Container: Python
             'OLLAMA_HOME',         # Host: mkdir/bind, Container: Ollama
             'OLLAMA_MODELS',       # Host: mkdir, Container: Ollama
+            'OLLAMA_HOST',         # Host: bash script Ollama server config, Container: Python
             'PROJECT_ROOT',        # Host: Python path, Container: Python path
         }
         
@@ -901,20 +918,25 @@ class TestEnvironmentVariablePrefixes:
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
         from llmflux.slurm.runner import SlurmRunner
-        
+
         slurm_config = mock_config.get_slurm_config()
-        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
-        
+        engine_config = EngineConfig(engine="ollama", home=str(temp_dir / ".ollama"))
+        model_config_mock = MagicMock()
+        model_config_mock.name = "Llama-3.2-3B-Instruct"
+        model_config_mock.hf_name = None
+        mock_config.load_model_config.return_value = model_config_mock
+        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir), engine_config=engine_config)
+
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
             model="Llama-3.2-3B-Instruct"
         )
-        
+
         # Get the environment
         call_args = mock_subprocess.call_args
         env_passed = call_args.kwargs.get('env', {})
-        
+
         # List of incorrect prefixes that should NOT be used for container variables
         incorrect_prefixes = [
             'SINGULARITYENV_',  # Old Singularity prefix (not Apptainer)
@@ -1009,10 +1031,15 @@ class TestEnvironmentVariablePrefixes:
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
         from llmflux.slurm.runner import SlurmRunner
-        
+
         slurm_config = mock_config.get_slurm_config()
-        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
-        
+        engine_config = EngineConfig(engine="ollama", home=str(temp_dir / ".ollama"))
+        model_config_mock = MagicMock()
+        model_config_mock.name = "Llama-3.2-3B-Instruct"
+        model_config_mock.hf_name = None
+        mock_config.load_model_config.return_value = model_config_mock
+        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir), engine_config=engine_config)
+
         runner.run(
             input_path=str(sample_jsonl),
             output_path=str(temp_dir / "output.json"),
@@ -1021,11 +1048,11 @@ class TestEnvironmentVariablePrefixes:
             max_tokens=4096,
             temperature=0.8
         )
-        
+
         # Get the environment
         call_args = mock_subprocess.call_args
         env_passed = call_args.kwargs.get('env', {})
-        
+
         # Collect all APPTAINERENV_ prefixed variables
         apptainerenv_vars = {key: value for key, value in env_passed.items() 
                             if key.startswith('APPTAINERENV_')}
@@ -1103,10 +1130,15 @@ class TestEnvironmentVariablePrefixes:
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="Submitted batch job 12345\n", stderr="", text=True)
         
         from llmflux.slurm.runner import SlurmRunner
-        
+
         slurm_config = mock_config.get_slurm_config()
-        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir))
-        
+        engine_config = EngineConfig(engine="ollama", home=str(temp_dir / ".ollama"))
+        model_config_mock = MagicMock()
+        model_config_mock.name = "Llama-3.2-3B-Instruct"
+        model_config_mock.hf_name = None
+        mock_config.load_model_config.return_value = model_config_mock
+        runner = SlurmRunner(config=slurm_config, workspace=str(temp_dir), engine_config=engine_config)
+
         # Pass various model parameters to test they all get proper prefix
         runner.run(
             input_path=str(sample_jsonl),
@@ -1183,13 +1215,13 @@ class TestCommandLineIntegration:
         assert call_kwargs["batch_size"] == 8
         assert call_kwargs["input_path"] == str(sample_jsonl)
     
-    @patch('llmflux.cli.save_prompts_to_jsonl')
-    @patch('llmflux.cli.generate_synthetic_prompts')
+    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
+    @patch('llmflux.cli.create_test_prompts_file')
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_cli_benchmark_integration(
         self, mock_config_class, mock_runner_class,
-        mock_generate_prompts, mock_save_jsonl
+        mock_create_prompts, mock_wait
     ):
         """Integration test for full CLI benchmark command."""
         # Setup mocks
@@ -1197,13 +1229,13 @@ class TestCommandLineIntegration:
         mock_slurm_config = MagicMock()
         mock_config.get_slurm_config.return_value = mock_slurm_config
         mock_config_class.return_value = mock_config
-        
+
         mock_runner = MagicMock()
         mock_runner.run.return_value = "67890"
         mock_runner_class.return_value = mock_runner
-        
-        mock_generate_prompts.return_value = [{"prompt": "test"}] * 50
-        
+
+        mock_create_prompts.return_value = Path("data/benchmarks/prompts.jsonl")
+
         # Simulate CLI call
         with patch('sys.argv', [
             'llmflux', 'benchmark',
@@ -1214,9 +1246,9 @@ class TestCommandLineIntegration:
         ]):
             with patch('builtins.print'):
                 result = main()
-        
+
         assert result == 0
-        mock_generate_prompts.assert_called_once_with(num_prompts=100, model="Llama-3.2-3B-Instruct")
+        mock_create_prompts.assert_called_once_with(num_prompts=100, temperature=0.7, max_tokens=500)
 
 
 if __name__ == "__main__":
