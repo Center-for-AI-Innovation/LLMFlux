@@ -121,7 +121,7 @@ For advanced model configuration, see the [Models Guide](MODELS.md).
 
 ## Command-Line Interface
 
-LLMFlux includes a command-line interface for submitting batch processing jobs. It uses Ollama as it's default engine, and model configurations rely on the Ollama naming scheme. To process your prompts.jsonl file using the Ollama engine running the llama3.2 model with 3b parameters, you would run the command:
+LLMFlux includes a command-line interface for submitting batch processing jobs. It uses vLLM as it's default engine, and model configurations rely on the HuggingFace naming scheme. To process your prompts.jsonl file using the Ollama engine running the llama3.2 model with 3b parameters, you would run the command:
 
 ```bash
 # Process JSONL file directly (core functionality)
@@ -142,7 +142,7 @@ llmflux run \
 
 ```bash
 # Process JSONL file using VLLM backend
-llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json --engine=vllm
+llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
 ```
 
 This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file mistral-lite/7b.yaml reveals the name: "mistrallite:7b". Update to the appropriate HuggingFace key and run 
@@ -215,7 +215,6 @@ Results are saved in the user's workspace:
       "method": "POST",
       "url": "/v1/chat/completions",
       "body": {
-        "model": "llama3.2:3b",
         "messages": [
           {"role": "system", "content": "You are a helpful assistant"},
           {"role": "user", "content": "Original prompt text"}
@@ -231,7 +230,6 @@ Results are saved in the user's workspace:
       "id": "chat-cmpl-123",
       "object": "chat.completion",
       "created": 1699123456,
-      "model": "llama3.2:3b",
       "choices": [
         {
           "index": 0,
