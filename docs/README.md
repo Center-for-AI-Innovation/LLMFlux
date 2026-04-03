@@ -28,6 +28,7 @@ LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API form
 - [Configuration Guide](CONFIGURATION.md) - How to configure LLMFlux
 - [Models Guide](MODELS.md) - Supported models and requirements
 - [Repository Structure](REPOSITORY_STRUCTURE.md) - Codebase organization
+- [Testing Guide](TESTING.md) - How to run tests
 
 ## Installation
 
@@ -129,18 +130,28 @@ llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output re
 
 In addition to the default vLLM engine, LLMFlux can also be run using Ollama. You then can call using the names as established in the models.yaml file in the templates dir:
 
+# With SLURM account and partition
 ```bash
-# Process JSONL file using Ollama backend
-llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json --engine=ollama
+llmflux run \
+   --account your-account \
+   --partition gpu \
+   --model Llama-3.2-3B-Instruct \
+   --input data/prompts.jsonl \
+   --output results/output.json
 ```
 
-This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file models.yaml reveals the name: "MistralLite". Update to the appropriate HuggingFace key and run 
 ```bash
-# Process JSONL file using Ollama backend
-llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json --engine=ollama
+# Process JSONL file using VLLM backend
+llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
 ```
-this will run the model, as noted in the config, by searching Ollama for `name: "mistrallite:7b"`. You will
-need to check an existing model by running the command `llmflux show-models` or from the file src/llmflux/templates/models.yaml to find a configuration that matches what you want
+
+This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file mistral-lite/7b.yaml reveals the name: "mistrallite:7b". Update to the appropriate HuggingFace key and run 
+```bash
+# Process JSONL file using VLLM backend
+llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
+```
+this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`. You will
+need to check an existing model file from the folder src/llmflux/templates to find a configuration that matches what you want
 and use the name as the argument for the --model argument.
 
 Note that in order to use some HuggingFace models, you will need a key from HF. Once you have a token, update your
@@ -204,7 +215,6 @@ Results are saved in the user's workspace:
       "method": "POST",
       "url": "/v1/chat/completions",
       "body": {
-        "model": "llama3.2:3b",
         "messages": [
           {"role": "system", "content": "You are a helpful assistant"},
           {"role": "user", "content": "Original prompt text"}
@@ -220,7 +230,6 @@ Results are saved in the user's workspace:
       "id": "chat-cmpl-123",
       "object": "chat.completion",
       "created": 1699123456,
-      "model": "llama3.2:3b",
       "choices": [
         {
           "index": 0,

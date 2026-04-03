@@ -29,13 +29,9 @@ class TestBatchProcessor(unittest.TestCase):
         )
         
         self.model_config = ModelConfig(
-            name="test-model",
-            type="test",
-            size="7b",
+            name="test:7b",
+            hf_name="test/test-model",
             parameters=self.model_params,
-            path=None,
-            description="Test model",
-            capabilities=["text"]
         )
         
         # Create a test JSONL file
@@ -48,7 +44,6 @@ class TestBatchProcessor(unittest.TestCase):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
-                    "model": "test-model",
                     "messages": [
                         {"role": "system", "content": "You are a helpful assistant."},
                         {"role": "user", "content": "Hello, world!"}
@@ -62,7 +57,6 @@ class TestBatchProcessor(unittest.TestCase):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
-                    "model": "test-model",
                     "messages": [
                         {"role": "user", "content": "How are you?"}
                     ],
@@ -109,33 +103,34 @@ class TestBatchProcessor(unittest.TestCase):
         mock_client_class.assert_called_once()
         
         # Check that warmup was called
-        mock_client.generate.assert_called_once()
+        mock_client.chat.assert_called_once()
     
     @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch(self, mock_client_class):
         """Test processing a batch of items."""
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.generate.return_value = "This is a test response."
+        mock_client.chat.return_value = "This is a test response."
         mock_client_class.return_value = mock_client
-        
+
         processor = BatchProcessor(model_config=self.model_config)
         processor.setup()
-        
+
         # Process batch
-        results = processor.process_batch(self.entries)
-        
+        results = processor.process_batch("vllm", self.entries)
+
         # Check that we have two results
         self.assertEqual(len(results), 2)
-        
+
         # Check first result
         self.assertEqual(results[0].input, self.entries[0])
         self.assertIsNotNone(results[0].output)
         self.assertIn("This is a test response.", str(results[0].output))
-        
-        # Check that generate was called with correct parameters
-        mock_client.generate.assert_any_call(
-            model="test-model",
+
+        # Check that chat was called with correct parameters
+        mock_client.chat.assert_any_call(
+            model="test/test-model",
+            engine="vllm",
             messages=self.entries[0]["body"]["messages"],
             temperature=0.7,
             max_tokens=500,
@@ -148,13 +143,13 @@ class TestBatchProcessor(unittest.TestCase):
         """Test running the processor with a JSONL file."""
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.generate.return_value = "This is a test response."
+        mock_client.chat.return_value = "This is a test response."
         mock_client_class.return_value = mock_client
-        
+
         processor = BatchProcessor(model_config=self.model_config)
-        
+
         # Run processor
-        results = processor.run(self.jsonl_path, self.output_path)
+        results = processor.run(self.jsonl_path, self.output_path, "vllm")
         
         # Check results
         self.assertEqual(len(results), 2)
@@ -176,14 +171,15 @@ class TestBatchProcessor(unittest.TestCase):
         """Test error handling in processing."""
         # Mock client instance to raise an exception
         mock_client = MagicMock()
-        mock_client.generate.side_effect = Exception("Test error")
+        mock_client.chat.side_effect = Exception("Test error")
         mock_client_class.return_value = mock_client
-        
+
         processor = BatchProcessor(model_config=self.model_config)
-        processor.setup()
-        
+        # Inject client directly to avoid setup()'s warmup call consuming the side_effect
+        processor.client = mock_client
+
         # Process batch
-        results = processor.process_batch(self.entries)
+        results = processor.process_batch("vllm", self.entries)
         
         # Check that we have two results with errors
         self.assertEqual(len(results), 2)
@@ -201,7 +197,6 @@ class TestBatchProcessor(unittest.TestCase):
             "method": "POST",
             "url": "/v1/completions",
             "body": {
-                "model": "test-model",
                 "prompt": "Complete this sentence: The sky is",
                 "temperature": 0.7,
                 "max_tokens": 500
@@ -213,17 +208,18 @@ class TestBatchProcessor(unittest.TestCase):
         
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.generate.return_value = "blue"
+        mock_client.chat.return_value = "blue"
         mock_client_class.return_value = mock_client
-        
+
         processor = BatchProcessor(model_config=self.model_config)
-        
+
         # Run processor
-        results = processor.run(completions_jsonl, self.output_path)
-        
-        # Check that generate was called with expected parameters
-        mock_client.generate.assert_called_with(
-            model="test-model",
+        results = processor.run(completions_jsonl, self.output_path, "vllm")
+
+        # Check that chat was called with expected parameters
+        mock_client.chat.assert_called_with(
+            model="test/test-model",
+            engine="vllm",
             messages=[{"role": "user", "content": "Complete this sentence: The sky is"}],
             temperature=0.7,
             max_tokens=500,

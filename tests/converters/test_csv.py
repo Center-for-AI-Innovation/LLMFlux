@@ -1,3 +1,4 @@
+
 """Tests for the CSV to JSONL converter."""
 
 import os
@@ -146,10 +147,15 @@ class TestCSVToJSONL(unittest.TestCase):
                 prompt_template="Test template"
             )
         
+        # Create a file so the FileNotFoundError check passes and ValueError is reached
+        existing_csv = self.test_dir / "test.csv"
+        with open(existing_csv, "w") as f:
+            f.write("name,age\nJohn,30\n")
+
         # Test without either template or column
         with self.assertRaises(ValueError):
             csv_to_jsonl(
-                input_path=self.test_dir / "test.csv",
+                input_path=existing_csv,
                 output_path=output_path
             )
 
