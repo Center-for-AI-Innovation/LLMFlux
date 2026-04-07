@@ -159,7 +159,7 @@ class VllmMetricsScraper:
     fixed interval to average gauge metrics over the full run duration.
     """
 
-    def __init__(self, base_url: str, interval_seconds: float = 5.0):
+    def __init__(self, base_url: str, interval_seconds: float = 1.0):
         self.base_url = base_url.rstrip("/")
         self.interval = interval_seconds
         self._samples: List[Dict] = []
@@ -231,8 +231,12 @@ class VllmMetricsScraper:
     def _sum_metric(self, snapshot: Dict, name: str) -> float:
         return sum(snapshot.get(name, {}).values())
 
-    def _avg_gauge(self, name: str) -> Optional[float]:
-        vals = [self._sum_metric(s, name) for s in self._samples if name in s]
+    def _avg_gauge(self, name: str, snapshots: Optional[List[Dict]] = None) -> Optional[float]:
+        """Average a gauge metric over samples, falling back to start/end snapshots."""
+        sources = list(self._samples)
+        if not sources and snapshots:
+            sources = [s for s in snapshots if s]
+        vals = [self._sum_metric(s, name) for s in sources if name in s]
         return round(statistics.mean(vals), 2) if vals else None
 
     def _histogram_percentile(self, snapshot: Dict, base_name: str, pct: float) -> Optional[float]:
@@ -281,6 +285,10 @@ class VllmMetricsScraper:
         req_delta = self._sum_metric(end, "vllm:request_success_total") - self._sum_metric(start, "vllm:request_success_total")
         tok_delta = self._sum_metric(end, "vllm:generation_tokens_total") - self._sum_metric(start, "vllm:generation_tokens_total")
 
+        # KV cache: fraction (0–1) → percentage; fall back to snapshots if no polling samples
+        kv_raw = self._avg_gauge("vllm:kv_cache_usage_perc", [start, end])
+        kv_cache_pct = round(kv_raw * 100, 4) if kv_raw is not None else None
+
         # Effective batch size: running / (running + waiting + swapped), averaged over samples
         eff_batch: Optional[float] = None
         if self._samples:
@@ -299,9 +307,9 @@ class VllmMetricsScraper:
             "vllm_token_throughput_tok_per_sec": round(tok_delta / elapsed, 1) if elapsed else None,
             "vllm_ttft_p50_ms": self._histogram_percentile(end, "vllm:time_to_first_token_seconds", 50),
             "vllm_ttft_p95_ms": self._histogram_percentile(end, "vllm:time_to_first_token_seconds", 95),
-            "vllm_itl_p50_ms": self._histogram_percentile(end, "vllm:time_per_output_token_seconds", 50),
-            "vllm_itl_p95_ms": self._histogram_percentile(end, "vllm:time_per_output_token_seconds", 95),
-            "vllm_kv_cache_usage_avg_pct": self._avg_gauge("vllm:gpu_cache_usage_perc"),
+            "vllm_itl_p50_ms": self._histogram_percentile(end, "vllm:request_time_per_output_token_seconds", 50),
+            "vllm_itl_p95_ms": self._histogram_percentile(end, "vllm:request_time_per_output_token_seconds", 95),
+            "vllm_kv_cache_usage_avg_pct": kv_cache_pct,
             "vllm_effective_batch_size_avg": eff_batch,
             "vllm_scrape_count": len(self._samples),
         }
