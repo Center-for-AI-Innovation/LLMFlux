@@ -90,6 +90,44 @@ def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout
         time.sleep(poll_seconds)
     return None
 
+def _ensure_container(config: "Config") -> bool:
+    """Build the Apptainer image on the current node if it does not exist.
+
+    Returns True if the image is ready, False on failure.
+    """
+    import os
+    sif_path = Path(config.containers_dir) / "llm_processor.sif"
+    if sif_path.exists():
+        return True
+
+    container_def = Path(__file__).parent / "container" / "container.def"
+    if not container_def.exists():
+        print(f"Error: container.def not found at {container_def}", file=sys.stderr)
+        return False
+
+    containers_dir = Path(config.containers_dir)
+    apptainer_tmp = Path(config.workspace) / "tmp"
+    apptainer_cache = apptainer_tmp / "cache"
+    apptainer_tmp.mkdir(parents=True, exist_ok=True)
+    apptainer_cache.mkdir(parents=True, exist_ok=True)
+    containers_dir.mkdir(parents=True, exist_ok=True)
+
+    print("Container image not found — building now (this may take a few minutes)...")
+    print(f"  Definition: {container_def}")
+    print(f"  Output:     {sif_path}")
+
+    result = subprocess.run(
+        ["apptainer", "build", "--force", str(sif_path), str(container_def)],
+        env={**os.environ, "APPTAINER_TMPDIR": str(apptainer_tmp), "APPTAINER_CACHEDIR": str(apptainer_cache)},
+    )
+    if result.returncode != 0:
+        print(f"Error: apptainer build failed (exit {result.returncode}).", file=sys.stderr)
+        return False
+
+    print(f"Container built successfully: {sif_path}")
+    return True
+
+
 def _benchmark_command(args: argparse.Namespace) -> int:
     """Handle the `benchmark` subcommand.
     Args:
@@ -124,6 +162,8 @@ def _benchmark_command(args: argparse.Namespace) -> int:
 
     # Collect SLURM config from CLI args (filter out None values)
     config = Config()
+    if not getattr(args, "rebuild", False) and not _ensure_container(config):
+        return 1
     slurm_overrides = {
         key: value for key, value in {
             "account": args.account,
@@ -249,6 +289,8 @@ def _run_command(args: argparse.Namespace) -> int:
 
     # Initialize config - engine will be automatically detected from SLURM_ENGINE env var
     config = Config()
+    if not getattr(args, "rebuild", False) and not _ensure_container(config):
+        return 1
 
     # Override engine if provided via CLI
     if args.engine:
