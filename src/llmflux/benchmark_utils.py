@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""Minimal benchmark utilities for generating test datasets."""
+"""Benchmark utilities for generating test datasets and computing metrics."""
 
 import json
 import random
+import re
+import statistics
+import threading
+import time
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+import requests
 
 
 BENCHMARK_DATA_DIR = Path(__file__).resolve().parent / "benchmark_data"
@@ -145,6 +151,218 @@ def save_prompts_to_jsonl(prompts: List[Dict[str, Any]], filepath: Path) -> None
     with filepath.open('w', encoding='utf-8') as f:
         for prompt in prompts:
             f.write(json.dumps(prompt) + '\n')
+
+class VllmMetricsScraper:
+    """Background thread that scrapes vLLM's /metrics endpoint during a benchmark run.
+
+    Takes a snapshot before and after the run to compute rates, and polls at a
+    fixed interval to average gauge metrics over the full run duration.
+    """
+
+    def __init__(self, base_url: str, interval_seconds: float = 5.0):
+        self.base_url = base_url.rstrip("/")
+        self.interval = interval_seconds
+        self._samples: List[Dict] = []
+        self._snapshot_start: Optional[Dict] = None
+        self._snapshot_end: Optional[Dict] = None
+        self._start_time: Optional[float] = None
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        self._snapshot_start = self._scrape()
+        self._start_time = time.time()
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._poll, daemon=True, name="vllm-scraper")
+        self._thread.start()
+
+    def stop(self) -> Dict[str, Any]:
+        """Stop polling, take a final snapshot, and return a summary dict."""
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=10)
+        self._snapshot_end = self._scrape()
+        return self._summarize()
+
+    # ------------------------------------------------------------------
+    # Scraping / parsing
+    # ------------------------------------------------------------------
+
+    def _scrape(self) -> Dict:
+        try:
+            resp = requests.get(f"{self.base_url}/metrics", timeout=5)
+            resp.raise_for_status()
+            return self._parse(resp.text)
+        except Exception:
+            return {}
+
+    def _parse(self, text: str) -> Dict[str, Dict[str, float]]:
+        """Parse Prometheus text format into {metric_name: {labels_str: value}}."""
+        result: Dict[str, Dict[str, float]] = {}
+        for line in text.splitlines():
+            if line.startswith("#") or not line.strip():
+                continue
+            m = re.match(r"^(\S+)\s+([-\d.eE+]+)", line)
+            if not m:
+                continue
+            full_name, raw_val = m.group(1), m.group(2)
+            try:
+                value = float(raw_val)
+            except ValueError:
+                continue
+            if "{" in full_name:
+                name, labels_str = full_name.split("{", 1)
+                labels_str = labels_str.rstrip("}")
+            else:
+                name, labels_str = full_name, ""
+            result.setdefault(name, {})[labels_str] = value
+        return result
+
+    def _poll(self) -> None:
+        while not self._stop.wait(self.interval):
+            sample = self._scrape()
+            if sample:
+                self._samples.append(sample)
+
+    # ------------------------------------------------------------------
+    # Metric helpers
+    # ------------------------------------------------------------------
+
+    def _sum_metric(self, snapshot: Dict, name: str) -> float:
+        return sum(snapshot.get(name, {}).values())
+
+    def _avg_gauge(self, name: str) -> Optional[float]:
+        vals = [self._sum_metric(s, name) for s in self._samples if name in s]
+        return round(statistics.mean(vals), 2) if vals else None
+
+    def _histogram_percentile(self, snapshot: Dict, base_name: str, pct: float) -> Optional[float]:
+        """Estimate a percentile (ms) from a cumulative Prometheus histogram."""
+        bucket_name = f"{base_name}_bucket"
+        if bucket_name not in snapshot:
+            return None
+        buckets: List[tuple] = []
+        for labels_str, value in snapshot[bucket_name].items():
+            le_m = re.search(r'le="([^"]+)"', labels_str)
+            if le_m and le_m.group(1) != "+Inf":
+                try:
+                    buckets.append((float(le_m.group(1)), value))
+                except ValueError:
+                    pass
+        if not buckets:
+            return None
+        buckets.sort()
+        total = self._sum_metric(snapshot, f"{base_name}_count")
+        if not total:
+            return None
+        target = pct / 100.0 * total
+        prev_le, prev_count = 0.0, 0.0
+        for le, count in buckets:
+            if count >= target:
+                if count == prev_count:
+                    return round(le * 1000, 1)
+                interp = prev_le + (le - prev_le) * (target - prev_count) / (count - prev_count)
+                return round(interp * 1000, 1)
+            prev_le, prev_count = le, count
+        return round(buckets[-1][0] * 1000, 1)
+
+    # ------------------------------------------------------------------
+    # Summary
+    # ------------------------------------------------------------------
+
+    def _summarize(self) -> Dict[str, Any]:
+        start = self._snapshot_start or {}
+        end = self._snapshot_end or {}
+        elapsed = time.time() - self._start_time if self._start_time else 0
+
+        if not end or not elapsed:
+            return {}
+
+        # Rates: delta between end and start snapshots divided by elapsed
+        req_delta = self._sum_metric(end, "vllm:request_success_total") - self._sum_metric(start, "vllm:request_success_total")
+        tok_delta = self._sum_metric(end, "vllm:generation_tokens_total") - self._sum_metric(start, "vllm:generation_tokens_total")
+
+        # Effective batch size: running / (running + waiting + swapped), averaged over samples
+        eff_batch: Optional[float] = None
+        if self._samples:
+            ratios = []
+            for s in self._samples:
+                running = self._sum_metric(s, "vllm:num_requests_running")
+                waiting = self._sum_metric(s, "vllm:num_requests_waiting")
+                swapped = self._sum_metric(s, "vllm:num_requests_swapped")
+                total = running + waiting + swapped
+                if total > 0:
+                    ratios.append(running / total)
+            eff_batch = round(statistics.mean(ratios), 3) if ratios else None
+
+        return {
+            "vllm_request_throughput_req_per_sec": round(req_delta / elapsed, 3) if elapsed else None,
+            "vllm_token_throughput_tok_per_sec": round(tok_delta / elapsed, 1) if elapsed else None,
+            "vllm_ttft_p50_ms": self._histogram_percentile(end, "vllm:time_to_first_token_seconds", 50),
+            "vllm_ttft_p95_ms": self._histogram_percentile(end, "vllm:time_to_first_token_seconds", 95),
+            "vllm_itl_p50_ms": self._histogram_percentile(end, "vllm:time_per_output_token_seconds", 50),
+            "vllm_itl_p95_ms": self._histogram_percentile(end, "vllm:time_per_output_token_seconds", 95),
+            "vllm_kv_cache_usage_avg_pct": self._avg_gauge("vllm:gpu_cache_usage_perc"),
+            "vllm_effective_batch_size_avg": eff_batch,
+            "vllm_scrape_count": len(self._samples),
+        }
+
+
+def compute_benchmark_metrics(output_path: str) -> Dict[str, Any]:
+    """Read a benchmark results file and return a flat metrics dict.
+
+    Supports both the legacy list format and the current envelope format:
+    {"results": [...], "vllm_metrics": {...}}
+    """
+    with open(output_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if isinstance(data, list):
+        results = data
+        vllm_metrics: Dict[str, Any] = {}
+    else:
+        results = data.get("results", [])
+        vllm_metrics = data.get("vllm_metrics", {})
+
+    total = len(results)
+    successful = [r for r in results if not r.get("error")]
+    failed = [r for r in results if r.get("error")]
+
+    metrics: Dict[str, Any] = {
+        "total_requests": total,
+        "successful_requests": len(successful),
+        "failed_requests": len(failed),
+        "success_rate_pct": round(100 * len(successful) / total, 2) if total else 0.0,
+        **vllm_metrics,
+    }
+    return metrics
+
+
+def format_metrics_table(metrics: Dict[str, Any]) -> str:
+    """Format a metrics dict as a human-readable table string."""
+    labels = [
+        ("Total requests",          "total_requests"),
+        ("Successful",              "successful_requests"),
+        ("Failed",                  "failed_requests"),
+        ("Success rate",            "success_rate_pct",                    "%"),
+        ("Request throughput",      "vllm_request_throughput_req_per_sec", "req/s"),
+        ("Token throughput",        "vllm_token_throughput_tok_per_sec",   "tok/s"),
+        ("p50 TTFT",                "vllm_ttft_p50_ms",                    "ms"),
+        ("p95 TTFT",                "vllm_ttft_p95_ms",                    "ms"),
+        ("p50 inter-token latency", "vllm_itl_p50_ms",                     "ms"),
+        ("p95 inter-token latency", "vllm_itl_p95_ms",                     "ms"),
+        ("KV cache usage avg",      "vllm_kv_cache_usage_avg_pct",         "%"),
+        ("Effective batch size avg","vllm_effective_batch_size_avg"),
+    ]
+    lines = ["\n=== Benchmark Metrics ==="]
+    for row in labels:
+        label, key = row[0], row[1]
+        unit = row[2] if len(row) > 2 else ""
+        val = metrics.get(key)
+        display = "N/A" if val is None else (f"{val} {unit}" if unit else str(val))
+        lines.append(f"  {label:<28} {display}")
+    lines.append("=" * 32)
+    return "\n".join(lines)
+
 
 def download_prompts_data() -> None:
     """

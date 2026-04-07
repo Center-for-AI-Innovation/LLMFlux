@@ -161,10 +161,11 @@ class TestBatchProcessor(unittest.TestCase):
         with open(self.output_path, "r") as f:
             output_data = json.load(f)
         
-        # Check output data
-        self.assertEqual(len(output_data), 2)
-        self.assertEqual(output_data[0]["input"]["custom_id"], "test-1")
-        self.assertEqual(output_data[1]["input"]["custom_id"], "test-2")
+        # Output is now {"results": [...], "vllm_metrics": {...}}
+        rows = output_data["results"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["input"]["custom_id"], "test-1")
+        self.assertEqual(rows[1]["input"]["custom_id"], "test-2")
     
     @patch('llmflux.processors.batch.LLMClient')
     def test_error_handling(self, mock_client_class):

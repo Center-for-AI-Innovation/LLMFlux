@@ -15,6 +15,7 @@ from ..core.client import LLMClient
 from ..core.config import ModelConfig
 from ..io.base import OutputHandler, OutputResult
 from ..converters.utils import read_jsonl
+from ..benchmark_utils import VllmMetricsScraper
 
 # Configure logging
 logging.basicConfig(
@@ -54,6 +55,7 @@ class BatchProcessor:
         self.retry_delay = retry_delay
         self.output_handler = output_handler
         self.client = None
+        self._vllm_metrics: Dict[str, Any] = {}
         self.temp_dir = temp_dir or tempfile.gettempdir()
         self.temp_file = os.path.join(self.temp_dir, f"llmflux_{int(time.time())}.jsonl")
         
@@ -266,29 +268,35 @@ class BatchProcessor:
         self.setup(engine)
         print("Setup complete")
 
+        # Start vLLM metrics scraper (vLLM only — Ollama doesn't expose the same endpoint)
+        scraper = None
+        if engine == "vllm":
+            scraper = VllmMetricsScraper(base_url=self.client.base_url)
+            scraper.start()
+
         try:
             # Process JSONL file
             all_results = []
             current_batch = []
             processed_count = 0
-            
+
             # Read JSONL file line by line
             for item in read_jsonl(input_path):
                 current_batch.append(item)
-                
+
                 # Process batch when it reaches batch size
                 if len(current_batch) >= self.batch_size:
                     print("processing batch")
                     batch_results = self.process_batch(engine, current_batch)
                     all_results.extend(batch_results)
                     current_batch = []
-                    
+
                     # Save intermediate results
                     processed_count += len(batch_results)
                     if processed_count % self.save_frequency == 0:
                         self._save_intermediate_results(all_results, output_path)
                         logger.info(f"Processed {processed_count} items")
-            
+
             # Process remaining items
             if current_batch:
                 print("processing  batch")
@@ -296,14 +304,20 @@ class BatchProcessor:
                 all_results.extend(batch_results)
                 processed_count += len(batch_results)
                 logger.info(f"Processed {processed_count} items")
-            
+
+            # Stop scraper before saving so metrics are included in output
+            if scraper:
+                self._vllm_metrics = scraper.stop()
+
             # Save final results
             self._save_results(all_results, output_path)
             logger.info(f"Processing complete. Results saved to {output_path}")
-            
+
             return all_results
-            
+
         finally:
+            if scraper and scraper._thread and scraper._thread.is_alive():
+                scraper.stop()
             self.cleanup()
     
     def _save_intermediate_results(self, results: List[OutputResult], output_path: str):
@@ -342,10 +356,12 @@ class BatchProcessor:
             if self.output_handler:
                 self.output_handler.save(results, output_path)
             else:
-                # Default to JSON output
                 serializable_results = [result.to_dict() for result in results]
+                output = {"results": serializable_results}
+                if self._vllm_metrics:
+                    output["vllm_metrics"] = self._vllm_metrics
                 with open(output_path, 'w') as f:
-                    json.dump(serializable_results, f, indent=2)
+                    json.dump(output, f, indent=2)
             
             # Clean up temporary file
             if os.path.exists(self.temp_file):

@@ -5,6 +5,7 @@ Provides the `llmflux` executable with subcommands.
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 import time
@@ -30,7 +31,7 @@ from .slurm.commands import (
 from .processors import BatchProcessor
 from .core.config import Config, EngineConfig
 from .core.registry import JobRegistry
-from .benchmark_utils import create_test_prompts_file
+from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
 
 
 def _get_llmflux_version() -> str:
@@ -61,6 +62,20 @@ def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[st
         result[key.strip()] = value.strip()
 
     return result if result else None
+
+def _parse_elapsed_to_seconds(elapsed: str) -> float:
+    """Parse a sacct elapsed string (HH:MM:SS or D-HH:MM:SS) to total seconds."""
+    try:
+        day_seconds = 0
+        rest = elapsed
+        if "-" in elapsed:
+            days, rest = elapsed.split("-", 1)
+            day_seconds = int(days) * 86400
+        h, m, s = rest.split(":")
+        return day_seconds + int(h) * 3600 + int(m) * 60 + int(s)
+    except Exception:
+        return 0.0
+
 
 def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout_seconds: int = 6 * 3600) -> str | None:
     """Return elapsed runtime (seconds) once SLURM job completes; None when unavailable."""
@@ -216,22 +231,27 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
 
-    # Create a metrics file that log the time taken to run the batch inference and the number of prompts processed
-    elapsed_seconds = _wait_for_slurm_elapsed_seconds(job_id)
-    try:
-        if elapsed_seconds is None:
-            print("Job finished but elapsed runtime could not be retrieved from sacct.")
-            return 0
-
-        metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
-        metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        metrics_path.write_text(
-            f"Time taken to run the batch inference: {elapsed_seconds}\n"
-            f"Number of prompts processed: {num_prompts}\n"
-        )
-    except Exception as e:
-        print(f"Error writing metrics file: {e}")
+    elapsed_str = _wait_for_slurm_elapsed_seconds(job_id)
+    if elapsed_str is None:
+        print("Job finished but elapsed runtime could not be retrieved from sacct.")
         return 0
+
+    elapsed_seconds = _parse_elapsed_to_seconds(elapsed_str)
+
+    try:
+        metrics = compute_benchmark_metrics(output_path)
+        metrics["elapsed_seconds"] = round(elapsed_seconds, 1)
+        metrics["elapsed"] = elapsed_str
+    except Exception as e:
+        print(f"Error computing metrics: {e}")
+        return 0
+
+    print(format_metrics_table(metrics))
+
+    metrics_path = Path(f"results/benchmarks/{name}_metrics.json")
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    metrics_path.write_text(json.dumps(metrics, indent=2))
+    print(f"\nMetrics saved to {metrics_path}")
 
     return 0
 
