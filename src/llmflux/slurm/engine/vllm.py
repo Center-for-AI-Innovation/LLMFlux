@@ -70,6 +70,8 @@ def create_vllm_batch_script(
         "    export APPTAINERENV_HF_TOKEN=\"$HF_TOKEN\"",
         "fi",
         "",
+        "# Pass SLURM-allocated GPU(s) into the container (--cleanenv strips CUDA_VISIBLE_DEVICES)",
+        "export APPTAINERENV_CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}",
         "VERBOSE=1 apptainer exec --nv --cleanenv \\",
         "    --bind \"$APPTAINER_BIND_PATHS\" \\",
         "    ${CONTAINERS_DIR}/llm_processor.sif \\",

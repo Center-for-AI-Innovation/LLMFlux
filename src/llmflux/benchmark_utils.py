@@ -4,7 +4,9 @@
 import json
 import random
 import re
+import shutil
 import statistics
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -237,7 +239,7 @@ class VllmMetricsScraper:
         if not sources and snapshots:
             sources = [s for s in snapshots if s]
         vals = [self._sum_metric(s, name) for s in sources if name in s]
-        return round(statistics.mean(vals), 2) if vals else None
+        return statistics.mean(vals) if vals else None
 
     def _histogram_percentile(self, snapshot: Dict, base_name: str, pct: float) -> Optional[float]:
         """Estimate a percentile (ms) from a cumulative Prometheus histogram."""
@@ -289,18 +291,11 @@ class VllmMetricsScraper:
         kv_raw = self._avg_gauge("vllm:kv_cache_usage_perc", [start, end])
         kv_cache_pct = round(kv_raw * 100, 4) if kv_raw is not None else None
 
-        # Effective batch size: running / (running + waiting + swapped), averaged over samples
+        # Effective batch size: average number of requests actively running
         eff_batch: Optional[float] = None
         if self._samples:
-            ratios = []
-            for s in self._samples:
-                running = self._sum_metric(s, "vllm:num_requests_running")
-                waiting = self._sum_metric(s, "vllm:num_requests_waiting")
-                swapped = self._sum_metric(s, "vllm:num_requests_swapped")
-                total = running + waiting + swapped
-                if total > 0:
-                    ratios.append(running / total)
-            eff_batch = round(statistics.mean(ratios), 3) if ratios else None
+            counts = [self._sum_metric(s, "vllm:num_requests_running") for s in self._samples]
+            eff_batch = round(statistics.mean(counts), 2) if counts else None
 
         return {
             "vllm_request_throughput_req_per_sec": round(req_delta / elapsed, 3) if elapsed else None,
@@ -312,6 +307,79 @@ class VllmMetricsScraper:
             "vllm_kv_cache_usage_avg_pct": kv_cache_pct,
             "vllm_effective_batch_size_avg": eff_batch,
             "vllm_scrape_count": len(self._samples),
+        }
+
+
+class GpuUtilScraper:
+    """Background thread that samples GPU utilization via nvidia-smi.
+
+    Polls all visible GPUs at a fixed interval. Reports average and peak
+    utilization across all GPUs and all samples.
+    """
+
+    def __init__(self, interval_seconds: float = 1.0):
+        self.interval = interval_seconds
+        self._samples: List[float] = []
+        self._stop = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    def start(self) -> None:
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._poll, daemon=True, name="gpu-util-scraper")
+        self._thread.start()
+
+    def stop(self) -> Dict[str, Any]:
+        """Stop polling and return a summary dict."""
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=10)
+        return self._summarize()
+
+    def _poll(self) -> None:
+        while not self._stop.wait(self.interval):
+            self._samples.extend(self._sample())
+
+    # Common nvidia-smi locations on HPC systems where it may not be in PATH
+    _NVIDIA_SMI_CANDIDATES = [
+        "nvidia-smi",
+        "/usr/bin/nvidia-smi",
+        "/usr/local/bin/nvidia-smi",
+        "/usr/local/cuda/bin/nvidia-smi",
+    ]
+
+    @classmethod
+    def _find_nvidia_smi(cls) -> Optional[str]:
+        """Return the first usable nvidia-smi path, or None."""
+        for candidate in cls._NVIDIA_SMI_CANDIDATES:
+            path = shutil.which(candidate) or (candidate if Path(candidate).is_file() else None)
+            if path:
+                return path
+        return None
+
+    def _sample(self) -> List[float]:
+        """Query utilization.gpu for all GPUs; return list of floats (one per GPU)."""
+        smi = self._find_nvidia_smi()
+        if not smi:
+            return []
+        try:
+            result = subprocess.run(
+                [smi, "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                return [float(v.strip()) for v in result.stdout.splitlines() if v.strip()]
+        except Exception:
+            pass
+        return []
+
+    def _summarize(self) -> Dict[str, Any]:
+        if not self._samples:
+            return {"gpu_util_avg_pct": None, "gpu_util_peak_pct": None}
+        return {
+            "gpu_util_avg_pct": round(statistics.mean(self._samples), 1),
+            "gpu_util_peak_pct": round(max(self._samples), 1),
         }
 
 
@@ -327,9 +395,11 @@ def compute_benchmark_metrics(output_path: str) -> Dict[str, Any]:
     if isinstance(data, list):
         results = data
         vllm_metrics: Dict[str, Any] = {}
+        gpu_metrics: Dict[str, Any] = {}
     else:
         results = data.get("results", [])
         vllm_metrics = data.get("vllm_metrics", {})
+        gpu_metrics = data.get("gpu_metrics", {})
 
     total = len(results)
     successful = [r for r in results if not r.get("error")]
@@ -341,6 +411,7 @@ def compute_benchmark_metrics(output_path: str) -> Dict[str, Any]:
         "failed_requests": len(failed),
         "success_rate_pct": round(100 * len(successful) / total, 2) if total else 0.0,
         **vllm_metrics,
+        **gpu_metrics,
     }
     return metrics
 
@@ -352,6 +423,7 @@ def format_metrics_table(metrics: Dict[str, Any]) -> str:
         ("Successful",              "successful_requests"),
         ("Failed",                  "failed_requests"),
         ("Success rate",            "success_rate_pct",                    "%"),
+        ("Total time",              "elapsed"),
         ("Request throughput",      "vllm_request_throughput_req_per_sec", "req/s"),
         ("Token throughput",        "vllm_token_throughput_tok_per_sec",   "tok/s"),
         ("p50 TTFT",                "vllm_ttft_p50_ms",                    "ms"),
@@ -360,6 +432,8 @@ def format_metrics_table(metrics: Dict[str, Any]) -> str:
         ("p95 inter-token latency", "vllm_itl_p95_ms",                     "ms"),
         ("KV cache usage avg",      "vllm_kv_cache_usage_avg_pct",         "%"),
         ("Effective batch size avg","vllm_effective_batch_size_avg"),
+        ("GPU utilization avg",     "gpu_util_avg_pct",                    "%"),
+        ("GPU utilization peak",    "gpu_util_peak_pct",                   "%"),
     ]
     lines = ["\n=== Benchmark Metrics ==="]
     for row in labels:

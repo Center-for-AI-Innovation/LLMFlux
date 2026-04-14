@@ -272,7 +272,7 @@ class SlurmRunner:
         
         # 1. For input:
         # If input_path is a file path, use it directly
-        input_file = Path(input_path)
+        input_file = Path(input_path).resolve()
 
         if not input_file.exists():
             # If it doesn't exist, check if it's relative to the data input directory
@@ -288,7 +288,7 @@ class SlurmRunner:
         
         # 2. For output:
         if output_path:
-            output_file = Path(output_path)
+            output_file = Path(output_path).resolve()
         else:
             config = self.config_manager.get_config()
             output_dir = config.get_path('DATA_OUTPUT_DIR')

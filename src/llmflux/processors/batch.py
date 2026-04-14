@@ -15,7 +15,7 @@ from ..core.client import LLMClient
 from ..core.config import ModelConfig
 from ..io.base import OutputHandler, OutputResult
 from ..converters.utils import read_jsonl
-from ..benchmark_utils import VllmMetricsScraper
+from ..benchmark_utils import VllmMetricsScraper, GpuUtilScraper
 
 # Configure logging
 logging.basicConfig(
@@ -56,6 +56,7 @@ class BatchProcessor:
         self.output_handler = output_handler
         self.client = None
         self._vllm_metrics: Dict[str, Any] = {}
+        self._gpu_metrics: Dict[str, Any] = {}
         self.temp_dir = temp_dir or tempfile.gettempdir()
         self.temp_file = os.path.join(self.temp_dir, f"llmflux_{int(time.time())}.jsonl")
         
@@ -274,6 +275,10 @@ class BatchProcessor:
             scraper = VllmMetricsScraper(base_url=self.client.base_url)
             scraper.start()
 
+        # GPU utilization scraper runs for all engines
+        gpu_scraper = GpuUtilScraper()
+        gpu_scraper.start()
+
         try:
             # Process JSONL file
             all_results = []
@@ -305,9 +310,10 @@ class BatchProcessor:
                 processed_count += len(batch_results)
                 logger.info(f"Processed {processed_count} items")
 
-            # Stop scraper before saving so metrics are included in output
+            # Stop scrapers before saving so metrics are included in output
             if scraper:
                 self._vllm_metrics = scraper.stop()
+            self._gpu_metrics = gpu_scraper.stop()
 
             # Save final results
             self._save_results(all_results, output_path)
@@ -318,6 +324,8 @@ class BatchProcessor:
         finally:
             if scraper and scraper._thread and scraper._thread.is_alive():
                 scraper.stop()
+            if gpu_scraper._thread and gpu_scraper._thread.is_alive():
+                gpu_scraper.stop()
             self.cleanup()
     
     def _save_intermediate_results(self, results: List[OutputResult], output_path: str):
@@ -360,6 +368,8 @@ class BatchProcessor:
                 output = {"results": serializable_results}
                 if self._vllm_metrics:
                     output["vllm_metrics"] = self._vllm_metrics
+                if self._gpu_metrics:
+                    output["gpu_metrics"] = self._gpu_metrics
                 with open(output_path, 'w') as f:
                     json.dump(output, f, indent=2)
             
