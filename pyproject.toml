@@ -72,3 +72,4 @@ where = ["src"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 norecursedirs = [".*", "build", "dist", "*.egg-info", ".venv", "backups", "tmp"]
+addopts = "--import-mode=importlib"
