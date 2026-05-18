@@ -43,10 +43,10 @@ class SystemConfig(BaseModel):
 
 class ValidationConfig(BaseModel):
     """Model validation configuration."""
-    temperature_range: List[float] = Field(..., min_items=2, max_items=2)
+    temperature_range: List[float] = Field(..., min_length=2, max_length=2)
     max_tokens_limit: int = Field(..., ge=1)
-    batch_size_range: List[int] = Field(..., min_items=2, max_items=2)
-    concurrent_range: List[int] = Field(..., min_items=2, max_items=2)
+    batch_size_range: List[int] = Field(..., min_length=2, max_length=2)
+    concurrent_range: List[int] = Field(..., min_length=2, max_length=2)
 
     @field_validator("temperature_range")
     @classmethod
