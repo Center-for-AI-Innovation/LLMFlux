@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from llmflux.benchmark_utils import (
+    create_test_prompts_file,
     ensure_benchmark_data_dir,
     extract_prompts_from_jsonl,
     generate_synthetic_prompts,
@@ -116,6 +117,82 @@ class TestSavePromptsToJsonl(unittest.TestCase):
         save_prompts_to_jsonl([], out)
         self.assertTrue(out.exists())
         self.assertEqual(out.read_text().strip(), "")
+
+
+class TestCreateTestPromptsFile(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp_dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write_category_file(self, benchmark_dir: Path, category: str, n: int = 5):
+        path = benchmark_dir / f"{category}.jsonl"
+        prompts = [
+            [{"role": "user", "content": f"{category} question {i}"}]
+            for i in range(n)
+        ]
+        with open(path, "w") as f:
+            for p in prompts:
+                f.write(json.dumps(p) + "\n")
+
+    def test_returns_path_string(self):
+        import llmflux.benchmark_utils as bu
+        categories = ["data_analysis", "language", "math", "reasoning", "instruction_following", "coding"]
+        bench_dir = self.tmp_dir / "benchmark_data"
+        bench_dir.mkdir()
+        for cat in categories:
+            self._write_category_file(bench_dir, cat)
+        with patch.object(bu, "BENCHMARK_DATA_DIR", bench_dir):
+            result = create_test_prompts_file(num_prompts=6)
+        self.assertIsInstance(result, str)
+        self.assertTrue(Path(result).exists())
+
+    def test_output_is_valid_jsonl(self):
+        import llmflux.benchmark_utils as bu
+        categories = ["data_analysis", "language", "math", "reasoning", "instruction_following", "coding"]
+        bench_dir = self.tmp_dir / "benchmark_data"
+        bench_dir.mkdir()
+        for cat in categories:
+            self._write_category_file(bench_dir, cat, n=5)
+        with patch.object(bu, "BENCHMARK_DATA_DIR", bench_dir):
+            result_path = create_test_prompts_file(num_prompts=6)
+        with open(result_path) as f:
+            lines = [json.loads(l) for l in f if l.strip()]
+        self.assertGreater(len(lines), 0)
+        for entry in lines:
+            self.assertIn("custom_id", entry)
+            self.assertIn("method", entry)
+            self.assertIn("body", entry)
+            self.assertIn("messages", entry["body"])
+
+    def test_calls_download_when_files_missing(self):
+        import llmflux.benchmark_utils as bu
+        bench_dir = self.tmp_dir / "benchmark_data_empty"
+        bench_dir.mkdir()
+        categories = ["data_analysis", "language", "math", "reasoning", "instruction_following", "coding"]
+        with patch.object(bu, "BENCHMARK_DATA_DIR", bench_dir):
+            with patch.object(bu, "download_prompts_data") as mock_dl:
+                # After download_prompts_data is called, write the files
+                def side_effect():
+                    for cat in categories:
+                        self._write_category_file(bench_dir, cat, n=3)
+                mock_dl.side_effect = side_effect
+                create_test_prompts_file(num_prompts=6)
+            mock_dl.assert_called_once()
+
+    def test_skips_download_when_files_present(self):
+        import llmflux.benchmark_utils as bu
+        categories = ["data_analysis", "language", "math", "reasoning", "instruction_following", "coding"]
+        bench_dir = self.tmp_dir / "benchmark_data_full"
+        bench_dir.mkdir()
+        for cat in categories:
+            self._write_category_file(bench_dir, cat, n=5)
+        with patch.object(bu, "BENCHMARK_DATA_DIR", bench_dir):
+            with patch.object(bu, "download_prompts_data") as mock_dl:
+                create_test_prompts_file(num_prompts=6)
+            mock_dl.assert_not_called()
 
 
 class TestEnsureBenchmarkDataDir(unittest.TestCase):

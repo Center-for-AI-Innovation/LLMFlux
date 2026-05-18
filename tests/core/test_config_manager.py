@@ -106,3 +106,34 @@ class TestGetParameter(unittest.TestCase):
 
 
 import unittest.mock
+
+
+class TestUpdateConfig(unittest.TestCase):
+    def tearDown(self):
+        cm_module._config_instance = None
+
+    def test_update_data_dir(self):
+        ConfigManager.get_config()
+        updated = ConfigManager.update_config(data_dir="/tmp/updated_data")
+        self.assertEqual(updated.data_dir, "/tmp/updated_data")
+
+    def test_update_logs_dir(self):
+        ConfigManager.get_config()
+        updated = ConfigManager.update_config(logs_dir="/tmp/updated_logs")
+        self.assertEqual(updated.logs_dir, "/tmp/updated_logs")
+
+    def test_update_returns_same_singleton(self):
+        original = ConfigManager.get_config()
+        updated = ConfigManager.update_config(data_dir="/tmp/x")
+        self.assertIs(original, updated)
+
+    def test_update_without_args_is_noop(self):
+        config = ConfigManager.get_config()
+        original_data_dir = config.data_dir
+        ConfigManager.update_config()
+        self.assertEqual(ConfigManager.get_config().data_dir, original_data_dir)
+
+    def test_update_refreshes_derived_paths(self):
+        ConfigManager.get_config()
+        updated = ConfigManager.update_config(data_dir="/tmp/newdata")
+        self.assertIn("input", str(updated.default_paths.get("DATA_INPUT_DIR", "")))
