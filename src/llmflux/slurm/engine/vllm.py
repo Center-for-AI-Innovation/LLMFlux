@@ -39,7 +39,7 @@ def create_vllm_batch_script(
 
     if mode == "serve":
         job_script.extend([
-            f"#SBATCH --mail-type=BEGIN,END,FAIL",
+            f"#SBATCH --mail-type=END,FAIL",
             f"#SBATCH --mail-user={email}",
         ])
 
@@ -149,6 +149,29 @@ def create_vllm_batch_script(
             "}",
             "EOF",
             "echo \"Connection info written to $CONNECTION_FILE\"",
+            "",
+            "# Send ready notification email with connection details",
+            f"mail -s \"LLMFlux serve job $SLURM_JOB_ID is ready\" {email} <<MAIL_EOF",
+            "Your LLMFlux serve job has finished loading and is ready to use.",
+            "",
+            "  Job ID:   $SLURM_JOB_ID",
+            "  Endpoint: http://$(hostname):$VLLM_PORT/v1",
+            "  API Key:  $LLMFLUX_API_KEY",
+            "  Model:    $VLLM_MODEL_NAME",
+            "  Engine:   vllm",
+            "",
+            "Example usage:",
+            "",
+            "  from openai import OpenAI",
+            "  client = OpenAI(base_url=\"http://$(hostname):$VLLM_PORT/v1\", api_key=\"$LLMFLUX_API_KEY\")",
+            "  response = client.chat.completions.create(",
+            "      model=\"$VLLM_MODEL_NAME\",",
+            "      messages=[{\"role\": \"user\", \"content\": \"Hello!\"}]",
+            "  )",
+            "",
+            "To get connection details again:",
+            "  llmflux connect $SLURM_JOB_ID",
+            "MAIL_EOF",
             "",
             "# Keep alive until wall time or scancel",
             "wait $VLLM_PID",
