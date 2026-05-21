@@ -20,7 +20,7 @@ SAMPLE_INFO = {
     "node": "gpu-node-01",
     "port": 8000,
     "model": "meta-llama/Llama-3.2-3B-Instruct",
-    "api_key": "llmflux-abc123def456",
+    "api_key": "llmflux-00000000000000000000000000000000",
     "engine": "vllm",
 }
 
@@ -200,7 +200,7 @@ class TestConnect(unittest.TestCase):
         with patch("builtins.print") as mock_print:
             connect("99999")
         output = " ".join(str(c) for c in mock_print.call_args_list)
-        self.assertIn("llmflux-abc123def456", output)
+        self.assertIn("llmflux-00000000000000000000000000000000", output)
 
     @patch("llmflux.slurm.connection._ping_endpoint", return_value=True)
     @patch("llmflux.slurm.connection.read_connection_info", return_value=SAMPLE_INFO)
