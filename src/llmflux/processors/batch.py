@@ -129,13 +129,13 @@ class BatchProcessor:
                     output=response,
                     metadata={
                         "model": self.model_config.get_model_name_for_engine(),
-                        "timestamp": datetime.datetime.utcnow().isoformat(),
+                        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
                         **metadata
                     }
                 )
                 results.append(result)
                 logger.debug(f"Processed item with ID: {custom_id}")
-                
+
             except Exception as e:
                 logger.error(f"Error processing item: {e}")
                 # Add error result
@@ -145,7 +145,7 @@ class BatchProcessor:
                     error=str(e),
                     metadata={
                         "model": self.model_config.get_model_name_for_engine(),
-                        "timestamp": datetime.datetime.utcnow().isoformat(),
+                        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
                         "error": True,
                         **item.get("metadata", {})
                     }

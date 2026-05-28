@@ -1,6 +1,6 @@
-# Testing Guide for AI-Flux
+# Testing Guide for LLMFlux
 
-This guide explains how to run the test suite for AI-Flux.
+This guide explains how to run the test suite for LLMFlux.
 
 ## Quick Start
 
@@ -60,9 +60,13 @@ pytest --cov=llmflux --cov-report=html --cov-report=term-missing
 
 ## Test Classification
 
-The test suite consists of:
-- **Unit Tests** (16 tests): Test individual functions in isolation
-- **Integration Tests** (9 tests): Test component interactions with mocked external dependencies
+The test suite consists of 250+ tests covering:
+- **Core** (`tests/core/`): Config, ConfigManager, JobRegistry, LLMClient
+- **Converters** (`tests/converters/`): CSV, JSON, directory, utils, vision
+- **Processors** (`tests/processors/`): Batch processing
+- **Slurm** (`tests/slurm/`): Runner, commands, engine scripts
+- **IO** (`tests/io/`): OutputResult, JSONOutputHandler
+- **CLI** (`tests/`): CLI commands, job control, version, custom config, benchmark utils
 
 All tests can run **locally** without requiring a SLURM cluster.
 
@@ -299,7 +303,7 @@ pytest --cov=llmflux.cli --cov=llmflux.slurm --cov-report=term-missing
 ssh username@server-hostname
 
 # Navigate to project
-cd ~/projects/ai-flux
+cd ~/projects/llmflux
 
 # Option 1: Load conda module (most common)
 module load anaconda3
@@ -662,15 +666,29 @@ pytest -n auto -v
 ```
 tests/
 ├── __init__.py
-├── test_cli.py              # CLI command tests (25 tests)
+├── test_benchmark_utils.py  # Benchmark utility tests
+├── test_cli.py              # CLI command and environment variable tests
+├── test_cli_jobs.py         # Job control command tests
+├── test_cli_version.py      # Version flag tests
+├── test_custom_config_path.py # Custom config path tests
+├── core/
+│   ├── test_client.py       # LLMClient tests
+│   ├── test_config.py       # Config, ValidationConfig, ModelConfig tests
+│   ├── test_config_manager.py # ConfigManager singleton and parameter tests
+│   └── test_registry.py     # JobRegistry CRUD tests
 ├── converters/
 │   ├── test_csv.py
-│   ├── test_json.py
 │   ├── test_directory.py
-│   └── test_utils.py
+│   ├── test_json.py
+│   ├── test_utils.py
+│   └── test_vision.py
+├── io/
+│   └── test_output.py       # OutputResult and JSONOutputHandler tests
 ├── processors/
 │   └── test_batch.py
 └── slurm/
+    ├── test_commands.py
+    ├── test_engine_scripts.py # vLLM and Ollama batch script generation
     └── test_runner.py
 ```
 
@@ -756,12 +774,9 @@ pytest -vv -s
 
 ## Continuous Integration
 
-Tests run automatically on:
-- Push to main/develop/master branches
-- Pull requests
-- GitHub Actions CI workflow
+Tests run automatically on pull requests via GitHub Actions across Python 3.11 and 3.12.
 
-See `.github/workflows/ci.yml` for CI configuration.
+See `.github/workflows/tests.yml` for CI configuration.
 
 ## Best Practices
 
@@ -790,7 +805,7 @@ See `.github/workflows/ci.yml` for CI configuration.
    pytest -x -v
    ```
 
-## Running AI-Flux Commands on Server
+## Running LLMFlux Commands on Server
 
 ### Specify Account in Command
 
@@ -868,9 +883,9 @@ llmflux run \
   --gpus-per-node 1
 ```
 
-### Module Loading Alternatives for AI-Flux
+### Module Loading Alternatives for LLMFlux
 
-If `anaconda3` module is not found when running AI-Flux:
+If `anaconda3` module is not found when running LLMFlux:
 
 ```bash
 # Try alternatives (in order):
@@ -965,7 +980,7 @@ pytest -x
 module load anaconda3 && conda activate llmflux && pytest -v
 ```
 
-### AI-Flux Commands
+### LLMFlux Commands
 
 ```bash
 # Basic command with account
