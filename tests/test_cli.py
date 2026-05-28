@@ -402,7 +402,7 @@ class TestBenchmarkCommand:
 
         # Verify
         assert result == 0
-        mock_create_prompts.assert_called_once_with(num_prompts=50, temperature=0.7, max_tokens=500)
+        mock_create_prompts.assert_called_once_with(num_prompts=50, temperature=0.7, max_tokens=500, model="Llama-3.2-3B-Instruct")
         mock_runner.run.assert_called_once()
     
     @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
@@ -1248,7 +1248,7 @@ class TestCommandLineIntegration:
                 result = main()
 
         assert result == 0
-        mock_create_prompts.assert_called_once_with(num_prompts=100, temperature=0.7, max_tokens=500)
+        mock_create_prompts.assert_called_once_with(num_prompts=100, temperature=0.7, max_tokens=500, model="Llama-3.2-3B-Instruct")
 
 
 if __name__ == "__main__":
