@@ -437,6 +437,110 @@ class TestSlurmRunnerServe(unittest.TestCase):
         result = runner.serve(email="user@example.com", model="test:7b")
 
         self.assertIsNone(result)
+class TestLoadVllmEngineArgs(unittest.TestCase):
+    def _make_runner(self):
+        with patch("llmflux.slurm.runner.ConfigManager") as mock_cm:
+            mock_cm.return_value.get_config.return_value = MagicMock()
+            return SlurmRunner()
+
+    def test_none_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args(None, "test"), {})
+
+    def test_dict_returned_as_is(self):
+        runner = self._make_runner()
+        d = {"max_model_len": 4096}
+        self.assertEqual(runner._load_vllm_engine_args(d, "test"), d)
+
+    def test_empty_string_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args("", "test"), {})
+        self.assertEqual(runner._load_vllm_engine_args("   ", "test"), {})
+
+    def test_valid_json_object_string(self):
+        runner = self._make_runner()
+        result = runner._load_vllm_engine_args('{"max_model_len": 4096}', "test")
+        self.assertEqual(result, {"max_model_len": 4096})
+
+    def test_invalid_json_string_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args("{bad json}", "test"), {})
+
+    def test_json_array_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args("[1, 2, 3]", "test"), {})
+
+    def test_non_string_non_dict_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args(42, "test"), {})
+        self.assertEqual(runner._load_vllm_engine_args(["a"], "test"), {})
+
+
+class TestBuildVllmEngineArgs(unittest.TestCase):
+    def _make_runner(self):
+        with patch("llmflux.slurm.runner.ConfigManager") as mock_cm:
+            mock_cm.return_value.get_config.return_value = MagicMock()
+            return SlurmRunner()
+
+    def test_bool_true_emits_flag_only(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"enable-prefix-caching": True})
+        self.assertIn("--enable-prefix-caching", result)
+        # No value after the flag
+        parts = result.split()
+        idx = parts.index("--enable-prefix-caching")
+        self.assertEqual(idx, len(parts) - 1)
+
+    def test_bool_false_omits_flag(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"enable-prefix-caching": False})
+        self.assertNotIn("enable-prefix-caching", result)
+
+    def test_none_value_omits_key(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"max_model_len": None})
+        self.assertEqual(result.strip(), "")
+
+    def test_int_value(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"max_model_len": 4096})
+        self.assertIn("--max_model_len", result)
+        self.assertIn("4096", result)
+
+    def test_key_already_prefixed(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"--max_model_len": 512})
+        parts = result.split()
+        flags = [p for p in parts if p.startswith("--")]
+        # Should appear exactly once, not doubled
+        self.assertEqual(flags.count("--max_model_len"), 1)
+
+    def test_unsupported_type_omitted(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"bad_arg": [1, 2, 3]})
+        self.assertEqual(result.strip(), "")
+
+
+class TestBuildJobName(unittest.TestCase):
+    def _make_runner(self):
+        with patch("llmflux.slurm.runner.ConfigManager") as mock_cm:
+            mock_cm.return_value.get_config.return_value = MagicMock()
+            return SlurmRunner()
+
+    def test_special_chars_replaced(self):
+        runner = self._make_runner()
+        name = runner._build_job_name("meta-llama/Llama-3.2-3B")
+        self.assertRegex(name, r"^llmflux_[a-zA-Z0-9_]+_")
+
+    def test_empty_identifier_uses_fallback(self):
+        runner = self._make_runner()
+        name = runner._build_job_name("---")
+        self.assertIn("llmflux_model_", name)
+
+    def test_name_truncated_to_120(self):
+        runner = self._make_runner()
+        name = runner._build_job_name("a" * 200)
+        self.assertLessEqual(len(name), 120)
 
 
 if __name__ == "__main__":

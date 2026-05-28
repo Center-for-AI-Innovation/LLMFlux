@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from llmflux.benchmark_utils import (
     create_test_prompts_file,
+    download_prompts_data,
     ensure_benchmark_data_dir,
     extract_prompts_from_jsonl,
     generate_synthetic_prompts,
@@ -200,6 +201,56 @@ class TestEnsureBenchmarkDataDir(unittest.TestCase):
         result = ensure_benchmark_data_dir()
         self.assertIsInstance(result, Path)
         self.assertTrue(result.exists())
+
+
+class TestDownloadPromptsData(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp_dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_raises_import_error_when_deps_missing(self):
+        import builtins
+        real_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name in ("datasets", "pandas"):
+                raise ImportError(f"No module named '{name}'")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=mock_import):
+            with self.assertRaises(ImportError) as ctx:
+                download_prompts_data()
+        self.assertIn("datasets", str(ctx.exception))
+
+    def test_downloads_all_categories(self):
+        import sys
+        import llmflux.benchmark_utils as bu
+        bench_dir = self.tmp_dir / "benchmark_data"
+        bench_dir.mkdir()
+
+        mock_row = MagicMock()
+        mock_row.__getitem__ = lambda self, key: ["What is ML?"] if key == "turns" else None
+
+        mock_df = MagicMock()
+        mock_df.iterrows.return_value = iter([(0, mock_row)])
+
+        mock_dataset = MagicMock()
+        mock_dataset.to_pandas.return_value = mock_df
+
+        mock_datasets_mod = MagicMock()
+        mock_datasets_mod.load_dataset.return_value = mock_dataset
+
+        categories = ["coding", "data_analysis", "instruction_following", "math", "reasoning", "language"]
+
+        with patch.object(bu, "BENCHMARK_DATA_DIR", bench_dir):
+            with patch.dict(sys.modules, {"datasets": mock_datasets_mod}):
+                download_prompts_data()
+
+        written = list(bench_dir.glob("*.jsonl"))
+        self.assertEqual(len(written), len(categories))
 
 
 if __name__ == "__main__":
