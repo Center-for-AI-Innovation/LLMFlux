@@ -388,8 +388,11 @@ class SlurmRunner:
             env_args = self._load_vllm_engine_args(os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS")
             cli_args = self._load_vllm_engine_args(kwargs.get("vllm_engine_args"), "--vllm-engine-args")
             merged_args = {**env_args, **cli_args}
+            # Automatically set tensor parallelism when multiple GPUs are requested,
+            # unless the user has already specified it.
+            if self.slurm_config.gpus_per_node > 1 and "tensor-parallel-size" not in merged_args:
+                merged_args["tensor-parallel-size"] = self.slurm_config.gpus_per_node
             env['VLLM_ENGINE_ARGS'] = self._build_vllm_engine_args(merged_args)
-
         # Container variables (used in Python inside container)
         # Always set MODEL_IDENTIFIER for reference
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
