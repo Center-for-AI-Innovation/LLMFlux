@@ -1,3 +1,4 @@
+import shlex
 from pathlib import Path
 
 def create_vllm_batch_script(
@@ -39,7 +40,7 @@ def create_vllm_batch_script(
 
     if mode == "serve":
         job_script.extend([
-            f"#SBATCH --mail-type=END,FAIL",
+            f"#SBATCH --mail-type=FAIL",
             f"#SBATCH --mail-user={email}",
         ])
 
@@ -134,10 +135,11 @@ def create_vllm_batch_script(
         "echo Time to ask questions!",
         "",
         *([
-            "# Write connection file for llmflux connect",
+            "# Write connection file for llmflux connect (restrict permissions — contains API key)",
             "CONNECTION_FILE=\"$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json\"",
             "mkdir -p \"$(dirname $CONNECTION_FILE)\"",
-            "cat > \"$CONNECTION_FILE\" <<EOF",
+            "chmod 700 \"$(dirname $CONNECTION_FILE)\"",
+            "(umask 077 && cat > \"$CONNECTION_FILE\" <<EOF",
             "{",
             "  \"job_id\": \"$SLURM_JOB_ID\",",
             "  \"node\": \"$(hostname)\",",
@@ -148,10 +150,13 @@ def create_vllm_batch_script(
             "  \"started_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"",
             "}",
             "EOF",
+            ")",
+            "chmod 600 \"$CONNECTION_FILE\"",
             "echo \"Connection info written to $CONNECTION_FILE\"",
             "",
             "# Send ready notification email with connection details",
-            f"mail -s \"LLMFlux serve job $SLURM_JOB_ID is ready\" {email} <<MAIL_EOF",
+            f"LLMFLUX_EMAIL={shlex.quote(email)}",
+            "mail -s \"LLMFlux serve job $SLURM_JOB_ID is ready\" -- \"$LLMFLUX_EMAIL\" <<MAIL_EOF",
             "Your LLMFlux serve job has finished loading and is ready to use.",
             "",
             "  Job ID:   $SLURM_JOB_ID",

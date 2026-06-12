@@ -16,7 +16,7 @@ from typing import Optional, List, Dict
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
 from .slurm.runner import SlurmRunner
-from .slurm.connection import connect as connection_connect
+from .slurm.connection import connect
 from .slurm.commands import (
     ACTIVE_STATES,
     SlurmCommandError,
@@ -353,7 +353,7 @@ def _connect_command(args: argparse.Namespace) -> int:
         )
         return 1
 
-    return connection_connect(
+    return connect(
         job_id=job_id,
         local_port=args.local_port,
         wait_timeout=args.wait_timeout,
@@ -395,12 +395,23 @@ def _serve_command(args: argparse.Namespace) -> int:
     if getattr(args, "vllm_engine_args", None) is not None:
         kwargs["vllm_engine_args"] = args.vllm_engine_args
 
-    job_id = runner.serve(email=args.email, **kwargs)
+    try:
+        job_id = runner.serve(email=args.email, **kwargs)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as exc:
+        print(f"Error: sbatch failed: {exc.stderr.strip()}", file=sys.stderr)
+        return 1
+
+    if not job_id:
+        print("Error: serve job submission failed — no job ID returned.", file=sys.stderr)
+        return 1
 
     print(f"Serve job submitted: {job_id}")
     print(f"  Model:  {args.model}")
     print(f"  Engine: {args.engine}")
-    print(f"  Time:   {args.time or slurm_config.time}")
+    print(f"  Time:   {args.time}")
     print(f"  Email:  {args.email}")
     print(f"\nYou will receive an email at {args.email} when the service is ready.")
     print(f"Then run: llmflux connect {job_id}")

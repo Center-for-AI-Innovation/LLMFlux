@@ -1,6 +1,7 @@
 """Connection helpers for llmflux serve jobs."""
 
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -9,15 +10,36 @@ from pathlib import Path
 from typing import Optional
 
 
+def _sanitize(value: str) -> str:
+    """Strip non-ASCII bytes to prevent terminal control-character injection."""
+    return value.encode("ascii", errors="replace").decode("ascii")
+
+
 def _connection_file_path(job_id: str) -> Path:
-    return Path.home() / ".llmflux" / "serve" / str(job_id) / "connection.json"
+    if not job_id.isdigit():
+        raise ValueError(f"Invalid job ID: {job_id!r}")
+    return Path.home() / ".llmflux" / "serve" / job_id / "connection.json"
 
 
 def read_connection_info(job_id: str) -> Optional[dict]:
-    """Return parsed connection file contents, or None if the file does not exist yet."""
+    """Return parsed connection file contents, or None if the file does not exist yet.
+
+    Raises:
+        PermissionError: if the file exists but is not owned by the current user.
+    """
     path = _connection_file_path(job_id)
     if not path.exists():
         return None
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    if stat.st_uid != os.getuid():
+        raise PermissionError(
+            f"Connection file {path} is owned by uid {stat.st_uid}, "
+            f"not the current user (uid {os.getuid()}). "
+            f"Refusing to read — the file may have been tampered with."
+        )
     try:
         return json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
@@ -77,20 +99,45 @@ def connect(job_id: str, local_port: int = 8000, wait_timeout: int = 600) -> int
     Returns:
         Exit code (0 on success, 1 on error).
     """
-    info = read_connection_info(job_id)
+    try:
+        info = read_connection_info(job_id)
+    except PermissionError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     if info is None:
         print(f"Model is still loading. Waiting up to {wait_timeout}s...")
         try:
             info = wait_for_connection_file(job_id, timeout=wait_timeout)
+        except PermissionError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
         except TimeoutError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
-    node    = info["node"]
-    port    = int(info["port"])
-    model   = info.get("model", "unknown")
-    engine  = info.get("engine", "vllm")
-    api_key = info.get("api_key", "")
+    missing = [f for f in ("node", "port") if not info.get(f)]
+    if missing:
+        print(
+            f"Error: connection file is missing required fields: {', '.join(missing)}. "
+            f"The file may be corrupt or incomplete. "
+            f"Check logs with: llmflux logs {job_id}",
+            file=sys.stderr,
+        )
+        return 1
+
+    node    = _sanitize(info["node"])
+    try:
+        port = int(info["port"])
+    except (ValueError, TypeError):
+        print(
+            f"Error: connection file has an invalid port value: {info['port']!r}. "
+            f"Check logs with: llmflux logs {job_id}",
+            file=sys.stderr,
+        )
+        return 1
+    model   = _sanitize(info.get("model", "unknown"))
+    engine  = _sanitize(info.get("engine", "vllm"))
+    api_key = _sanitize(info.get("api_key", ""))
 
     # Confirm the endpoint is reachable before showing info
     print(f"Pinging {node}:{port}...", end=" ", flush=True)

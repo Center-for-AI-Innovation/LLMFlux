@@ -566,7 +566,7 @@ class SlurmRunner:
             **kwargs: model, engine args, rebuild, debug, vllm_engine_args
 
         Returns:
-            SLURM job ID string
+            SLURM job ID string, or None if submission failed.
         """
         env = self._setup_environment()
 
@@ -580,22 +580,19 @@ class SlurmRunner:
         model_config = self.config_manager.get_config().load_model_config(model_identifier)
 
         if not model_config:
-            logger.error(f"Model '{model_identifier}' not found. Check available models in models.yaml.")
-            return "1"
+            raise ValueError(f"Model '{model_identifier}' not found. Check available models with: llmflux show-models")
 
         if self.engine.engine == 'ollama' and (model_config.name is None or model_config.name == 'NA'):
-            logger.error(
-                f"Model '{model_identifier}' is not available for Ollama engine. "
+            raise ValueError(
+                f"Model '{model_identifier}' is not available for the Ollama engine. "
                 f"Please use --engine vllm to run this model."
             )
-            return "1"
 
         if self.engine.engine == 'vllm' and (model_config.hf_name is None or model_config.hf_name == 'NA'):
-            logger.error(
-                f"Model '{model_identifier}' is not available for vLLM engine. "
+            raise ValueError(
+                f"Model '{model_identifier}' is not available for the vLLM engine. "
                 f"Please use --engine ollama to run this model."
             )
-            return "1"
 
         if self.engine.engine == 'ollama':
             selected_model_name = model_config.name
@@ -700,26 +697,29 @@ class SlurmRunner:
             )
 
             output = result.stdout.strip()
-            job_id = output.split()[-1] if output else "unknown"
+            job_id = output.split()[-1] if output else None
 
-            if job_id != "unknown":
-                registry = JobRegistry()
-                try:
-                    registry.create_job(
-                        job_id=job_id,
-                        metadata={
-                            "job_name": job_name,
-                            "model": str(model_identifier),
-                            "engine": str(self.engine.engine),
-                            "type": "serve",
-                            "email": email,
-                            "api_key": api_key,
-                            "logs_dir": str(self.logs_dir),
-                            "submitted_at": datetime.now(timezone.utc).isoformat(),
-                        },
-                    )
-                except ValueError:
-                    logger.warning(f"Job {job_id} is already tracked in registry; skipping duplicate write.")
+            if not job_id:
+                logger.error("sbatch did not return a job ID in its output.")
+                return None
+
+            registry = JobRegistry()
+            try:
+                registry.create_job(
+                    job_id=job_id,
+                    metadata={
+                        "job_name": job_name,
+                        "model": str(model_identifier),
+                        "engine": str(self.engine.engine),
+                        "type": "serve",
+                        "email": email,
+                        "api_key": api_key,
+                        "logs_dir": str(self.logs_dir),
+                        "submitted_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            except ValueError:
+                logger.warning(f"Job {job_id} is already tracked in registry; skipping duplicate write.")
 
             return job_id
 
