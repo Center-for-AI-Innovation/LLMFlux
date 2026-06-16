@@ -16,7 +16,7 @@ from typing import Optional, List, Dict
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
 from .slurm.runner import SlurmRunner
-from .slurm.connection import connect
+from .slurm.connection import connect, read_connection_info
 from .slurm.commands import (
     ACTIVE_STATES,
     SlurmCommandError,
@@ -325,6 +325,9 @@ def _run_command(args: argparse.Namespace) -> int:
 def _connect_command(args: argparse.Namespace) -> int:
     """Handle the `connect` subcommand."""
     job_id = str(args.job_id)
+    if not job_id.isdigit():
+        print(f"Error: Invalid job ID {job_id!r}: SLURM job IDs must be positive integers.", file=sys.stderr)
+        return 1
     registry = JobRegistry()
     metadata = registry.get_job(job_id)
 
@@ -646,7 +649,6 @@ def _status_command(args: argparse.Namespace) -> int:
     )
 
     if is_serve:
-        from .slurm.connection import read_connection_info
         conn = read_connection_info(job_id)
         if conn:
             engine = conn.get("engine", "vllm")
@@ -882,7 +884,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--partition", type=str)
     serve_parser.add_argument("--nodes", type=int)
     serve_parser.add_argument("--gpus-per-node", type=int)
-    serve_parser.add_argument("--time", type=str, help="How long to keep the service up, e.g. 02:00:00")
+    serve_parser.add_argument("--time", required=True, type=str, help="How long to keep the service up, e.g. 02:00:00")
     serve_parser.add_argument("--mem", type=str)
     serve_parser.add_argument("--cpus-per-task", type=int)
     serve_parser.add_argument(

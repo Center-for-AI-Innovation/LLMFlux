@@ -1398,23 +1398,17 @@ class TestConnectCommand:
         assert args.wait_timeout == 600
 
     def test_connect_invalid_job_id(self):
-        """Non-numeric job_id returns exit code 1."""
+        """Non-numeric job_id returns exit code 1 before touching SLURM."""
         from llmflux.cli import _connect_command
 
         args = MagicMock()
         args.job_id = "../../.ssh"
 
-        with patch("llmflux.cli.JobRegistry") as mock_registry_class:
-            mock_registry_class.return_value.get_job.return_value = {
-                "type": "serve"
-            }
-            with patch("sys.stderr", new=StringIO()):
-                # _connect_command calls connection_connect which calls
-                # _connection_file_path which raises ValueError for bad job_id
-                with patch("llmflux.cli.connect", side_effect=ValueError("Invalid job ID")):
-                    result = _connect_command(args)
+        with patch("sys.stderr", new=StringIO()) as mock_stderr:
+            result = _connect_command(args)
 
         assert result == 1
+        assert "Invalid job ID" in mock_stderr.getvalue()
 
     @patch("llmflux.cli.JobRegistry")
     def test_connect_not_in_registry(self, mock_registry_class):
@@ -1542,7 +1536,7 @@ class TestStatusServeView:
         args = MagicMock()
         args.job_id = "12345"
 
-        with patch("llmflux.cli.read_connection_info", return_value={
+        with patch("llmflux.slurm.connection.read_connection_info", return_value={
             "node": "gpu01", "port": 8000, "engine": "vllm"
         }):
             with patch("builtins.print") as mock_print:
