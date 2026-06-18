@@ -32,6 +32,8 @@ LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API form
 
 ## Installation
 
+> **Prerequisites:** LLMFlux runs models inside [Apptainer](https://apptainer.org/) (formerly Singularity) containers on the compute nodes. Apptainer must be available on your HPC cluster — contact your system administrator if you are unsure. No local GPU is required; everything runs on the SLURM nodes.
+
 ```bash
 pip install llmflux
 ```
@@ -100,7 +102,7 @@ runner = SlurmRunner(config=slurm_config)
 job_id = runner.run(
     input_path="prompts.jsonl",
     output_path="results.json",
-    model="llama3.2:3b",
+    model="Llama-3.2-3B-Instruct",
     batch_size=4
 )
 print(f"Job submitted with ID: {job_id}")
@@ -121,17 +123,16 @@ For advanced model configuration, see the [Models Guide](MODELS.md).
 
 ## Command-Line Interface
 
-LLMFlux includes a command-line interface for submitting batch processing jobs. It uses vLLM as it's default engine, and model configurations rely on the HuggingFace naming scheme. To process your prompts.jsonl file using the Ollama engine running the llama3.2 model with 3b parameters, you would run the command:
+LLMFlux uses **model keys** (e.g. `Llama-3.2-3B-Instruct`) to identify models. Run `llmflux show-models` to see every available key and which engines each supports. The `--model` argument always takes a model key, not an Ollama tag or HuggingFace repo name.
 
 ```bash
-# Process JSONL file directly (core functionality)
+# Process a JSONL file with the default vLLM engine
 llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json
-```
 
-In addition to the default vLLM engine, LLMFlux can also be run using Ollama. You then can call using the names as established in the models.yaml file in the templates dir:
+# Use the Ollama engine instead
+llmflux run --model Llama-3.2-3B-Instruct --engine ollama --input data/prompts.jsonl --output results/output.json
 
-# With SLURM account and partition
-```bash
+# Specify a SLURM account and partition
 llmflux run \
    --account your-account \
    --partition gpu \
@@ -140,31 +141,19 @@ llmflux run \
    --output results/output.json
 ```
 
-```bash
-# Process JSONL file using VLLM backend
-llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
-```
+`--output` is optional. When omitted, results are written to a timestamped file in your configured workspace output directory.
 
-This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file mistral-lite/7b.yaml reveals the name: "mistrallite:7b". Update to the appropriate HuggingFace key and run 
-```bash
-# Process JSONL file using VLLM backend
-llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
-```
-this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`. You will
-need to check an existing model file from the folder src/llmflux/templates to find a configuration that matches what you want
-and use the name as the argument for the --model argument.
+The model key determines which HuggingFace repository vLLM downloads (e.g. `MistralLite` maps to `amazon/MistralLite`) and which Ollama tag is pulled. Use `llmflux show-models` to look up the key for any model.
 
-Note that in order to use some HuggingFace models, you will need a key from HF. Once you have a token, update your
-local copy of the .env file and add or change this line:
+**HuggingFace token:** Some models (e.g. Llama) are gated and require a token. Once you have one, add it to your `.env` file:
 
 ```bash
 HUGGINGFACE_TOKEN=hf_XXXXXXXXXXXXXXX
 ```
-to use the token, replace the hf_XXXX piece with your token. For some gated repos, you will have to visit the huggingface repository directly and activate access (often by accepting a terms and conditions agreement). You may also need to adjust settings on your HF token to ensure that LLMFlux has proper rights to access the model. In addition, the model will by default be stored in your base directory: `~/.cache/huggingfacel/hub`. To change this, you can add the following parameter to your `.env` file:
-```bash
-HF_HOME=/path/to/dir
-```
-llmflux will automatically download the appropriate models for both OLLAMA and vLLM.
+
+Visit the model's HuggingFace page and accept the terms to activate access. You may also need to grant your token read access to gated repos in your HuggingFace account settings. Models are cached by default at `~/.cache/huggingface/hub`; set `HF_HOME` in `.env` to change this location.
+
+LLMFlux downloads models automatically for both vLLM and Ollama on first use.
 
 For detailed command options:
 ```bash
@@ -252,17 +241,34 @@ Results are saved in the user's workspace:
 
 ## Utility Converters
 
-LLMFlux provides utility converters to help prepare JSONL files from various input formats:
+LLMFlux provides utility converters to help prepare JSONL input files from common formats.
+
+### CSV converter
 
 ```bash
-# Convert CSV to JSONL
-llmflux convert csv --input data/papers.csv --output data/papers.jsonl --template "Summarize: {text}"
-
-# Convert directory to JSONL
-llmflux convert dir --input data/documents/ --output data/docs.jsonl --recursive
+llmflux convert csv \
+    --input data/papers.csv \
+    --output data/papers.jsonl \
+    --template "Summarize the following abstract: {abstract}"
 ```
 
-For code examples of converters, see the [examples directory](examples/).
+- `--template` is a Python format string whose placeholders (`{column_name}`) are filled from each CSV row. Every column in the CSV can be used as a placeholder.
+- `--output` is optional; if omitted, the output is written alongside the input file with a `.jsonl` extension.
+
+### Directory converter
+
+```bash
+llmflux convert dir \
+    --input data/documents/ \
+    --output data/docs.jsonl \
+    --recursive
+```
+
+- Each file in the directory becomes one JSONL entry. The file contents are placed in the `user` message.
+- `--recursive` descends into subdirectories.
+- Supported file types: `.txt`, `.md`, `.rst`, and plain text files without an extension.
+
+For additional code examples, see the [examples directory](examples/).
 
 ## Benchmarking
 
