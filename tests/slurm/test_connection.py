@@ -213,8 +213,18 @@ class TestConnect(unittest.TestCase):
 
     @patch("llmflux.slurm.connection._ping_endpoint", return_value=False)
     @patch("llmflux.slurm.connection.read_connection_info", return_value=SAMPLE_INFO)
-    def test_ping_failure_returns_one(self, mock_read, mock_ping):
-        self.assertEqual(connect("99999"), 1)
+    def test_ping_failure_still_returns_zero(self, mock_read, mock_ping):
+        # Unreachable ping is a warning, not a hard failure — endpoint info is still shown
+        self.assertEqual(connect("99999"), 0)
+
+    @patch("llmflux.slurm.connection._ping_endpoint", return_value=False)
+    @patch("llmflux.slurm.connection.read_connection_info", return_value=SAMPLE_INFO)
+    def test_ping_failure_prints_tunnel_hint(self, mock_read, mock_ping):
+        with patch("sys.stdout") as mock_stdout:
+            connect("99999")
+        output = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
+        self.assertIn("ssh -N -L", output)
+        self.assertIn("localhost:", output)
 
     @patch(
         "llmflux.slurm.connection.wait_for_connection_file",
