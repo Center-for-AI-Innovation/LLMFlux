@@ -145,12 +145,11 @@ def connect(job_id: str, local_port: int = 8000, wait_timeout: int = 600) -> int
 
     # Confirm the endpoint is reachable before showing info
     print(f"Pinging {node}:{port}...", end=" ", flush=True)
-    if _ping_endpoint(node, port, engine):
+    reachable = _ping_endpoint(node, port, engine)
+    if reachable:
         print("OK")
     else:
-        print(f"unreachable.\nThe endpoint did not respond. "
-              f"Check logs with: llmflux logs {job_id}", file=sys.stderr)
-        return 1
+        print("unreachable (server may be behind a firewall — see note below).")
 
     endpoint = f"http://{node}:{port}/v1"
 
@@ -171,5 +170,16 @@ def connect(job_id: str, local_port: int = 8000, wait_timeout: int = 600) -> int
     print(f"    messages=[{{\"role\": \"user\", \"content\": \"Hello!\"}}]")
     print(f")")
     print()
+    if not reachable:
+        short_node = node.split(".")[0]
+        print(f"Note: The compute node is not directly reachable on port {port} from this login node.")
+        print(f"To use this endpoint, first run this in a separate terminal to open a port tunnel:")
+        print()
+        print(f"  ssh -N -L {port}:localhost:{port} {short_node} &")
+        print()
+        print(f"Then use this URL in your code:")
+        print()
+        print(f"  http://localhost:{port}/v1")
+        print()
 
     return 0
