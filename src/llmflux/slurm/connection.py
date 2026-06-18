@@ -79,6 +79,10 @@ def _ping_endpoint(node: str, port: int, engine: str) -> bool:
     try:
         with urllib.request.urlopen(url, timeout=5) as resp:
             return resp.status == 200
+    except urllib.error.HTTPError:
+        # Any HTTP error (e.g. 500 from broken prometheus middleware) still
+        # means the server process is running and accepting connections.
+        return True
     except Exception:
         return False
 
@@ -160,12 +164,12 @@ def connect(job_id: str, local_port: int = 8000, wait_timeout: int = 600) -> int
     print()
     print("Example usage:")
     print()
-    print("  from openai import OpenAI")
-    print(f"  client = OpenAI(base_url=\"{endpoint}\", api_key=\"{api_key}\")")
-    print(f"  response = client.chat.completions.create(")
-    print(f"      model=\"{model}\",")
-    print(f"      messages=[{{\"role\": \"user\", \"content\": \"Hello!\"}}]")
-    print(f"  )")
+    print("from openai import OpenAI")
+    print(f"client = OpenAI(base_url=\"{endpoint}\", api_key=\"{api_key}\")")
+    print(f"response = client.chat.completions.create(")
+    print(f"    model=\"{model}\",")
+    print(f"    messages=[{{\"role\": \"user\", \"content\": \"Hello!\"}}]")
+    print(f")")
     print()
 
     return 0
