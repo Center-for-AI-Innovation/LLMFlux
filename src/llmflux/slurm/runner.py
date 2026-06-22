@@ -317,10 +317,7 @@ class SlurmRunner:
         env = self._setup_environment()
 
         # Optionally force container rebuild via CLI flag or env var
-        try:
-            rebuild_requested = bool(kwargs.get("rebuild", False))
-        except Exception:
-            rebuild_requested = False
+        rebuild_requested = bool(kwargs.get("rebuild", False))
         # Host-only variable (used in bash script if condition)
         env["LLMFLUX_FORCE_REBUILD"] = "1" if rebuild_requested or os.getenv("LLMFLUX_FORCE_REBUILD") == "1" else "0"
 
@@ -570,10 +567,7 @@ class SlurmRunner:
         """
         env = self._setup_environment()
 
-        try:
-            rebuild_requested = bool(kwargs.get("rebuild", False))
-        except Exception:
-            rebuild_requested = False
+        rebuild_requested = bool(kwargs.get("rebuild", False))
         env["LLMFLUX_FORCE_REBUILD"] = "1" if rebuild_requested or os.getenv("LLMFLUX_FORCE_REBUILD") == "1" else "0"
 
         model_identifier = kwargs.get('model', 'Llama-3.2-3B-Instruct')
@@ -638,8 +632,9 @@ class SlurmRunner:
         debug_mode = kwargs.get('debug', False)
 
         # input_file/output_file are unused in serve mode but required by the
-        # engine function signatures (they only appear in the batch branch)
-        dummy = Path("")
+        # engine function signatures (they only appear in the batch branch).
+        # Use an obviously-fake placeholder so it's clear if it ever leaks downstream.
+        unused_path = Path("unused-in-serve-mode")
 
         if self.engine.engine == "ollama":
             job_script = create_ollama_batch_script(
@@ -651,8 +646,8 @@ class SlurmRunner:
                 self.slurm_config.memory,
                 str(self.slurm_config.cpus_per_task),
                 self.logs_dir,
-                dummy,
-                dummy,
+                unused_path,
+                unused_path,
                 job_name,
                 self.slurm_config,
                 mode="serve",
@@ -668,8 +663,8 @@ class SlurmRunner:
                 self.slurm_config.memory,
                 str(self.slurm_config.cpus_per_task),
                 self.logs_dir,
-                dummy,
-                dummy,
+                unused_path,
+                unused_path,
                 job_name,
                 self.slurm_config,
                 mode="serve",

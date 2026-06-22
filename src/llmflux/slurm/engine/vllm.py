@@ -92,6 +92,11 @@ def create_vllm_batch_script(
             "export APPTAINERENV_VLLM_PORT=$VLLM_PORT",
             "echo \"Using port: $VLLM_PORT\"",
             "",
+            "# Install cleanup trap early so the connection file (contains the API key)",
+            "# and server are removed even if the job is cancelled with scancel (SIGTERM).",
+            "CONNECTION_FILE=\"$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json\"",
+            "trap 'rm -f \"$CONNECTION_FILE\"; pkill -f \"vllm serve\" || true' EXIT TERM INT",
+            "",
         ] if mode == "serve" else []),
         "VERBOSE=1 apptainer exec --nv --cleanenv \\",
         "    --bind \"$APPTAINER_BIND_PATHS\" \\",
@@ -136,7 +141,7 @@ def create_vllm_batch_script(
         "",
         *([
             "# Write connection file for llmflux connect (restrict permissions — contains API key)",
-            "CONNECTION_FILE=\"$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json\"",
+            "# CONNECTION_FILE was defined earlier alongside the cleanup trap.",
             "mkdir -p \"$(dirname $CONNECTION_FILE)\"",
             "chmod 700 \"$(dirname $CONNECTION_FILE)\"",
             "(umask 077 && cat > \"$CONNECTION_FILE\" <<EOF",
@@ -231,8 +236,9 @@ def create_vllm_batch_script(
         ]),
         "",
         "# Cleanup",
-        *( ["rm -f \"$CONNECTION_FILE\""] if mode == "serve" else [] ),
-        "pkill -f \"vllm serve\" || true",
+        # In serve mode the EXIT/TERM/INT trap handles connection-file removal
+        # and killing the server, so no explicit cleanup is needed here.
+        *( ["pkill -f \"vllm serve\" || true"] if mode != "serve" else [] ),
         "# Only remove temporary directories that we created",
         "if [ -d \"$APPTAINER_TMPDIR\" ] && [ -w \"$APPTAINER_TMPDIR\" ]; then",
         "    rm -rf \"$APPTAINER_TMPDIR\"",

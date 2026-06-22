@@ -863,7 +863,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--local-port",
         type=int,
         default=8000,
-        help="Local port to bind on the head node (default: 8000)",
+        help="Unused; kept for CLI compatibility (access is direct to node:port)",
     )
     connect_parser.add_argument(
         "--wait-timeout",
