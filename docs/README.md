@@ -32,8 +32,6 @@ LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API form
 
 ## Installation
 
-> **Prerequisites:** LLMFlux runs models inside [Apptainer](https://apptainer.org/) (formerly Singularity) containers on the compute nodes. Apptainer must be available on your HPC cluster — contact your system administrator if you are unsure. No local GPU is required; everything runs on the SLURM nodes.
-
 ```bash
 pip install llmflux
 ```
@@ -68,8 +66,8 @@ LLMFlux CLI
 positional arguments:
   {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel}
     run                 Submit a batch processing job
-    serve               Start a long-running OpenAI-compatible model service on SLURM
-    connect             Show endpoint/API key for a serve job and verify readiness
+    serve               Start a model as a long-running service on a compute node
+    connect             Show connection info for a running serve job
     benchmark           Run a benchmark job
     show-models         List all available model keys from models.yaml
     jobs                List LLMFlux tracked Slurm jobs
@@ -104,7 +102,7 @@ runner = SlurmRunner(config=slurm_config)
 job_id = runner.run(
     input_path="prompts.jsonl",
     output_path="results.json",
-    model="Llama-3.2-3B-Instruct",
+    model="llama3.2:3b",
     batch_size=4
 )
 print(f"Job submitted with ID: {job_id}")
@@ -125,16 +123,17 @@ For advanced model configuration, see the [Models Guide](MODELS.md).
 
 ## Command-Line Interface
 
-LLMFlux uses **model keys** (e.g. `Llama-3.2-3B-Instruct`) to identify models. Run `llmflux show-models` to see every available key and which engines each supports. The `--model` argument always takes a model key, not an Ollama tag or HuggingFace repo name.
+LLMFlux includes a command-line interface for submitting batch processing jobs. It uses vLLM as it's default engine, and model configurations rely on the HuggingFace naming scheme. To process your prompts.jsonl file using the Ollama engine running the llama3.2 model with 3b parameters, you would run the command:
 
 ```bash
-# Process a JSONL file with the default vLLM engine
+# Process JSONL file directly (core functionality)
 llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json
+```
 
-# Use the Ollama engine instead
-llmflux run --model Llama-3.2-3B-Instruct --engine ollama --input data/prompts.jsonl --output results/output.json
+In addition to the default vLLM engine, LLMFlux can also be run using Ollama. You then can call using the names as established in the models.yaml file in the templates dir:
 
-# Specify a SLURM account and partition
+# With SLURM account and partition
+```bash
 llmflux run \
    --account your-account \
    --partition gpu \
@@ -143,19 +142,31 @@ llmflux run \
    --output results/output.json
 ```
 
-`--output` is optional. When omitted, results are written to a timestamped file in your configured workspace output directory.
+```bash
+# Process JSONL file using VLLM backend
+llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
+```
 
-The model key determines which HuggingFace repository vLLM downloads (e.g. `MistralLite` maps to `amazon/MistralLite`) and which Ollama tag is pulled. Use `llmflux show-models` to look up the key for any model.
+This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file mistral-lite/7b.yaml reveals the name: "mistrallite:7b". Update to the appropriate HuggingFace key and run 
+```bash
+# Process JSONL file using VLLM backend
+llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
+```
+this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`. You will
+need to check an existing model file from the folder src/llmflux/templates to find a configuration that matches what you want
+and use the name as the argument for the --model argument.
 
-**HuggingFace token:** Some models (e.g. Llama) are gated and require a token. Once you have one, add it to your `.env` file:
+Note that in order to use some HuggingFace models, you will need a key from HF. Once you have a token, update your
+local copy of the .env file and add or change this line:
 
 ```bash
 HUGGINGFACE_TOKEN=hf_XXXXXXXXXXXXXXX
 ```
-
-Visit the model's HuggingFace page and accept the terms to activate access. You may also need to grant your token read access to gated repos in your HuggingFace account settings. Models are cached by default at `~/.cache/huggingface/hub`; set `HF_HOME` in `.env` to change this location.
-
-LLMFlux downloads models automatically for both vLLM and Ollama on first use.
+to use the token, replace the hf_XXXX piece with your token. For some gated repos, you will have to visit the huggingface repository directly and activate access (often by accepting a terms and conditions agreement). You may also need to adjust settings on your HF token to ensure that LLMFlux has proper rights to access the model. In addition, the model will by default be stored in your base directory: `~/.cache/huggingfacel/hub`. To change this, you can add the following parameter to your `.env` file:
+```bash
+HF_HOME=/path/to/dir
+```
+llmflux will automatically download the appropriate models for both OLLAMA and vLLM.
 
 For detailed command options:
 ```bash
@@ -193,55 +204,6 @@ llmflux cancel <job-id> --force
 Notes:
 - `jobs` and `status` derive live state from Slurm JSON output.
 - `logs` and `cancel` only operate on jobs present in the LLMFlux registry.
-
-## Interactive Serving
-
-In addition to batch processing, LLMFlux can start a model as a long-running
-OpenAI-compatible service on a compute node.
-
-### Start a serve job
-
-```bash
-llmflux serve \
-    --model Llama-3.2-3B-Instruct \
-    --email you@example.com \
-    --time 02:00:00 \
-    --engine vllm
-```
-
-- `--model` — model key from `models.yaml` (same as `llmflux run`)
-- `--email` — you receive an email when the model is ready
-- `--time` — serve job walltime (for example: `02:00:00`, `08:00:00`)
-- `--engine` — `vllm` (default) or `ollama`
-
-LLMFlux generates a session API key and prints the serve job ID after
-submission. When the service becomes reachable, use `connect` to retrieve
-connection details and verify readiness.
-
-### Connect once the model is ready
-
-```bash
-llmflux connect 2301062
-```
-
-This command prints:
-- service endpoint (OpenAI-compatible `/v1` base URL)
-- API key for the running serve session
-- model and engine metadata
-- a copy/paste Python snippet using the OpenAI client
-
-### Check status and stop the service
-
-```bash
-# Show endpoint/API key and other metadata for a serve job
-llmflux status 2301062
-
-# Shut down a serve job early
-llmflux cancel 2301062
-```
-
-`llmflux jobs` includes a `TYPE` column (`serve` / `batch`) so you can quickly
-distinguish interactive services from standard batch jobs.
 
 ## Output Format
 
@@ -292,34 +254,92 @@ Results are saved in the user's workspace:
 
 ## Utility Converters
 
-LLMFlux provides utility converters to help prepare JSONL input files from common formats.
-
-### CSV converter
+LLMFlux provides utility converters to help prepare JSONL files from various input formats:
 
 ```bash
-llmflux convert csv \
-    --input data/papers.csv \
-    --output data/papers.jsonl \
-    --template "Summarize the following abstract: {abstract}"
+# Convert CSV to JSONL
+llmflux convert csv --input data/papers.csv --output data/papers.jsonl --template "Summarize: {text}"
+
+# Convert directory to JSONL
+llmflux convert dir --input data/documents/ --output data/docs.jsonl --recursive
 ```
 
-- `--template` is a Python format string whose placeholders (`{column_name}`) are filled from each CSV row. Every column in the CSV can be used as a placeholder.
-- `--output` is optional; if omitted, the output is written alongside the input file with a `.jsonl` extension.
+For code examples of converters, see the [examples directory](examples/).
 
-### Directory converter
+## Interactive Serving
+
+In addition to batch processing, LLMFlux can start a model as a long-running
+OpenAI-compatible service on a compute node.
+
+### Start a serve job
 
 ```bash
-llmflux convert dir \
-    --input data/documents/ \
-    --output data/docs.jsonl \
-    --recursive
+llmflux serve \
+    --model Llama-3.2-3B-Instruct \
+    --email you@example.com \
+    --time 02:00:00 \
+    --engine vllm
 ```
 
-- Each file in the directory becomes one JSONL entry. The file contents are placed in the `user` message.
-- `--recursive` descends into subdirectories.
-- Supported file types: `.txt`, `.md`, `.rst`, and plain text files without an extension.
+- `--model` — model key from `models.yaml` (same as `llmflux run`)
+- `--email` — you will receive an email **when the model is ready** (not just when the job starts)
+- `--time` — how long to keep the service alive (e.g. `02:00:00`, `08:00:00`)
+- `--engine` — `vllm` (default) or `ollama`
 
-For additional code examples, see the [examples directory](examples/).
+LLMFlux generates a unique API key for the session and prints the job ID:
+
+```
+Serve job submitted: 2301062
+  Model:  Llama-3.2-3B-Instruct
+  Engine: vllm
+  Time:   02:00:00
+  Email:  you@example.com
+
+You will receive an email at you@example.com when the service is ready.
+Then run: llmflux connect 2301062
+```
+
+### Connect once the model is ready
+
+After receiving the ready email, run:
+
+```bash
+llmflux connect 2301062
+```
+
+This pings the endpoint and prints everything you need:
+
+```
+Service is ready.
+
+  Endpoint:  http://gpu-node-04:8031/v1
+  API Key:   llmflux-57de4141f7d9b52a24481f05438c166c
+  Model:     meta-llama/Llama-3.2-3B-Instruct
+  Engine:    vllm
+
+Example usage:
+
+from openai import OpenAI
+client = OpenAI(base_url="http://gpu-node-04:8031/v1", api_key="llmflux-57de4141f7d9b52a24481f05438c166c")
+response = client.chat.completions.create(
+    model="meta-llama/Llama-3.2-3B-Instruct",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(response.choices[0].message.content)
+```
+
+### Check status and shut down
+
+```bash
+# See endpoint, API key, and email for a serve job
+llmflux status 2301062
+
+# Shut the service down early
+llmflux cancel 2301062
+```
+
+`llmflux jobs` also shows a `TYPE` column (`serve` / `batch`) so you can
+distinguish long-running services from batch jobs at a glance.
 
 ## Benchmarking
 

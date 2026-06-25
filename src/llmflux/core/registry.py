@@ -16,8 +16,9 @@ class JobRegistry:
 
     def __init__(self, registry_file: str = os.path.expanduser("~/.llmflux/jobs.json")):
         self.registry_file = Path(registry_file)
-        self.registry_file.parent.mkdir(parents=True, exist_ok=True)
+        self.registry_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         if not self.registry_file.exists():
+            self.registry_file.touch(mode=0o600)
             self.registry_file.write_text("{}", encoding="utf-8")
         self.jobs = self.load_jobs()
 
@@ -29,8 +30,19 @@ class JobRegistry:
         return {}
 
     def save_jobs(self) -> None:
-        with self.registry_file.open("w", encoding="utf-8") as file:
-            json.dump(self.jobs, file, indent=2, sort_keys=True)
+        # Write to a temp file first, then atomically replace to avoid a
+        # window where the file is empty if the process is interrupted mid-write.
+        tmp = self.registry_file.with_suffix(".tmp")
+        try:
+            tmp.touch(mode=0o600)
+            with tmp.open("w", encoding="utf-8") as file:
+                json.dump(self.jobs, file, indent=2, sort_keys=True)
+            tmp.replace(self.registry_file)
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            raise
+        # Ensure permissions are correct even if the file pre-existed with wrong mode.
+        self.registry_file.chmod(0o600)
 
     def create_job(self, job_id: str, metadata: Dict[str, Any]) -> None:
         """Create a new immutable metadata record for a job.

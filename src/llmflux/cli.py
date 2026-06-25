@@ -16,6 +16,7 @@ from typing import Optional, List, Dict
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
 from .slurm.runner import SlurmRunner
+from .slurm.connection import connect, read_connection_info
 from .slurm.commands import (
     ACTIVE_STATES,
     SlurmCommandError,
@@ -321,6 +322,105 @@ def _run_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _connect_command(args: argparse.Namespace) -> int:
+    """Handle the `connect` subcommand."""
+    job_id = str(args.job_id)
+    if not job_id.isdigit():
+        print(f"Error: Invalid job ID {job_id!r}: SLURM job IDs must be positive integers.", file=sys.stderr)
+        return 1
+    registry = JobRegistry()
+    metadata = registry.get_job(job_id)
+
+    if metadata is None:
+        print(f"Job {job_id} is not tracked by LLMFlux registry.", file=sys.stderr)
+        return 1
+
+    if metadata.get("type") != "serve":
+        print(f"Job {job_id} is a batch job, not a serve job.", file=sys.stderr)
+        return 1
+
+    try:
+        state = get_job_state(job_id)
+    except SlurmCommandError:
+        state = None
+
+    if state in {"FAILED", "CANCELLED", "TIMEOUT", "COMPLETED"}:
+        print(f"Job {job_id} is no longer running (state: {state}).", file=sys.stderr)
+        return 1
+
+    if state == "PENDING":
+        print(
+            f"Job {job_id} is still queued (PENDING). "
+            "Wait for the email notification before connecting.",
+            file=sys.stderr,
+        )
+        return 1
+
+    return connect(
+        job_id=job_id,
+        local_port=args.local_port,
+        wait_timeout=args.wait_timeout,
+    )
+
+
+def _serve_command(args: argparse.Namespace) -> int:
+    """Handle the `serve` subcommand."""
+    config = Config()
+
+    if args.engine == "ollama":
+        engine_config = EngineConfig(engine="ollama", home=str(config.workspace / ".ollama"))
+    else:
+        engine_config = EngineConfig(engine="vllm", home=str(config.workspace / ".vllm"))
+
+    slurm_overrides = {
+        key: value for key, value in {
+            "account": args.account,
+            "partition": args.partition,
+            "nodes": args.nodes,
+            "gpus_per_node": args.gpus_per_node,
+            "time": args.time,
+            "mem": args.mem,
+            "cpus_per_task": args.cpus_per_task,
+        }.items() if value is not None
+    }
+    extra_args = _parse_sbatch_args(getattr(args, 'sbatch_arg', None))
+    if extra_args:
+        slurm_overrides['extra_sbatch_args'] = extra_args
+
+    slurm_config = config.get_slurm_config(slurm_overrides)
+    runner = SlurmRunner(config=slurm_config, engine_config=engine_config)
+
+    kwargs = {"model": args.model}
+    if getattr(args, "rebuild", False):
+        kwargs["rebuild"] = True
+    if getattr(args, "debug", False):
+        kwargs["debug"] = True
+    if getattr(args, "vllm_engine_args", None) is not None:
+        kwargs["vllm_engine_args"] = args.vllm_engine_args
+
+    try:
+        job_id = runner.serve(email=args.email, **kwargs)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as exc:
+        print(f"Error: sbatch failed: {exc.stderr.strip()}", file=sys.stderr)
+        return 1
+
+    if not job_id:
+        print("Error: serve job submission failed — no job ID returned.", file=sys.stderr)
+        return 1
+
+    print(f"Serve job submitted: {job_id}")
+    print(f"  Model:  {args.model}")
+    print(f"  Engine: {args.engine}")
+    print(f"  Time:   {args.time}")
+    print(f"  Email:  {args.email}")
+    print(f"\nYou will receive an email at {args.email} when the service is ready.")
+    print(f"Then run: llmflux connect {job_id}")
+    return 0
+
+
 def _show_models_command(args: argparse.Namespace) -> int:
     """Handle the `show-models` subcommand.
 
@@ -466,6 +566,7 @@ def _jobs_command(args: argparse.Namespace) -> int:
                 str(job_id),
                 str(metadata.get("job_name", "--")),
                 state,
+                metadata.get("type", "batch"),
                 str(metadata.get("model", "--")),
                 str(metadata.get("engine", "--")),
                 times["elapsed"],
@@ -483,22 +584,21 @@ def _jobs_command(args: argparse.Namespace) -> int:
             if effective_filters and state not in effective_filters:
                 continue
             times = _pick_time_fields(jobs[job_id])
-            # For running jobs, we compute the elapsed time from the start time and the current time
-            # elapsed_time = _format_seconds_to_hhmmss(time.monotonic() - times["start"])
             rows.append([
                 str(job_id),
                 str(metadata.get("job_name", "--")),
                 state,
+                metadata.get("type", "batch"),
                 str(metadata.get("model", "--")),
                 str(metadata.get("engine", "--")),
                 times["elapsed"],
                 _format_timestamp(metadata.get("submitted_at")),
             ])
 
-    rows.sort(key=lambda row: row[6], reverse=True)
+    rows.sort(key=lambda row: row[7], reverse=True)
     _render_table(
         rows,
-        ["JOB ID", "NAME", "STATE", "MODEL", "ENGINE", "ELAPSED", "SUBMITTED"],
+        ["JOB ID", "NAME", "STATE", "TYPE", "MODEL", "ENGINE", "ELAPSED", "SUBMITTED"],
     )
     return 0
 
@@ -528,11 +628,13 @@ def _status_command(args: argparse.Namespace) -> int:
         logs_dir=str(metadata.get("logs_dir")) if metadata else None,
     )
     times = _pick_time_fields(details)
+    is_serve = metadata is not None and metadata.get("type") == "serve"
 
     view = OrderedDict(
         [
             ("Job ID", job_id),
             ("Job Name", metadata.get("job_name", _pick(details, "name", "job_name")) if metadata else _pick(details, "name", "job_name")),
+            ("Type", metadata.get("type", "batch") if metadata else "batch"),
             ("State", state),
             ("Model", metadata.get("model", "--") if metadata else "--"),
             ("Engine", metadata.get("engine", "--") if metadata else "--"),
@@ -543,17 +645,36 @@ def _status_command(args: argparse.Namespace) -> int:
             ("Elapsed", times["elapsed"]),
             ("Time Limit", times["limit"]),
             ("Working Dir", metadata.get("workspace", _pick(details, "working_directory", "work_dir", "WorkDir")) if metadata else _pick(details, "working_directory", "work_dir", "WorkDir")),
-            ("Input", metadata.get("input", "--") if metadata else "--"),
-            ("Output", metadata.get("output", "--") if metadata else "--"),
-            ("Log (stdout)", stdout_path or "--"),
-            ("Log (stderr)", stderr_path or "--"),
         ]
     )
+
+    if is_serve:
+        conn = read_connection_info(job_id)
+        if conn:
+            engine = conn.get("engine", "vllm")
+            node = conn.get("node", "--")
+            port = conn.get("port", "--")
+            endpoint = f"http://{node}:{port}/v1" if node != "--" and port != "--" else "--"
+            view["Endpoint"] = endpoint
+        else:
+            view["Endpoint"] = "(not ready yet)"
+        view["API Key"] = metadata.get("api_key", "--")
+        view["Email"] = metadata.get("email", "--")
+    else:
+        view["Input"] = metadata.get("input", "--") if metadata else "--"
+        view["Output"] = metadata.get("output", "--") if metadata else "--"
+
+    view["Log (stdout)"] = stdout_path or "--"
+    view["Log (stderr)"] = stderr_path or "--"
 
     pad = max(len(key) for key in view)
     for key, value in view.items():
         print(f"{key + ':':<{pad + 1}} {value}")
-    print(f"\nTip: Run `llmflux logs {job_id}` to view job logs (stdout and stderr).")
+
+    if is_serve and state == "RUNNING":
+        print(f"\nTip: Run `llmflux connect {job_id}` to get the full connection details.")
+    else:
+        print(f"\nTip: Run `llmflux logs {job_id}` to view job logs (stdout and stderr).")
     return 0
 
 
@@ -734,6 +855,48 @@ def build_parser() -> argparse.ArgumentParser:
     # run_parser.add_argument("--local", action="store_true", help="Run locally without SLURM")
 
     run_parser.set_defaults(func=_run_command)
+
+    # connect subcommand
+    connect_parser = subparsers.add_parser("connect", help="Show connection info for a running serve job")
+    connect_parser.add_argument("job_id", help="Slurm job ID of a running serve job")
+    connect_parser.add_argument(
+        "--local-port",
+        type=int,
+        default=8000,
+        help="Unused; kept for CLI compatibility (access is direct to node:port)",
+    )
+    connect_parser.add_argument(
+        "--wait-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for model to finish loading (default: 600)",
+    )
+    connect_parser.set_defaults(func=_connect_command)
+
+    # serve subcommand
+    serve_parser = subparsers.add_parser("serve", help="Start a model as a long-running service on a compute node")
+    serve_parser.add_argument("--model", required=True, help="Model key from models.yaml")
+    serve_parser.add_argument("--email", required=True, help="Email address for SLURM notification when service is ready")
+    serve_parser.add_argument("--engine", type=str, default="vllm", choices=["ollama", "vllm"])
+
+    # SLURM configuration
+    serve_parser.add_argument("--account", type=str)
+    serve_parser.add_argument("--partition", type=str)
+    serve_parser.add_argument("--nodes", type=int)
+    serve_parser.add_argument("--gpus-per-node", type=int)
+    serve_parser.add_argument("--time", required=True, type=str, help="How long to keep the service up, e.g. 02:00:00")
+    serve_parser.add_argument("--mem", type=str)
+    serve_parser.add_argument("--cpus-per-task", type=int)
+    serve_parser.add_argument(
+        "--sbatch-arg",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Additional SBATCH directive. Can be used multiple times.",
+    )
+    serve_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    serve_parser.add_argument("--rebuild", action="store_true", help="Force rebuild of the Apptainer/Singularity image")
+    serve_parser.add_argument("--debug", action="store_true", help="Preserve generated SLURM job script for debugging")
+    serve_parser.set_defaults(func=_serve_command)
 
     # benchmark subcommand
     benchmark_parser = subparsers.add_parser("benchmark", help="Run a benchmark job")

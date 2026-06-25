@@ -1251,6 +1251,340 @@ class TestCommandLineIntegration:
         mock_create_prompts.assert_called_once_with(num_prompts=100, temperature=0.7, max_tokens=500)
 
 
+class TestServeCommand:
+    """Tests for the `llmflux serve` subcommand."""
+
+    def _make_serve_args(self, **overrides):
+        args = MagicMock()
+        args.model = "Llama-3.2-3B-Instruct"
+        args.email = "user@example.com"
+        args.engine = "vllm"
+        args.account = None
+        args.partition = None
+        args.nodes = None
+        args.gpus_per_node = None
+        args.time = "02:00:00"
+        args.mem = None
+        args.cpus_per_task = None
+        args.sbatch_arg = None
+        args.rebuild = False
+        args.debug = False
+        args.vllm_engine_args = None
+        for k, v in overrides.items():
+            setattr(args, k, v)
+        return args
+
+    @patch("llmflux.cli.SlurmRunner")
+    @patch("llmflux.cli.Config")
+    def test_serve_command_success(self, mock_config_class, mock_runner_class):
+        """Successful serve submission returns 0 and prints job ID."""
+        from llmflux.cli import _serve_command
+
+        mock_config = MagicMock()
+        mock_config.get_slurm_config.return_value = MagicMock(time="02:00:00")
+        mock_config_class.return_value = mock_config
+
+        mock_runner = MagicMock()
+        mock_runner.serve.return_value = "99999"
+        mock_runner_class.return_value = mock_runner
+
+        with patch("builtins.print") as mock_print:
+            result = _serve_command(self._make_serve_args())
+
+        assert result == 0
+        mock_runner.serve.assert_called_once()
+        call_kwargs = mock_runner.serve.call_args[1]
+        assert call_kwargs["email"] == "user@example.com"
+        assert call_kwargs["model"] == "Llama-3.2-3B-Instruct"
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        assert "99999" in printed
+
+    @patch("llmflux.cli.SlurmRunner")
+    @patch("llmflux.cli.Config")
+    def test_serve_command_validation_error(self, mock_config_class, mock_runner_class):
+        """ValueError from serve() returns exit code 1, no success message."""
+        from llmflux.cli import _serve_command
+
+        mock_config_class.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.serve.side_effect = ValueError("Model 'bad-model' not found.")
+        mock_runner_class.return_value = mock_runner
+
+        with patch("sys.stderr", new=StringIO()) as mock_stderr:
+            result = _serve_command(self._make_serve_args(model="bad-model"))
+
+        assert result == 1
+        assert "bad-model" in mock_stderr.getvalue()
+
+    @patch("llmflux.cli.SlurmRunner")
+    @patch("llmflux.cli.Config")
+    def test_serve_command_sbatch_failure(self, mock_config_class, mock_runner_class):
+        """CalledProcessError from sbatch returns exit code 1."""
+        import subprocess
+        from llmflux.cli import _serve_command
+
+        mock_config_class.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.serve.side_effect = subprocess.CalledProcessError(
+            1, "sbatch", stderr="Invalid partition"
+        )
+        mock_runner_class.return_value = mock_runner
+
+        with patch("sys.stderr", new=StringIO()) as mock_stderr:
+            result = _serve_command(self._make_serve_args())
+
+        assert result == 1
+        assert "sbatch" in mock_stderr.getvalue().lower() or "Invalid partition" in mock_stderr.getvalue()
+
+    @patch("llmflux.cli.SlurmRunner")
+    @patch("llmflux.cli.Config")
+    def test_serve_command_none_job_id(self, mock_config_class, mock_runner_class):
+        """None returned from serve() returns exit code 1, no job ID printed."""
+        from llmflux.cli import _serve_command
+
+        mock_config_class.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.serve.return_value = None
+        mock_runner_class.return_value = mock_runner
+
+        with patch("sys.stderr", new=StringIO()) as mock_stderr:
+            with patch("builtins.print") as mock_print:
+                result = _serve_command(self._make_serve_args())
+
+        assert result == 1
+        printed = " ".join(str(c) for c in mock_print.call_args_list)
+        assert "Serve job submitted" not in printed
+
+    def test_serve_parser_required_args(self):
+        """serve subcommand requires --model, --email, and --time."""
+        parser = build_parser()
+        # missing --email and --time
+        with pytest.raises(SystemExit):
+            parser.parse_args(["serve", "--model", "Llama-3.2-3B-Instruct"])
+        # missing --model and --time
+        with pytest.raises(SystemExit):
+            parser.parse_args(["serve", "--email", "user@example.com"])
+        # missing --time
+        with pytest.raises(SystemExit):
+            parser.parse_args(["serve", "--model", "Llama-3.2-3B-Instruct", "--email", "user@example.com"])
+
+    def test_serve_parser_args(self):
+        """serve subcommand parses all arguments correctly."""
+        parser = build_parser()
+        args = parser.parse_args([
+            "serve",
+            "--model", "Llama-3.2-3B-Instruct",
+            "--email", "user@example.com",
+            "--engine", "ollama",
+            "--time", "04:00:00",
+            "--partition", "gpuA100x4",
+        ])
+        assert args.model == "Llama-3.2-3B-Instruct"
+        assert args.email == "user@example.com"
+        assert args.engine == "ollama"
+        assert args.time == "04:00:00"
+        assert args.partition == "gpuA100x4"
+
+
+class TestConnectCommand:
+    """Tests for the `llmflux connect` subcommand."""
+
+    def test_connect_parser_args(self):
+        """connect subcommand parses job_id and optional flags."""
+        parser = build_parser()
+        args = parser.parse_args(["connect", "12345"])
+        assert args.job_id == "12345"
+        assert args.local_port == 8000
+        assert args.wait_timeout == 600
+
+    def test_connect_invalid_job_id(self):
+        """Non-numeric job_id returns exit code 1 before touching SLURM."""
+        from llmflux.cli import _connect_command
+
+        args = MagicMock()
+        args.job_id = "../../.ssh"
+
+        with patch("sys.stderr", new=StringIO()) as mock_stderr:
+            result = _connect_command(args)
+
+        assert result == 1
+        assert "Invalid job ID" in mock_stderr.getvalue()
+
+    @patch("llmflux.cli.JobRegistry")
+    def test_connect_not_in_registry(self, mock_registry_class):
+        """Job not tracked in registry returns exit code 1."""
+        from llmflux.cli import _connect_command
+
+        mock_registry_class.return_value.get_job.return_value = None
+        args = MagicMock()
+        args.job_id = "12345"
+
+        with patch("sys.stderr", new=StringIO()):
+            result = _connect_command(args)
+
+        assert result == 1
+
+    @patch("llmflux.cli.JobRegistry")
+    def test_connect_batch_job_rejected(self, mock_registry_class):
+        """Connecting to a batch job (not serve) returns exit code 1."""
+        from llmflux.cli import _connect_command
+
+        mock_registry_class.return_value.get_job.return_value = {"type": "batch"}
+        args = MagicMock()
+        args.job_id = "12345"
+
+        with patch("sys.stderr", new=StringIO()):
+            result = _connect_command(args)
+
+        assert result == 1
+
+    @patch("llmflux.cli.get_job_state", return_value="PENDING")
+    @patch("llmflux.cli.JobRegistry")
+    def test_connect_pending_job_rejected(self, mock_registry_class, mock_state):
+        """PENDING serve job returns exit code 1 with helpful message."""
+        from llmflux.cli import _connect_command
+
+        mock_registry_class.return_value.get_job.return_value = {"type": "serve"}
+        args = MagicMock()
+        args.job_id = "12345"
+
+        with patch("sys.stderr", new=StringIO()) as mock_stderr:
+            result = _connect_command(args)
+
+        assert result == 1
+        assert "PENDING" in mock_stderr.getvalue()
+
+    @patch("llmflux.cli.connect", return_value=0)
+    @patch("llmflux.cli.get_job_state", return_value="RUNNING")
+    @patch("llmflux.cli.JobRegistry")
+    def test_connect_running_job_succeeds(self, mock_registry_class, mock_state, mock_connect):
+        """RUNNING serve job delegates to connection_connect and returns its exit code."""
+        from llmflux.cli import _connect_command
+
+        mock_registry_class.return_value.get_job.return_value = {"type": "serve"}
+        args = MagicMock()
+        args.job_id = "12345"
+        args.local_port = 8000
+        args.wait_timeout = 600
+
+        result = _connect_command(args)
+
+        assert result == 0
+        mock_connect.assert_called_once_with(
+            job_id="12345", local_port=8000, wait_timeout=600
+        )
+
+
+class TestJobsServeType:
+    """Tests for TYPE column in llmflux jobs."""
+
+    @patch("llmflux.cli.get_active_job_details")
+    @patch("llmflux.cli.JobRegistry")
+    def test_jobs_shows_type_column(self, mock_registry_class, mock_active_jobs):
+        """llmflux jobs table includes TYPE column with serve/batch values."""
+        from llmflux.cli import _jobs_command
+
+        mock_registry_class.return_value.get_all_jobs.return_value = {
+            "11111": {"job_name": "batch_job", "model": "Llama", "engine": "vllm",
+                      "type": "batch", "submitted_at": "2026-01-01T00:00:00+00:00"},
+            "22222": {"job_name": "serve_job", "model": "Llama", "engine": "vllm",
+                      "type": "serve", "submitted_at": "2026-01-01T01:00:00+00:00"},
+        }
+        mock_active_jobs.return_value = {
+            "11111": {"state": {"current": "RUNNING"}, "time": {}},
+            "22222": {"state": {"current": "RUNNING"}, "time": {}},
+        }
+
+        args = MagicMock()
+        args.all = False
+        args.state = None
+
+        with patch("builtins.print") as mock_print:
+            result = _jobs_command(args)
+
+        assert result == 0
+        output = " ".join(str(c) for c in mock_print.call_args_list)
+        assert "TYPE" in output
+        assert "batch" in output
+        assert "serve" in output
+
+
+class TestStatusServeView:
+    """Tests for llmflux status showing serve-specific fields."""
+
+    @patch("llmflux.cli.get_job_log_paths", return_value=(None, None))
+    @patch("llmflux.cli.get_job_details", return_value={"state": {"current": "RUNNING"}, "time": {}})
+    @patch("llmflux.cli.JobRegistry")
+    def test_status_serve_job_shows_endpoint_fields(
+        self, mock_registry_class, mock_details, mock_log_paths
+    ):
+        """status for a serve job shows Endpoint, API Key, Email instead of Input/Output."""
+        from llmflux.cli import _status_command
+        from llmflux.slurm.connection import read_connection_info
+
+        mock_registry_class.return_value.get_job.return_value = {
+            "job_name": "serve_job",
+            "type": "serve",
+            "model": "Llama",
+            "engine": "vllm",
+            "email": "user@example.com",
+            "api_key": "llmflux-abc123",
+            "submitted_at": "2026-01-01T00:00:00+00:00",
+            "logs_dir": "/tmp/logs",
+        }
+
+        args = MagicMock()
+        args.job_id = "12345"
+
+        with patch("llmflux.slurm.connection.read_connection_info", return_value={
+            "node": "gpu01", "port": 8000, "engine": "vllm"
+        }):
+            with patch("builtins.print") as mock_print:
+                result = _status_command(args)
+
+        assert result == 0
+        output = " ".join(str(c) for c in mock_print.call_args_list)
+        assert "Endpoint" in output
+        assert "API Key" in output
+        assert "Email" in output
+        assert "Input" not in output
+        assert "Output" not in output
+        assert "llmflux connect 12345" in output
+
+    @patch("llmflux.cli.get_job_log_paths", return_value=(None, None))
+    @patch("llmflux.cli.get_job_details", return_value={"state": {"current": "RUNNING"}, "time": {}})
+    @patch("llmflux.cli.JobRegistry")
+    def test_status_batch_job_shows_input_output(
+        self, mock_registry_class, mock_details, mock_log_paths
+    ):
+        """status for a batch job shows Input and Output, not endpoint fields."""
+        from llmflux.cli import _status_command
+
+        mock_registry_class.return_value.get_job.return_value = {
+            "job_name": "batch_job",
+            "type": "batch",
+            "model": "Llama",
+            "engine": "vllm",
+            "input": "/data/input.jsonl",
+            "output": "/data/output.json",
+            "submitted_at": "2026-01-01T00:00:00+00:00",
+            "logs_dir": "/tmp/logs",
+        }
+
+        args = MagicMock()
+        args.job_id = "12345"
+
+        with patch("builtins.print") as mock_print:
+            result = _status_command(args)
+
+        assert result == 0
+        output = " ".join(str(c) for c in mock_print.call_args_list)
+        assert "Input" in output
+        assert "Output" in output
+        assert "Endpoint" not in output
+        assert "API Key" not in output
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 
