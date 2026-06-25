@@ -355,14 +355,13 @@ class TestRunCommand:
 class TestBenchmarkCommand:
     """Test the benchmark command functionality."""
     
-    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
     @patch('llmflux.cli._ensure_container', return_value=True)
     @patch('llmflux.cli.create_test_prompts_file')
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_benchmark_command_generate_prompts(
         self, mock_config_class, mock_runner_class,
-        mock_create_prompts, mock_ensure_container, mock_wait, temp_dir
+        mock_create_prompts, mock_ensure_container, temp_dir
     ):
         """Test benchmark command with prompt generation."""
         # Setup mocks
@@ -399,19 +398,24 @@ class TestBenchmarkCommand:
         args.debug = False
 
         # Run command
-        with patch('builtins.print'):
+        with patch('builtins.print'), patch('pathlib.Path.write_text') as mock_write_text:
             result = _benchmark_command(args)
 
         # Verify
         assert result == 0
         mock_create_prompts.assert_called_once_with(num_prompts=50, temperature=0.7, max_tokens=500)
         mock_runner.run.assert_called_once()
+        mock_write_text.assert_called_once()
+        submitted_summary = json.loads(mock_write_text.call_args[0][0])
+        assert submitted_summary["status"] == "submitted"
+        assert submitted_summary["job_id"] == "12345"
+        assert submitted_summary["num_prompts"] == 50
+        assert submitted_summary["output_path"] == "results/benchmarks/benchmark_Llama-3.2-3B-Instruct_results.json"
     
-    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_benchmark_command_with_existing_input(
-        self, mock_config_class, mock_runner_class, mock_wait, temp_dir, sample_jsonl
+        self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl
     ):
         """Test benchmark command with existing input file."""
         # Setup mocks
@@ -446,7 +450,7 @@ class TestBenchmarkCommand:
         args.debug = True
         
         # Run command
-        with patch('builtins.print'):
+        with patch('builtins.print'), patch('pathlib.Path.write_text') as mock_write_text:
             result = _benchmark_command(args)
         
         # Verify
@@ -458,6 +462,12 @@ class TestBenchmarkCommand:
         assert call_kwargs["batch_size"] == 8
         assert call_kwargs["rebuild"] is True
         assert call_kwargs["debug"] is True
+        mock_write_text.assert_called_once()
+        submitted_summary = json.loads(mock_write_text.call_args[0][0])
+        assert submitted_summary["status"] == "submitted"
+        assert submitted_summary["job_id"] == "67890"
+        assert submitted_summary["num_prompts"] == 2
+        assert submitted_summary["output_path"] == str(temp_dir / "benchmark_results.json")
 
 
 class TestMainFunction:

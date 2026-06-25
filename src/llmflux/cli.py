@@ -31,7 +31,7 @@ from .slurm.commands import (
 from .processors import BatchProcessor
 from .core.config import Config, EngineConfig
 from .core.registry import JobRegistry
-from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
+from .benchmark_utils import create_test_prompts_file
 
 
 def _get_llmflux_version() -> str:
@@ -231,39 +231,24 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
 
-    elapsed_str = _wait_for_slurm_elapsed_seconds(job_id, poll_seconds=120)
+    summary = {
+        "status": "submitted",
+        "job_id": job_id,
+        "benchmark_name": name,
+        "model": args.model,
+        "num_prompts": num_prompts,
+        "input_path": str(input_path),
+        "output_path": output_path,
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+    }
 
-    try:
-        if elapsed_str is None:
-            print("Job finished but elapsed runtime could not be retrieved from sacct.")
-            return 0
+    summary_path = Path(f"results/benchmarks/{name}_submission.json")
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2))
 
-        metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
-        metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        metrics_path.write_text(
-            f"Time taken to run the batch inference: {elapsed_str}\n"
-            f"Number of prompts processed: {num_prompts}\n"
-        )
-    except Exception as e:
-        print(f"Error writing metrics file: {e}")
-        return 0
-
-    elapsed_seconds = _parse_elapsed_to_seconds(elapsed_str)
-
-    try:
-        metrics = compute_benchmark_metrics(output_path)
-        metrics["elapsed_seconds"] = round(elapsed_seconds, 1)
-        metrics["elapsed"] = elapsed_str
-    except Exception as e:
-        print(f"Error computing metrics: {e}")
-        return 0
-
-    print(format_metrics_table(metrics))
-
-    metrics_path = Path(f"results/benchmarks/{name}_metrics.json")
-    metrics_path.parent.mkdir(parents=True, exist_ok=True)
-    metrics_path.write_text(json.dumps(metrics, indent=2))
-    print(f"\nMetrics saved to {metrics_path}")
+    print("Benchmark job submitted (detached mode).")
+    print(f"Submission details saved to {summary_path}")
+    print(f"Benchmark output will be written to {output_path} once the job completes.")
 
     return 0
 
