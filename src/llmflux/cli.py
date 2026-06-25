@@ -231,9 +231,21 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
 
-    elapsed_str = _wait_for_slurm_elapsed_seconds(job_id)
-    if elapsed_str is None:
-        print("Job finished but elapsed runtime could not be retrieved from sacct.")
+    elapsed_str = _wait_for_slurm_elapsed_seconds(job_id, poll_seconds=120)
+
+    try:
+        if elapsed_str is None:
+            print("Job finished but elapsed runtime could not be retrieved from sacct.")
+            return 0
+
+        metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        metrics_path.write_text(
+            f"Time taken to run the batch inference: {elapsed_str}\n"
+            f"Number of prompts processed: {num_prompts}\n"
+        )
+    except Exception as e:
+        print(f"Error writing metrics file: {e}")
         return 0
 
     elapsed_seconds = _parse_elapsed_to_seconds(elapsed_str)
