@@ -55,6 +55,12 @@ From: ollama/ollama:latest
     # Install vLLM for high-performance LLM inference
     # Pinned versions ensure PyTorch 2.9.1+cu129 is not overwritten
     pip install --no-cache-dir vllm==0.15.0
+    # Patch prometheus-fastapi-instrumentator: on some package-version combos its
+    # route introspection calls route.path on _IncludedRouter objects, which lack
+    # that attribute, crashing every request with a 500. Use a getattr fallback.
+    # Scoped to this container's venv; no-op if the line isn't present.
+    find /app/venv/lib -path "*/prometheus_fastapi_instrumentator/routing.py" -exec sed \
+        -i 's/route_name = route\.path/route_name = getattr(route, "path", None) or ""/g' {} +
 
 %environment
     # Locale

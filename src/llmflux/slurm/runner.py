@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import os
+import secrets
 import subprocess
 import socket
 import shutil
@@ -316,10 +317,7 @@ class SlurmRunner:
         env = self._setup_environment()
 
         # Optionally force container rebuild via CLI flag or env var
-        try:
-            rebuild_requested = bool(kwargs.get("rebuild", False))
-        except Exception:
-            rebuild_requested = False
+        rebuild_requested = bool(kwargs.get("rebuild", False))
         # Host-only variable (used in bash script if condition)
         env["LLMFLUX_FORCE_REBUILD"] = "1" if rebuild_requested or os.getenv("LLMFLUX_FORCE_REBUILD") == "1" else "0"
 
@@ -551,4 +549,181 @@ class SlurmRunner:
         finally:
             # Cleanup job script if it exists (unless debug mode)
             if not debug_mode and job_script_path.exists():
-                job_script_path.unlink() 
+                job_script_path.unlink()
+
+    def serve(self, email: str, **kwargs) -> str:
+        """Start a model as a long-running service on a SLURM compute node.
+
+        Unlike run(), there is no input file to process. The SLURM job keeps
+        the engine alive for the full wall-time and writes a connection file
+        so llmflux connect can display the endpoint info.
+
+        Args:
+            email: Address to notify when the service is ready (SLURM BEGIN mail)
+            **kwargs: model, engine args, rebuild, debug, vllm_engine_args
+
+        Returns:
+            SLURM job ID string, or None if submission failed.
+        """
+        env = self._setup_environment()
+
+        rebuild_requested = bool(kwargs.get("rebuild", False))
+        env["LLMFLUX_FORCE_REBUILD"] = "1" if rebuild_requested or os.getenv("LLMFLUX_FORCE_REBUILD") == "1" else "0"
+
+        model_identifier = kwargs.get('model', 'Llama-3.2-3B-Instruct')
+        model_config = self.config_manager.get_config().load_model_config(model_identifier)
+
+        if not model_config:
+            raise ValueError(f"Model '{model_identifier}' not found. Check available models with: llmflux show-models")
+
+        if self.engine.engine == 'ollama' and (model_config.name is None or model_config.name == 'NA'):
+            raise ValueError(
+                f"Model '{model_identifier}' is not available for the Ollama engine. "
+                f"Please use --engine vllm to run this model."
+            )
+
+        if self.engine.engine == 'vllm' and (model_config.hf_name is None or model_config.hf_name == 'NA'):
+            raise ValueError(
+                f"Model '{model_identifier}' is not available for the vLLM engine. "
+                f"Please use --engine ollama to run this model."
+            )
+
+        if self.engine.engine == 'ollama':
+            selected_model_name = model_config.name
+        else:
+            selected_model_name = model_config.hf_name
+
+        if self.engine.engine == 'ollama':
+            env['OLLAMA_MODEL_NAME'] = str(selected_model_name)
+            env['OLLAMA_HOST'] = '0.0.0.0'
+        elif self.engine.engine == 'vllm':
+            env['VLLM_MODEL_NAME'] = str(selected_model_name)
+            env['VLLM_HOST'] = '0.0.0.0'
+            env_args = self._load_vllm_engine_args(os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS")
+            cli_args = self._load_vllm_engine_args(kwargs.get("vllm_engine_args"), "--vllm-engine-args")
+            merged_args = {**env_args, **cli_args}
+            env['VLLM_ENGINE_ARGS'] = self._build_vllm_engine_args(merged_args)
+
+        env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
+        env['APPTAINERENV_ENGINE'] = str(self.engine.engine)
+
+        if self.engine.engine == 'ollama':
+            env['APPTAINERENV_MODEL_NAME'] = str(selected_model_name)
+            env['APPTAINERENV_OLLAMA_MODEL_NAME'] = str(selected_model_name)
+        elif self.engine.engine == 'vllm':
+            env['APPTAINERENV_VLLM_MODEL_NAME'] = str(selected_model_name)
+
+        # Port finding happens on the compute node in the SLURM script so it
+        # finds a consecutive free port on the actual machine running the model.
+        # Pass 8000 as the base; the script increments until it finds one free.
+        base_port = 8000
+        env['OLLAMA_PORT'] = str(base_port)
+        env['VLLM_PORT'] = str(base_port)
+        env['APPTAINERENV_OLLAMA_PORT'] = str(base_port)
+        env['APPTAINERENV_OLLAMA_HOST'] = f"0.0.0.0:{base_port}"
+        env['APPTAINERENV_VLLM_PORT'] = str(base_port)
+        env['APPTAINERENV_VLLM_HOST'] = "0.0.0.0"
+
+        # Generate a unique API key for this serve session
+        api_key = f"llmflux-{secrets.token_hex(16)}"
+        env['LLMFLUX_API_KEY'] = api_key
+
+        job_name = self._build_job_name(model_identifier)
+        debug_mode = kwargs.get('debug', False)
+
+        # input_file/output_file are unused in serve mode but required by the
+        # engine function signatures (they only appear in the batch branch).
+        # Use an obviously-fake placeholder so it's clear if it ever leaks downstream.
+        unused_path = Path("unused-in-serve-mode")
+
+        if self.engine.engine == "ollama":
+            job_script = create_ollama_batch_script(
+                self.slurm_config.account,
+                self.slurm_config.partition,
+                str(self.slurm_config.nodes),
+                str(self.slurm_config.gpus_per_node),
+                self.slurm_config.time,
+                self.slurm_config.memory,
+                str(self.slurm_config.cpus_per_task),
+                self.logs_dir,
+                unused_path,
+                unused_path,
+                job_name,
+                self.slurm_config,
+                mode="serve",
+                email=email,
+            )
+        elif self.engine.engine == "vllm":
+            job_script = create_vllm_batch_script(
+                self.slurm_config.account,
+                self.slurm_config.partition,
+                str(self.slurm_config.nodes),
+                str(self.slurm_config.gpus_per_node),
+                self.slurm_config.time,
+                self.slurm_config.memory,
+                str(self.slurm_config.cpus_per_task),
+                self.logs_dir,
+                unused_path,
+                unused_path,
+                job_name,
+                self.slurm_config,
+                mode="serve",
+                email=email,
+            )
+        else:
+            logger.error(f"Unknown engine: {self.engine.engine}")
+            raise NotImplementedError
+
+        job_script_path = self.workspace / "job.sh"
+
+        try:
+            with open(job_script_path, 'w') as f:
+                f.write('\n'.join(job_script))
+
+            if debug_mode:
+                logger.info(f"Debug mode: job script saved to {job_script_path}")
+
+            result = subprocess.run(
+                ['sbatch', str(job_script_path)],
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            output = result.stdout.strip()
+            job_id = output.split()[-1] if output else None
+
+            if not job_id:
+                logger.error("sbatch did not return a job ID in its output.")
+                return None
+
+            registry = JobRegistry()
+            try:
+                registry.create_job(
+                    job_id=job_id,
+                    metadata={
+                        "job_name": job_name,
+                        "model": str(model_identifier),
+                        "engine": str(self.engine.engine),
+                        "type": "serve",
+                        "email": email,
+                        "api_key": api_key,
+                        "logs_dir": str(self.logs_dir),
+                        "submitted_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            except ValueError:
+                logger.warning(f"Job {job_id} is already tracked in registry; skipping duplicate write.")
+
+            return job_id
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error submitting serve job: {e}")
+            logger.error(f"STDERR: {e.stderr}")
+            logger.error(f"STDOUT: {e.stdout}")
+            raise
+
+        finally:
+            if not debug_mode and job_script_path.exists():
+                job_script_path.unlink()

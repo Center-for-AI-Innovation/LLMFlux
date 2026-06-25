@@ -253,5 +253,191 @@ class TestSlurmRunner(unittest.TestCase):
         mock_run.assert_called_once()
 
 
+class TestSlurmRunnerServe(unittest.TestCase):
+    """Tests for SlurmRunner.serve()."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.test_dir = Path(self.temp_dir.name)
+
+        self.slurm_config = SlurmConfig(
+            partition="gpu",
+            nodes=1,
+            ntasks=1,
+            time="02:00:00",
+            mem="32G",
+            ntasks_per_node=1,
+            cpus_per_task=4,
+            gpus_per_node=1,
+            account="project1",
+        )
+
+        self.model_params = ModelParameters(
+            temperature=0.7,
+            max_tokens=500,
+            top_p=0.9,
+            top_k=40,
+            stop_sequences=None,
+        )
+
+        self.model_config = ModelConfig(
+            name="test:7b",
+            hf_name="test/test-model",
+            parameters=self.model_params,
+        )
+
+        self.config = Config(
+            data_dir=str(self.test_dir / "data"),
+            models_dir=str(self.test_dir / "models"),
+            logs_dir=str(self.test_dir / "logs"),
+            containers_dir=str(self.test_dir / "containers"),
+            slurm=self.slurm_config,
+            models=[self.model_config],
+        )
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_returns_job_id(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() returns the job ID on success."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 55555"
+
+        runner = SlurmRunner()
+        job_id = runner.serve(email="user@example.com", model="test:7b")
+
+        self.assertEqual(job_id, "55555")
+        mock_run.assert_called_once()
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_sets_api_key_env(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() injects LLMFLUX_API_KEY into the sbatch environment."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 55555"
+
+        runner = SlurmRunner()
+        runner.serve(email="user@example.com", model="test:7b")
+
+        _, call_kwargs = mock_run.call_args
+        env = call_kwargs["env"]
+        self.assertIn("LLMFLUX_API_KEY", env)
+        self.assertTrue(env["LLMFLUX_API_KEY"].startswith("llmflux-"))
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_registry_metadata(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() writes type, email, and api_key to registry."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 55555"
+
+        mock_registry_instance = MagicMock()
+        mock_registry.return_value = mock_registry_instance
+
+        runner = SlurmRunner()
+        runner.serve(email="user@example.com", model="test:7b")
+
+        mock_registry_instance.create_job.assert_called_once()
+        _, kwargs = mock_registry_instance.create_job.call_args
+        metadata = kwargs["metadata"]
+        self.assertEqual(metadata["type"], "serve")
+        self.assertEqual(metadata["email"], "user@example.com")
+        self.assertIn("api_key", metadata)
+        self.assertTrue(metadata["api_key"].startswith("llmflux-"))
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.core.config.Config.load_model_config")
+    def test_serve_invalid_model_raises(self, mock_load_model_config, mock_config_manager):
+        """serve() raises ValueError when model is not found."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_load_model_config.return_value = None
+
+        runner = SlurmRunner()
+        with self.assertRaises(ValueError):
+            runner.serve(email="user@example.com", model="nonexistent-model")
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.core.config.Config.load_model_config")
+    def test_serve_engine_mismatch_raises(self, mock_load_model_config, mock_config_manager):
+        """serve() raises ValueError when engine does not support the model."""
+        from llmflux.core.config import EngineConfig
+
+        mock_config_manager.return_value.get_config.return_value = self.config
+        # Model with no Ollama name
+        ollama_incompatible = ModelConfig(
+            name="NA",
+            hf_name="test/test-model",
+            parameters=self.model_params,
+        )
+        mock_load_model_config.return_value = ollama_incompatible
+
+        engine_config = EngineConfig(engine="ollama", home=str(self.test_dir / ".ollama"))
+        runner = SlurmRunner(config=self.slurm_config, engine_config=engine_config)
+
+        with self.assertRaises(ValueError):
+            runner.serve(email="user@example.com", model="test:7b")
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_script_uses_serve_mode(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() generates a script with serve-mode markers (connection file, wait)."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 55555"
+
+        runner = SlurmRunner()
+        runner.serve(email="user@example.com", model="test:7b", debug=True)
+
+        job_script_path = runner.workspace / "job.sh"
+        try:
+            script = job_script_path.read_text()
+            self.assertIn("connection.json", script)
+            self.assertIn("LLMFLUX_API_KEY", script)
+            self.assertIn("wait $VLLM_PID", script)
+            self.assertIn("--mail-type=FAIL", script)
+            self.assertNotIn("BatchProcessor", script)
+        finally:
+            if job_script_path.exists():
+                job_script_path.unlink()
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_none_on_empty_sbatch_output(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() returns None when sbatch output is empty."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = ""
+
+        runner = SlurmRunner()
+        result = runner.serve(email="user@example.com", model="test:7b")
+
+        self.assertIsNone(result)
+
+
 if __name__ == "__main__":
     unittest.main()
