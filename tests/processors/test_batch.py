@@ -166,6 +166,11 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["input"]["custom_id"], "test-1")
         self.assertEqual(rows[1]["input"]["custom_id"], "test-2")
+        self.assertIn("run_metrics", output_data)
+        self.assertIn("elapsed_sec", output_data["run_metrics"])
+        self.assertIn("request_latency_p95_ms", output_data["run_metrics"])
+        self.assertIn("error_rate_by_type_pct", output_data["run_metrics"])
+        self.assertIn("retry_rate_pct", output_data["run_metrics"])
     
     @patch('llmflux.processors.batch.LLMClient')
     def test_error_handling(self, mock_client_class):
@@ -187,6 +192,39 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertIsNone(results[0].output)
         self.assertEqual(results[0].error, "Test error")
         self.assertTrue(results[0].metadata.get("error"))
+        self.assertEqual(results[0].metadata.get("retry_count"), 3)
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_compute_run_metrics_includes_retry_and_error_breakdown(self, mock_client_class):
+        """Test aggregate run metrics include retry and error taxonomy fields."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        processor = BatchProcessor(model_config=self.model_config)
+        results = [
+            OutputResult(
+                input={"custom_id": "ok-1"},
+                output={"usage": {"completion_tokens": 12}},
+                metadata={"request_latency_ms": 10.0, "retry_count": 1},
+            ),
+            OutputResult(
+                input={"custom_id": "ok-2"},
+                output={"usage": {"completion_tokens": 8}},
+                metadata={"request_latency_ms": 20.0, "retry_count": 0},
+            ),
+            OutputResult(
+                input={"custom_id": "bad-1"},
+                output=None,
+                error="timeout exceeded",
+                metadata={"request_latency_ms": 30.0, "retry_count": 2},
+            ),
+        ]
+
+        metrics = processor._compute_run_metrics(results, elapsed_sec=2.0)
+        self.assertEqual(metrics["retry_count_total"], 3)
+        self.assertAlmostEqual(metrics["retry_rate_pct"], 66.67, places=2)
+        self.assertEqual(metrics["error_rate_by_type_pct"]["timeout"], 33.33)
+        self.assertEqual(metrics["output_tokens_avg"], 10)
     
     @patch('llmflux.processors.batch.LLMClient')
     def test_completion_endpoint(self, mock_client_class):

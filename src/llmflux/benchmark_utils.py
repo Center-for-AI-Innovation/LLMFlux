@@ -290,6 +290,12 @@ class VllmMetricsScraper:
         # KV cache: fraction (0–1) → percentage; fall back to snapshots if no polling samples
         kv_raw = self._avg_gauge("vllm:kv_cache_usage_perc", [start, end])
         kv_cache_pct = round(kv_raw * 100, 4) if kv_raw is not None else None
+        kv_peak_pct = None
+        if self._samples:
+            kv_values = [self._sum_metric(s, "vllm:kv_cache_usage_perc") for s in self._samples]
+            kv_values = [v for v in kv_values if isinstance(v, (int, float))]
+            if kv_values:
+                kv_peak_pct = round(max(kv_values) * 100, 4)
 
         # Effective batch size: average number of requests actively running
         eff_batch: Optional[float] = None
@@ -305,6 +311,7 @@ class VllmMetricsScraper:
             "vllm_itl_p50_ms": self._histogram_percentile(end, "vllm:request_time_per_output_token_seconds", 50),
             "vllm_itl_p95_ms": self._histogram_percentile(end, "vllm:request_time_per_output_token_seconds", 95),
             "vllm_kv_cache_usage_avg_pct": kv_cache_pct,
+            "vllm_kv_cache_peak_pct": kv_peak_pct,
             "vllm_effective_batch_size_avg": eff_batch,
             "vllm_scrape_count": len(self._samples),
         }
@@ -376,10 +383,25 @@ class GpuUtilScraper:
 
     def _summarize(self) -> Dict[str, Any]:
         if not self._samples:
-            return {"gpu_util_avg_pct": None, "gpu_util_peak_pct": None}
+            return {
+                "gpu_util_avg_pct": None,
+                "gpu_util_peak_pct": None,
+                "gpu_util_p50_pct": None,
+                "gpu_util_p95_pct": None,
+                "gpu_util_stddev_pct": None,
+            }
+        p50 = self._samples[0]
+        p95 = self._samples[0]
+        if len(self._samples) > 1:
+            quantiles = statistics.quantiles(self._samples, n=100, method="inclusive")
+            p50 = quantiles[49]
+            p95 = quantiles[94]
         return {
             "gpu_util_avg_pct": round(statistics.mean(self._samples), 1),
             "gpu_util_peak_pct": round(max(self._samples), 1),
+            "gpu_util_p50_pct": round(p50, 1),
+            "gpu_util_p95_pct": round(p95, 1),
+            "gpu_util_stddev_pct": round(statistics.pstdev(self._samples), 2),
         }
 
 
@@ -394,10 +416,12 @@ def compute_benchmark_metrics(output_path: str) -> Dict[str, Any]:
 
     if isinstance(data, list):
         results = data
+        run_metrics: Dict[str, Any] = {}
         vllm_metrics: Dict[str, Any] = {}
         gpu_metrics: Dict[str, Any] = {}
     else:
         results = data.get("results", [])
+        run_metrics = data.get("run_metrics", {})
         vllm_metrics = data.get("vllm_metrics", {})
         gpu_metrics = data.get("gpu_metrics", {})
 
@@ -410,6 +434,7 @@ def compute_benchmark_metrics(output_path: str) -> Dict[str, Any]:
         "successful_requests": len(successful),
         "failed_requests": len(failed),
         "success_rate_pct": round(100 * len(successful) / total, 2) if total else 0.0,
+        **run_metrics,
         **vllm_metrics,
         **gpu_metrics,
     }
@@ -423,7 +448,18 @@ def format_metrics_table(metrics: Dict[str, Any]) -> str:
         ("Successful",              "successful_requests"),
         ("Failed",                  "failed_requests"),
         ("Success rate",            "success_rate_pct",                    "%"),
-        ("Total time",              "elapsed"),
+        ("Total time",              "elapsed_sec",                         "s"),
+        ("Successful req/s",        "successful_req_per_sec",              "req/s"),
+        ("Successful tok/s",        "successful_tok_per_sec",              "tok/s"),
+        ("Request latency p50",     "request_latency_p50_ms",              "ms"),
+        ("Request latency p95",     "request_latency_p95_ms",              "ms"),
+        ("Request latency p99",     "request_latency_p99_ms",              "ms"),
+        ("Retry count total",       "retry_count_total"),
+        ("Retry rate",              "retry_rate_pct",                      "%"),
+        ("Retries/request avg",     "avg_retries_per_request"),
+        ("Retry success rate",      "retry_success_rate_pct",              "%"),
+        ("Output tokens avg",       "output_tokens_avg"),
+        ("Output tokens p95",       "output_tokens_p95"),
         ("Request throughput",      "vllm_request_throughput_req_per_sec", "req/s"),
         ("Token throughput",        "vllm_token_throughput_tok_per_sec",   "tok/s"),
         ("p50 TTFT",                "vllm_ttft_p50_ms",                    "ms"),
@@ -433,7 +469,11 @@ def format_metrics_table(metrics: Dict[str, Any]) -> str:
         ("KV cache usage avg",      "vllm_kv_cache_usage_avg_pct",         "%"),
         ("Effective batch size avg","vllm_effective_batch_size_avg"),
         ("GPU utilization avg",     "gpu_util_avg_pct",                    "%"),
+        ("GPU utilization p50",     "gpu_util_p50_pct",                    "%"),
+        ("GPU utilization p95",     "gpu_util_p95_pct",                    "%"),
+        ("GPU utilization stddev",  "gpu_util_stddev_pct",                 "%"),
         ("GPU utilization peak",    "gpu_util_peak_pct",                   "%"),
+        ("Error rate by type",      "error_rate_by_type_pct"),
     ]
     lines = ["\n=== Benchmark Metrics ==="]
     for row in labels:
