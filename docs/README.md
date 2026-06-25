@@ -61,13 +61,15 @@ Confirm the installation by running a base command and ensuring your system give
 
 ```bash
 $llmflux -h
-usage: llmflux [-h] [--version] {run,benchmark,show-models,jobs,status,logs,cancel} ...
+usage: llmflux [-h] [--version] {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel} ...
 
 LLMFlux CLI
 
 positional arguments:
-  {run,benchmark,show-models,jobs,status,logs,cancel}
+  {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel}
     run                 Submit a batch processing job
+    serve               Start a long-running OpenAI-compatible model service on SLURM
+    connect             Show endpoint/API key for a serve job and verify readiness
     benchmark           Run a benchmark job
     show-models         List all available model keys from models.yaml
     jobs                List LLMFlux tracked Slurm jobs
@@ -191,6 +193,55 @@ llmflux cancel <job-id> --force
 Notes:
 - `jobs` and `status` derive live state from Slurm JSON output.
 - `logs` and `cancel` only operate on jobs present in the LLMFlux registry.
+
+## Interactive Serving
+
+In addition to batch processing, LLMFlux can start a model as a long-running
+OpenAI-compatible service on a compute node.
+
+### Start a serve job
+
+```bash
+llmflux serve \
+    --model Llama-3.2-3B-Instruct \
+    --email you@example.com \
+    --time 02:00:00 \
+    --engine vllm
+```
+
+- `--model` — model key from `models.yaml` (same as `llmflux run`)
+- `--email` — you receive an email when the model is ready
+- `--time` — serve job walltime (for example: `02:00:00`, `08:00:00`)
+- `--engine` — `vllm` (default) or `ollama`
+
+LLMFlux generates a session API key and prints the serve job ID after
+submission. When the service becomes reachable, use `connect` to retrieve
+connection details and verify readiness.
+
+### Connect once the model is ready
+
+```bash
+llmflux connect 2301062
+```
+
+This command prints:
+- service endpoint (OpenAI-compatible `/v1` base URL)
+- API key for the running serve session
+- model and engine metadata
+- a copy/paste Python snippet using the OpenAI client
+
+### Check status and stop the service
+
+```bash
+# Show endpoint/API key and other metadata for a serve job
+llmflux status 2301062
+
+# Shut down a serve job early
+llmflux cancel 2301062
+```
+
+`llmflux jobs` includes a `TYPE` column (`serve` / `batch`) so you can quickly
+distinguish interactive services from standard batch jobs.
 
 ## Output Format
 
