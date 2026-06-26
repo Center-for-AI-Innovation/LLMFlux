@@ -157,7 +157,7 @@ class TestCreateTestPromptsFile(unittest.TestCase):
         for cat in categories:
             self._write_category_file(bench_dir, cat, n=5)
         with patch.object(bu, "BENCHMARK_DATA_DIR", bench_dir):
-            result_path = create_test_prompts_file(num_prompts=6)
+            result_path = create_test_prompts_file(num_prompts=6, model="test-model")
         with open(result_path) as f:
             lines = [json.loads(l) for l in f if l.strip()]
         self.assertGreater(len(lines), 0)
@@ -166,6 +166,7 @@ class TestCreateTestPromptsFile(unittest.TestCase):
             self.assertIn("method", entry)
             self.assertIn("body", entry)
             self.assertIn("messages", entry["body"])
+            self.assertIn("model", entry["body"])
 
     def test_calls_download_when_files_missing(self):
         import llmflux.benchmark_utils as bu

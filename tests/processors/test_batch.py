@@ -137,6 +137,66 @@ class TestBatchProcessor(unittest.TestCase):
             top_p=0.9,
             stop=None
         )
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_process_batch_accepts_matching_jsonl_model(self, mock_client_class):
+        """Model in JSONL body is accepted when it matches requested llmflux model."""
+        mock_client = MagicMock()
+        mock_client.chat.return_value = "This is a test response."
+        mock_client_class.return_value = mock_client
+
+        matching_entry = {
+            "custom_id": "test-match-model",
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": {
+                "model": "test/test-model",
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        }
+
+        processor = BatchProcessor(model_config=self.model_config)
+        processor.setup()
+        results = processor.process_batch("vllm", [matching_entry])
+
+        self.assertEqual(len(results), 1)
+        self.assertIsNone(results[0].error)
+        mock_client.chat.assert_any_call(
+            model="test/test-model",
+            engine="vllm",
+            messages=matching_entry["body"]["messages"],
+            temperature=0.7,
+            max_tokens=500,
+            top_p=0.9,
+            stop=None,
+        )
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_process_batch_rejects_mismatched_jsonl_model(self, mock_client_class):
+        """Model mismatch between JSONL body and requested llmflux model returns error."""
+        mock_client = MagicMock()
+        mock_client.chat.return_value = "This is a test response."
+        mock_client_class.return_value = mock_client
+
+        mismatch_entry = {
+            "custom_id": "test-mismatch-model",
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": {
+                "model": "different/model",
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        }
+
+        processor = BatchProcessor(model_config=self.model_config)
+        processor.setup()
+        results = processor.process_batch("vllm", [mismatch_entry])
+
+        self.assertEqual(len(results), 1)
+        self.assertIsNone(results[0].output)
+        self.assertIn("does not match requested model", results[0].error)
+        self.assertTrue(results[0].metadata.get("error"))
+        mock_client.chat.assert_called_once()  # setup() warmup only
     
     @patch('llmflux.processors.batch.LLMClient')
     def test_run_with_jsonl(self, mock_client_class):
