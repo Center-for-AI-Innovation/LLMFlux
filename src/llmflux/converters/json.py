@@ -182,13 +182,17 @@ def _process_json_item(
                 item['custom_id'] = str(item[id_field])
             else:
                 item['custom_id'] = generate_custom_id()
-        
+
+        # Inject model into body if provided and not already set
+        if model and 'model' not in item['body']:
+            item['body']['model'] = model
+
         # Add API parameters if provided
         if api_parameters and 'body' in item:
             for key, value in api_parameters.items():
                 if key not in item['body']:
                     item['body'][key] = value
-                
+
         # Write item as is
         file_handle.write(json.dumps(item) + '\n')
         return

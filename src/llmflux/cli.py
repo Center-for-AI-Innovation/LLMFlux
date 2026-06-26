@@ -114,7 +114,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         temperature = 0.7 if args.temperature is None else args.temperature
         max_tokens = 500 if args.max_tokens is None else args.max_tokens
 
-        input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens)
+        input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens, model=args.model)
         
     # Set output path
     if args.output:
