@@ -40,7 +40,7 @@ CHAT_ENTRY = {
     "method": "POST",
     "url": "/v1/chat/completions",
     "body": {
-        "model": "test:7b",
+        "model": "test/test-model",
         "messages": [{"role": "user", "content": "Hello"}],
         "temperature": 0.7,
         "max_tokens": 500,
@@ -483,16 +483,17 @@ class TestJsonToJsonlToBatchProcessorPipeline(unittest.TestCase):
 
     @patch("llmflux.processors.batch.LLMClient")
     def test_model_field_survives_pipeline(self, mock_cls):
-        """model set during json_to_jsonl conversion is used by BatchProcessor."""
+        """model set during json_to_jsonl conversion flows through to BatchProcessor."""
         raw_data = [{"messages": [{"role": "user", "content": "hi"}]}]
         json_path = self.d / "input.json"
         json_path.write_text(json.dumps(raw_data))
         jsonl_path = self.d / "converted.jsonl"
 
-        json_to_jsonl(json_path, jsonl_path, model="special-model")
+        # Use the engine-appropriate model name so validation passes
+        json_to_jsonl(json_path, jsonl_path, model="test/test-model")
 
         entry = json.loads(jsonl_path.read_text().strip())
-        self.assertEqual(entry["body"]["model"], "special-model")
+        self.assertEqual(entry["body"]["model"], "test/test-model")
 
         mock_client = MagicMock()
         mock_client.chat.return_value = "ok"
@@ -502,7 +503,7 @@ class TestJsonToJsonlToBatchProcessorPipeline(unittest.TestCase):
         processor.run(str(jsonl_path), str(self.d / "out.json"), "vllm")
 
         call_kwargs = mock_client.chat.call_args[1]
-        self.assertEqual(call_kwargs["model"], "special-model")
+        self.assertEqual(call_kwargs["model"], "test/test-model")
 
     @patch("llmflux.processors.batch.LLMClient")
     def test_already_batch_format_passthrough(self, mock_cls):
@@ -513,7 +514,7 @@ class TestJsonToJsonlToBatchProcessorPipeline(unittest.TestCase):
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
-                    "model": "llama3",
+                    "model": "test/test-model",
                     "messages": [{"role": "user", "content": "pre-built"}],
                     "temperature": 0.5,
                     "max_tokens": 100,
@@ -527,7 +528,7 @@ class TestJsonToJsonlToBatchProcessorPipeline(unittest.TestCase):
         json_to_jsonl(json_path, jsonl_path)
         entry = json.loads(jsonl_path.read_text().strip())
         self.assertEqual(entry["custom_id"], "pre-formatted")
-        self.assertEqual(entry["body"]["model"], "llama3")
+        self.assertEqual(entry["body"]["model"], "test/test-model")
         self.assertEqual(entry["body"]["temperature"], 0.5)
 
         mock_client = MagicMock()
