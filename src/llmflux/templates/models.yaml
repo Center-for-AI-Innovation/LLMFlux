@@ -601,8 +601,8 @@ models:
     name: mixtral:8x22b
     hf_name: mistralai/Mixtral-8x22B-Instruct-v0.1
     resources:
-      gpu_layers: 48
-      gpu_memory: 48GB
+      gpu_layers: 56
+      gpu_memory: 282GB
       batch_size: 1
       max_concurrent: 1
     parameters:
@@ -626,8 +626,8 @@ models:
       - 1
       - 1
     requirements:
-      min_gpu_memory: 48GB
-      recommended_gpu: A100-80GB
+      min_gpu_memory: 282GB
+      recommended_gpu: H200x2
       cuda_version: '>=12.0'
       cpu_threads: 16
       gpu_memory_utilization: 0.9

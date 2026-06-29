@@ -111,7 +111,7 @@ def extract_prompts_from_jsonl(
 
     return prompts[:num_prompts]
 
-def create_test_prompts_file(num_prompts: int = 120, temperature: float = 0.7, max_tokens: int = 500) -> str:
+def create_test_prompts_file(num_prompts: int = 120, temperature: float = 0.7, max_tokens: int = 500, model: str = None) -> str:
     """Get test prompts for a given model from 6 LiveBench categories: data_analysis, language, math, reasoning, instruction_following, and coding.
     Args:
         num_prompts: Total number of prompts to generate.
@@ -134,7 +134,7 @@ def create_test_prompts_file(num_prompts: int = 120, temperature: float = 0.7, m
         file_name = benchmark_dir / f"{file_names[i]}.jsonl"
         prompts = extract_prompts_from_jsonl(file_name, num_prompts=num_prompts//len(file_names))
         for prompt in prompts:
-            all_prompts.append({"custom_id":"request1","method":"POST","url":"/v1/chat/completions","body":{"messages":prompt,"temperature":temperature,"max_tokens":max_tokens}})
+            all_prompts.append({"custom_id":"request1","method":"POST","url":"/v1/chat/completions","body":{"model":model,"messages":prompt,"temperature":temperature,"max_tokens":max_tokens}})
     save_prompts_to_jsonl(all_prompts, prompts_file)
 
     return str(prompts_file)

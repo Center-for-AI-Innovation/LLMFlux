@@ -64,6 +64,18 @@ class BatchProcessor:
         # Ensure temp directory exists
         os.makedirs(self.temp_dir, exist_ok=True)
 
+    def _get_validated_model(self, body: Dict[str, Any]) -> str:
+        """Return request model after validating against configured model."""
+        requested_model = self.model_config.get_model_name_for_engine()
+        jsonl_model = body.get('model')
+
+        if jsonl_model and jsonl_model != requested_model:
+            raise ValueError(
+                f"JSONL model '{jsonl_model}' does not match requested model '{requested_model}'"
+            )
+
+        return jsonl_model or requested_model
+
     @staticmethod
     def _percentile(values: List[float], pct: float) -> Optional[float]:
         """Return percentile using linear interpolation."""
@@ -282,8 +294,7 @@ class BatchProcessor:
             Chat completion response
         """
         messages = body.get('messages', [])
-        # Use the engine-appropriate model name
-        model = body.get('model', self.model_config.get_model_name_for_engine())
+        model = self._get_validated_model(body)
         
         # Extract parameters with defaults from model config
         temperature = body.get('temperature', self.model_config.parameters.temperature)
@@ -331,7 +342,7 @@ class BatchProcessor:
             Completion response
         """
         prompt = body.get('prompt', '')
-        model = body.get('model', self.model_config.get_model_name_for_engine())
+        model = self._get_validated_model(body)
 
         # Extract parameters with defaults from model config
         temperature = body.get('temperature', self.model_config.parameters.temperature)

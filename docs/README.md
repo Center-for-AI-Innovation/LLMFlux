@@ -59,13 +59,15 @@ Confirm the installation by running a base command and ensuring your system give
 
 ```bash
 $llmflux -h
-usage: llmflux [-h] [--version] {run,benchmark,show-models,jobs,status,logs,cancel} ...
+usage: llmflux [-h] [--version] {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel} ...
 
 LLMFlux CLI
 
 positional arguments:
-  {run,benchmark,show-models,jobs,status,logs,cancel}
+  {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel}
     run                 Submit a batch processing job
+    serve               Start a model as a long-running service on a compute node
+    connect             Show connection info for a running serve job
     benchmark           Run a benchmark job
     show-models         List all available model keys from models.yaml
     jobs                List LLMFlux tracked Slurm jobs
@@ -263,6 +265,81 @@ llmflux convert dir --input data/documents/ --output data/docs.jsonl --recursive
 ```
 
 For code examples of converters, see the [examples directory](examples/).
+
+## Interactive Serving
+
+In addition to batch processing, LLMFlux can start a model as a long-running
+OpenAI-compatible service on a compute node.
+
+### Start a serve job
+
+```bash
+llmflux serve \
+    --model Llama-3.2-3B-Instruct \
+    --email you@example.com \
+    --time 02:00:00 \
+    --engine vllm
+```
+
+- `--model` — model key from `models.yaml` (same as `llmflux run`)
+- `--email` — you will receive an email **when the model is ready** (not just when the job starts)
+- `--time` — how long to keep the service alive (e.g. `02:00:00`, `08:00:00`)
+- `--engine` — `vllm` (default) or `ollama`
+
+LLMFlux generates a unique API key for the session and prints the job ID:
+
+```
+Serve job submitted: 2301062
+  Model:  Llama-3.2-3B-Instruct
+  Engine: vllm
+  Time:   02:00:00
+  Email:  you@example.com
+
+You will receive an email at you@example.com when the service is ready.
+Then run: llmflux connect 2301062
+```
+
+### Connect once the model is ready
+
+After receiving the ready email, run:
+
+```bash
+llmflux connect 2301062
+```
+
+This pings the endpoint and prints everything you need:
+
+```
+Service is ready.
+
+  Endpoint:  http://gpu-node-04:8031/v1
+  API Key:   llmflux-57de4141f7d9b52a24481f05438c166c
+  Model:     meta-llama/Llama-3.2-3B-Instruct
+  Engine:    vllm
+
+Example usage:
+
+from openai import OpenAI
+client = OpenAI(base_url="http://gpu-node-04:8031/v1", api_key="llmflux-57de4141f7d9b52a24481f05438c166c")
+response = client.chat.completions.create(
+    model="meta-llama/Llama-3.2-3B-Instruct",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(response.choices[0].message.content)
+```
+
+### Check status and shut down
+
+```bash
+# See endpoint, API key, and email for a serve job
+llmflux status 2301062
+
+# Shut the service down early
+llmflux cancel 2301062
+```
+
+`llmflux jobs` also shows a `TYPE` column (`serve` / `batch`) so you can
+distinguish long-running services from batch jobs at a glance.
 
 ## Benchmarking
 
