@@ -32,6 +32,8 @@ LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API form
 
 ## Installation
 
+**Prerequisites:** LLMFlux runs models inside [Apptainer](https://apptainer.org/) (formerly Singularity) containers on HPC systems. Apptainer must be available on your cluster — confirm with `apptainer --version` or contact your cluster admin.
+
 ```bash
 pip install llmflux
 ```
@@ -102,7 +104,7 @@ runner = SlurmRunner(config=slurm_config)
 job_id = runner.run(
     input_path="prompts.jsonl",
     output_path="results.json",
-    model="llama3.2:3b",
+    model="Llama-3.2-3B-Instruct",
     batch_size=4
 )
 print(f"Job submitted with ID: {job_id}")
@@ -123,17 +125,19 @@ For advanced model configuration, see the [Models Guide](MODELS.md).
 
 ## Command-Line Interface
 
-LLMFlux includes a command-line interface for submitting batch processing jobs. It uses vLLM as it's default engine, and model configurations rely on the HuggingFace naming scheme. To process your prompts.jsonl file using the Ollama engine running the llama3.2 model with 3b parameters, you would run the command:
+LLMFlux uses vLLM as its default engine. Model keys come from `models.yaml` (see `llmflux show-models`). `--output` is optional — if omitted, results are written to a timestamped file in your configured output directory.
 
 ```bash
-# Process JSONL file directly (core functionality)
-llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json
-```
+# Minimal: engine defaults to vllm, output path is auto-generated
+llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl
 
-In addition to the default vLLM engine, LLMFlux can also be run using Ollama. You then can call using the names as established in the models.yaml file in the templates dir:
+# Explicit engine and output path
+llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --output results/output.json --engine vllm
+
+# Use the Ollama engine instead
+llmflux run --model Llama-3.2-3B-Instruct --input data/prompts.jsonl --engine ollama
 
 # With SLURM account and partition
-```bash
 llmflux run \
    --account your-account \
    --partition gpu \
@@ -142,31 +146,22 @@ llmflux run \
    --output results/output.json
 ```
 
-```bash
-# Process JSONL file using VLLM backend
-llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
-```
+The `--model` value must match a key from `models.yaml` (e.g. `MistralLite`, `Llama-3.2-3B-Instruct`). LLMFlux resolves the correct HuggingFace repo name (`hf_name`) and Ollama tag (`name`) automatically from that key.
 
-This will run the same as above, using VLLM as the backend interface. If you wanted to run mistral-lite, for example, checking the file mistral-lite/7b.yaml reveals the name: "mistrallite:7b". Update to the appropriate HuggingFace key and run 
-```bash
-# Process JSONL file using VLLM backend
-llmflux run --model MistralLite --input data/prompts.jsonl --output results/output.json
-```
-this will run the model, as noted in the config, by searching HuggingFace for `hf_name: "amazon/MistralLite"`. You will
-need to check an existing model file from the folder src/llmflux/templates to find a configuration that matches what you want
-and use the name as the argument for the --model argument.
-
-Note that in order to use some HuggingFace models, you will need a key from HF. Once you have a token, update your
-local copy of the .env file and add or change this line:
+Note that in order to use some HuggingFace models, you will need a token from HF. Once you have a token, update your
+local copy of the `.env` file:
 
 ```bash
 HUGGINGFACE_TOKEN=hf_XXXXXXXXXXXXXXX
 ```
-to use the token, replace the hf_XXXX piece with your token. For some gated repos, you will have to visit the huggingface repository directly and activate access (often by accepting a terms and conditions agreement). You may also need to adjust settings on your HF token to ensure that LLMFlux has proper rights to access the model. In addition, the model will by default be stored in your base directory: `~/.cache/huggingfacel/hub`. To change this, you can add the following parameter to your `.env` file:
+
+For some gated repos, you will also need to visit the HuggingFace repository directly and accept the terms of access. The model cache defaults to `~/.cache/huggingface/hub`. To change this, add to your `.env`:
+
 ```bash
 HF_HOME=/path/to/dir
 ```
-llmflux will automatically download the appropriate models for both OLLAMA and vLLM.
+
+LLMFlux will automatically download the appropriate models for both Ollama and vLLM.
 
 For detailed command options:
 ```bash
@@ -254,17 +249,25 @@ Results are saved in the user's workspace:
 
 ## Utility Converters
 
-LLMFlux provides utility converters to help prepare JSONL files from various input formats:
+LLMFlux provides utility converters to help prepare JSONL files from various input formats.
+
+**Supported source types:**
+- `csv` — CSV files; use `--template` with `{column_name}` placeholders
+- `dir` — directories of text files (`.txt`, `.md`, `.json`, `.py`, `.yaml`, `.yml`); use `--recursive` to traverse subdirectories
+- `json` — existing JSON files already in batch or messages format
+
+**`--template` syntax:** Wrap column or field names in `{braces}` to interpolate values into the prompt. For example, `"Summarize the following paper: {abstract}"` pulls the `abstract` column from each CSV row.
 
 ```bash
-# Convert CSV to JSONL
+# Convert CSV to JSONL using a prompt template
 llmflux convert csv --input data/papers.csv --output data/papers.jsonl --template "Summarize: {text}"
 
-# Convert directory to JSONL
+# Convert a directory of text files to JSONL
 llmflux convert dir --input data/documents/ --output data/docs.jsonl --recursive
-```
 
-For code examples of converters, see the [examples directory](examples/).
+# Convert an existing JSON file (batch or messages format) to JSONL
+llmflux convert json --input data/prompts.json --output data/prompts.jsonl
+```
 
 ## Interactive Serving
 
