@@ -327,7 +327,9 @@ class TestBatchProcessor(unittest.TestCase):
     def test_completion_endpoint_accepts_matching_model(self, mock_client_class):
         """_get_validated_model accepts matching model field on /v1/completions."""
         mock_client = MagicMock()
-        mock_client.chat.return_value = "blue"
+        # Tuple form matches the (content, usage) contract client.chat() returns
+        # with return_usage=True, used once benchmarking's batch.py changes land.
+        mock_client.chat.return_value = ("blue", {})
         mock_client_class.return_value = mock_client
 
         completions_jsonl = self.test_dir / "completions_match.jsonl"
