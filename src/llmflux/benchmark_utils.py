@@ -241,23 +241,37 @@ class VllmMetricsScraper:
         vals = [self._sum_metric(s, name) for s in sources if name in s]
         return statistics.mean(vals) if vals else None
 
-    def _histogram_percentile(self, snapshot: Dict, base_name: str, pct: float) -> Optional[float]:
-        """Estimate a percentile (ms) from a cumulative Prometheus histogram."""
+    def _histogram_percentile(
+        self,
+        snapshot: Dict,
+        base_name: str,
+        pct: float,
+        start_snapshot: Optional[Dict] = None,
+    ) -> Optional[float]:
+        """Estimate a percentile (ms) from a cumulative Prometheus histogram.
+
+        Bucket counts are cumulative since process start, so we subtract
+        `start_snapshot`'s counts from `snapshot`'s to isolate samples
+        recorded during this run (e.g. skipping the pre-run warm-up request
+        and any traffic from earlier runs against the same server).
+        """
         bucket_name = f"{base_name}_bucket"
         if bucket_name not in snapshot:
             return None
+        start_buckets = (start_snapshot or {}).get(bucket_name, {})
         buckets: List[tuple] = []
         for labels_str, value in snapshot[bucket_name].items():
             le_m = re.search(r'le="([^"]+)"', labels_str)
             if le_m and le_m.group(1) != "+Inf":
                 try:
-                    buckets.append((float(le_m.group(1)), value))
+                    le = float(le_m.group(1))
                 except ValueError:
-                    pass
+                    continue
+                buckets.append((le, value - start_buckets.get(labels_str, 0.0)))
         if not buckets:
             return None
         buckets.sort()
-        total = self._sum_metric(snapshot, f"{base_name}_count")
+        total = self._sum_metric(snapshot, f"{base_name}_count") - self._sum_metric(start_snapshot or {}, f"{base_name}_count")
         if not total:
             return None
         target = pct / 100.0 * total
@@ -306,10 +320,10 @@ class VllmMetricsScraper:
         return {
             "vllm_request_throughput_req_per_sec": round(req_delta / elapsed, 3) if elapsed else None,
             "vllm_token_throughput_tok_per_sec": round(tok_delta / elapsed, 1) if elapsed else None,
-            "vllm_ttft_p50_ms": self._histogram_percentile(end, "vllm:time_to_first_token_seconds", 50),
-            "vllm_ttft_p95_ms": self._histogram_percentile(end, "vllm:time_to_first_token_seconds", 95),
-            "vllm_itl_p50_ms": self._histogram_percentile(end, "vllm:request_time_per_output_token_seconds", 50),
-            "vllm_itl_p95_ms": self._histogram_percentile(end, "vllm:request_time_per_output_token_seconds", 95),
+            "vllm_ttft_p50_ms": self._histogram_percentile(end, "vllm:time_to_first_token_seconds", 50, start),
+            "vllm_ttft_p95_ms": self._histogram_percentile(end, "vllm:time_to_first_token_seconds", 95, start),
+            "vllm_itl_p50_ms": self._histogram_percentile(end, "vllm:request_time_per_output_token_seconds", 50, start),
+            "vllm_itl_p95_ms": self._histogram_percentile(end, "vllm:request_time_per_output_token_seconds", 95, start),
             "vllm_kv_cache_usage_avg_pct": kv_cache_pct,
             "vllm_kv_cache_peak_pct": kv_peak_pct,
             "vllm_effective_batch_size_avg": eff_batch,

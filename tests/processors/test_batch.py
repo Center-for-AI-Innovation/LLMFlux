@@ -110,7 +110,7 @@ class TestBatchProcessor(unittest.TestCase):
         """Test processing a batch of items."""
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = "This is a test response."
+        mock_client.chat.return_value = ("This is a test response.", {})
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
@@ -135,14 +135,15 @@ class TestBatchProcessor(unittest.TestCase):
             temperature=0.7,
             max_tokens=500,
             top_p=0.9,
-            stop=None
+            stop=None,
+            return_usage=True
         )
 
     @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch_accepts_matching_jsonl_model(self, mock_client_class):
         """Model in JSONL body is accepted when it matches requested llmflux model."""
         mock_client = MagicMock()
-        mock_client.chat.return_value = "This is a test response."
+        mock_client.chat.return_value = ("This is a test response.", {})
         mock_client_class.return_value = mock_client
 
         matching_entry = {
@@ -169,13 +170,14 @@ class TestBatchProcessor(unittest.TestCase):
             max_tokens=500,
             top_p=0.9,
             stop=None,
+            return_usage=True,
         )
 
     @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch_rejects_mismatched_jsonl_model(self, mock_client_class):
         """Model mismatch between JSONL body and requested llmflux model returns error."""
         mock_client = MagicMock()
-        mock_client.chat.return_value = "This is a test response."
+        mock_client.chat.return_value = ("This is a test response.", {})
         mock_client_class.return_value = mock_client
 
         mismatch_entry = {
@@ -203,24 +205,29 @@ class TestBatchProcessor(unittest.TestCase):
         """Test running the processor with a JSONL file."""
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = "This is a test response."
+        mock_client.chat.return_value = (
+            "This is a test response.",
+            {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8},
+        )
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
 
         # Run processor
         results = processor.run(self.jsonl_path, self.output_path, "vllm")
-        
+
         # Check results
         self.assertEqual(len(results), 2)
-        
+        self.assertIsNone(results[0].error)
+        self.assertIsNone(results[1].error)
+
         # Check that output file was created
         self.assertTrue(os.path.exists(self.output_path))
-        
+
         # Read output file
         with open(self.output_path, "r") as f:
             output_data = json.load(f)
-        
+
         # Output is now {"results": [...], "vllm_metrics": {...}}
         rows = output_data["results"]
         self.assertEqual(len(rows), 2)
@@ -231,6 +238,7 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertIn("request_latency_p95_ms", output_data["run_metrics"])
         self.assertIn("error_rate_by_type_pct", output_data["run_metrics"])
         self.assertIn("retry_rate_pct", output_data["run_metrics"])
+        self.assertEqual(output_data["run_metrics"]["output_tokens_avg"], 5)
     
     @patch('llmflux.processors.batch.LLMClient')
     def test_error_handling(self, mock_client_class):
@@ -307,7 +315,7 @@ class TestBatchProcessor(unittest.TestCase):
         
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = "blue"
+        mock_client.chat.return_value = ("blue", {})
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
@@ -323,7 +331,8 @@ class TestBatchProcessor(unittest.TestCase):
             temperature=0.7,
             max_tokens=500,
             top_p=0.9,
-            stop=None
+            stop=None,
+            return_usage=True
         )
         
         # Check output format

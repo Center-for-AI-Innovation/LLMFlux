@@ -20,6 +20,7 @@ from .slurm.runner import SlurmRunner
 from .slurm.connection import connect, read_connection_info
 from .slurm.commands import (
     ACTIVE_STATES,
+    TERMINAL_STATES,
     SlurmCommandError,
     cancel_job,
     get_active_job_details,
@@ -32,7 +33,7 @@ from .slurm.commands import (
 from .processors import BatchProcessor
 from .core.config import Config, EngineConfig
 from .core.registry import JobRegistry
-from .benchmark_utils import create_test_prompts_file
+from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
 
 
 def _get_llmflux_version() -> str:
@@ -77,34 +78,6 @@ def _parse_elapsed_to_seconds(elapsed: str) -> float:
     except Exception:
         return 0.0
 
-
-def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout_seconds: int = 6 * 3600) -> str | None:
-    """Return elapsed runtime (seconds) once SLURM job completes; None when unavailable."""
-    start = time.monotonic()
-    while time.monotonic() - start < timeout_seconds:
-        result = subprocess.run(
-            [
-                "sacct",
-                "-n",
-                "-P",
-                "-j",
-                f"{job_id}.batch",
-                "--format=State,Elapsed"
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            rows = [row for row in result.stdout.splitlines() if row.strip()]
-            if rows:
-                state, elapsed = rows[0].split("|", 1)
-                state = state.upper()
-                if state in {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"}:
-                    return str(elapsed)
-        print(f"Job {job_id} is still running... Waiting for {poll_seconds} seconds")
-        time.sleep(poll_seconds)
-    return None
 
 def _ensure_container(config: "Config") -> bool:
     """Build the Apptainer image on the current node if it does not exist.
@@ -734,6 +707,15 @@ def _status_command(args: argparse.Namespace) -> int:
         print(f"\nTip: Run `llmflux connect {job_id}` to get the full connection details.")
     else:
         print(f"\nTip: Run `llmflux logs {job_id}` to view job logs (stdout and stderr).")
+
+    if not is_serve and state in TERMINAL_STATES:
+        output_path = metadata.get("output") if metadata else None
+        if output_path and Path(output_path).exists():
+            try:
+                print(format_metrics_table(compute_benchmark_metrics(output_path)))
+            except Exception as exc:
+                print(f"(could not read metrics from {output_path}: {exc})", file=sys.stderr)
+
     return 0
 
 

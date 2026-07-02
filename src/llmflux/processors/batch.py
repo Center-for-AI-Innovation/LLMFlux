@@ -127,6 +127,10 @@ class BatchProcessor:
             for r in results
             if isinstance(r.metadata.get("retry_count"), int)
         ]
+        retried_results = [
+            r for r in results
+            if isinstance(r.metadata.get("retry_count"), int) and r.metadata.get("retry_count", 0) > 0
+        ]
 
         error_counts = {
             "timeout": 0,
@@ -163,7 +167,10 @@ class BatchProcessor:
             "retry_count_total": retry_count_total,
             "retry_rate_pct": round((retried_requests * 100.0 / total), 2) if total else 0.0,
             "avg_retries_per_request": round(retry_count_total / total, 3) if total else 0.0,
-            "retry_success_rate_pct": round((retried_requests * 100.0 / len(successful)), 2) if successful else 0.0,
+            "retry_success_rate_pct": (
+                round(sum(1 for r in retried_results if not r.error) * 100.0 / len(retried_results), 2)
+                if retried_results else None
+            ),
             "error_rate_by_type_pct": error_rates_pct,
             "output_tokens_avg": round(statistics.mean(output_tokens), 2) if output_tokens else 0.0,
             "output_tokens_p95": round(self._percentile(output_tokens, 95), 2) if output_tokens else 0.0,
@@ -301,18 +308,19 @@ class BatchProcessor:
         max_tokens = body.get('max_tokens', self.model_config.parameters.max_tokens)
         top_p = body.get('top_p', self.model_config.parameters.top_p)
         stop = body.get('stop', self.model_config.parameters.stop_sequences)
-        
+
         # Generate response
-        response = self.client.chat(
+        response, usage = self.client.chat(
             model=model,
             engine=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             top_p=top_p,
-            stop=stop
+            stop=stop,
+            return_usage=True
         )
-        
+
         # Format in OpenAI-compatible format
         return {
             "id": str(uuid.uuid4()),
@@ -328,7 +336,8 @@ class BatchProcessor:
                     },
                     "finish_reason": "stop"
                 }
-            ]
+            ],
+            "usage": usage
         }
     
     def _process_completion(self, engine: str, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -354,16 +363,17 @@ class BatchProcessor:
         messages = [{"role": "user", "content": prompt}]
 
         # Generate response
-        response = self.client.chat(
+        response, usage = self.client.chat(
             model=model,
             engine=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             top_p=top_p,
-            stop=stop
+            stop=stop,
+            return_usage=True
         )
-        
+
         # Format in OpenAI-compatible format
         return {
             "id": str(uuid.uuid4()),
@@ -376,7 +386,8 @@ class BatchProcessor:
                     "index": 0,
                     "finish_reason": "stop"
                 }
-            ]
+            ],
+            "usage": usage
         }
     
     def run(self, input_path: str, output_path: str, engine: str, **kwargs) -> List[Dict[str, Any]]:

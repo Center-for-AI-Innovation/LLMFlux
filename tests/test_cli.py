@@ -1228,14 +1228,13 @@ class TestCommandLineIntegration:
         assert call_kwargs["batch_size"] == 8
         assert call_kwargs["input_path"] == str(sample_jsonl)
     
-    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
     @patch('llmflux.cli._ensure_container', return_value=True)
     @patch('llmflux.cli.create_test_prompts_file')
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_cli_benchmark_integration(
         self, mock_config_class, mock_runner_class,
-        mock_create_prompts, mock_ensure_container, mock_wait
+        mock_create_prompts, mock_ensure_container
     ):
         """Integration test for full CLI benchmark command."""
         # Setup mocks
