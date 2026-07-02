@@ -250,24 +250,42 @@ Results are saved in the user's workspace:
 ## Utility Converters
 
 LLMFlux provides utility converters to help prepare JSONL files from various input formats.
+These are Python functions in `llmflux.converters` — there is no `llmflux convert` CLI
+command. Call them from a script, then pass the resulting JSONL file to `llmflux run`.
 
 **Supported source types:**
-- `csv` — CSV files; use `--template` with `{column_name}` placeholders
-- `dir` — directories of text files (`.txt`, `.md`, `.json`, `.py`, `.yaml`, `.yml`); use `--recursive` to traverse subdirectories
-- `json` — existing JSON files already in batch or messages format
+- `csv_to_jsonl` — CSV files; use `prompt_template` with `{column_name}` placeholders
+- `directory_to_jsonl` — directories of text files (`.txt`, `.md`, `.json`, `.py`, `.yaml`, `.yml`); use `recursive=True` to traverse subdirectories
+- `json_to_jsonl` — existing JSON files already in batch or messages format
 
-**`--template` syntax:** Wrap column or field names in `{braces}` to interpolate values into the prompt. For example, `"Summarize the following paper: {abstract}"` pulls the `abstract` column from each CSV row.
+**`prompt_template` syntax:** Wrap column or field names in `{braces}` to interpolate values into the prompt. For example, `"Summarize the following paper: {abstract}"` pulls the `abstract` column from each CSV row.
 
-```bash
+```python
+from llmflux.converters import csv_to_jsonl, directory_to_jsonl, json_to_jsonl
+
 # Convert CSV to JSONL using a prompt template
-llmflux convert csv --input data/papers.csv --output data/papers.jsonl --template "Summarize: {text}"
+csv_to_jsonl(
+    input_path="data/papers.csv",
+    output_path="data/papers.jsonl",
+    prompt_template="Summarize: {text}",
+)
 
 # Convert a directory of text files to JSONL
-llmflux convert dir --input data/documents/ --output data/docs.jsonl --recursive
+directory_to_jsonl(
+    input_path="data/documents/",
+    output_path="data/docs.jsonl",
+    recursive=True,
+)
 
 # Convert an existing JSON file (batch or messages format) to JSONL
-llmflux convert json --input data/prompts.json --output data/prompts.jsonl
+json_to_jsonl(
+    input_path="data/prompts.json",
+    output_path="data/prompts.jsonl",
+)
 ```
+
+See `examples/csv_jsonl_example.py`, `examples/directory_jsonl_example.py`, and
+`examples/json_jsonl_example.py` for complete, runnable versions of the above.
 
 ## Interactive Serving
 
