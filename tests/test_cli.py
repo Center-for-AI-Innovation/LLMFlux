@@ -12,7 +12,17 @@ from io import StringIO
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from llmflux.cli import main, _run_command, _benchmark_command, build_parser
+from llmflux.cli import (
+    main,
+    _run_command,
+    _benchmark_command,
+    _get_llmflux_version,
+    _parse_sbatch_args,
+    _render_table,
+    _pick,
+    _show_models_command,
+    build_parser,
+)
 from llmflux.slurm.runner import SlurmRunner
 from llmflux.core.config import Config, SlurmConfig, EngineConfig
 
@@ -1583,6 +1593,113 @@ class TestStatusServeView:
         assert "Output" in output
         assert "Endpoint" not in output
         assert "API Key" not in output
+class TestGetLlmfluxVersion:
+    def test_returns_string_when_installed(self):
+        with patch("llmflux.cli.pkg_version", return_value="1.2.3"):
+            assert _get_llmflux_version() == "1.2.3"
+
+    def test_returns_unknown_when_not_installed(self):
+        from importlib.metadata import PackageNotFoundError
+        with patch("llmflux.cli.pkg_version", side_effect=PackageNotFoundError):
+            assert _get_llmflux_version() == "unknown"
+
+
+class TestParseSbatchArgs:
+    def test_none_returns_none(self):
+        assert _parse_sbatch_args(None) is None
+
+    def test_empty_list_returns_none(self):
+        assert _parse_sbatch_args([]) is None
+
+    def test_valid_pairs_parsed(self):
+        result = _parse_sbatch_args(["account=proj", "partition=gpu"])
+        assert result == {"account": "proj", "partition": "gpu"}
+
+    def test_value_with_equals_sign(self):
+        result = _parse_sbatch_args(["constraint=gpu=a100"])
+        assert result == {"constraint": "gpu=a100"}
+
+    def test_invalid_entry_skipped_with_warning(self, capsys):
+        result = _parse_sbatch_args(["no-equals-here", "key=val"])
+        assert result == {"key": "val"}
+        captured = capsys.readouterr()
+        assert "Warning" in captured.out
+
+    def test_all_invalid_entries_returns_none(self, capsys):
+        result = _parse_sbatch_args(["no-equals"])
+        assert result is None
+
+
+class TestRenderTable:
+    def test_empty_rows_prints_no_jobs(self, capsys):
+        _render_table([], ["ID", "STATE"])
+        assert "No jobs found." in capsys.readouterr().out
+
+    def test_header_and_rows_printed(self, capsys):
+        _render_table([["123", "RUNNING"]], ["ID", "STATE"])
+        out = capsys.readouterr().out
+        assert "ID" in out
+        assert "STATE" in out
+        assert "123" in out
+        assert "RUNNING" in out
+
+    def test_columns_padded_to_longest_value(self, capsys):
+        _render_table([["1", "COMPLETED"], ["99999", "RUN"]], ["ID", "STATE"])
+        out = capsys.readouterr().out
+        lines = [l for l in out.splitlines() if l.strip()]
+        # Each row should be the same width
+        assert len(lines) == 3  # header + 2 rows
+
+
+class TestPick:
+    def test_returns_first_matching_key(self):
+        assert _pick({"a": "1", "b": "2"}, "a", "b") == "1"
+
+    def test_skips_none_values(self):
+        assert _pick({"a": None, "b": "found"}, "a", "b") == "found"
+
+    def test_skips_blank_string_values(self):
+        assert _pick({"a": "  ", "b": "val"}, "a", "b") == "val"
+
+    def test_returns_dash_dash_when_no_match(self):
+        assert _pick({}, "x", "y") == "--"
+
+    def test_single_key_found(self):
+        assert _pick({"job_id": "42"}, "job_id") == "42"
+
+
+class TestShowModelsCommand:
+    def test_returns_1_when_yaml_missing(self, capsys):
+        args = MagicMock()
+        with patch("llmflux.cli.Path.exists", return_value=False):
+            result = _show_models_command(args)
+        assert result == 1
+
+    def test_returns_0_with_empty_models(self, capsys):
+        args = MagicMock()
+        yaml_content = {"models": {}}
+        with patch("llmflux.cli.Path.exists", return_value=True):
+            with patch("builtins.open", mock_open()):
+                with patch("yaml.safe_load", return_value=yaml_content):
+                    result = _show_models_command(args)
+        assert result == 0
+
+    def test_prints_model_keys(self, capsys):
+        args = MagicMock()
+        yaml_content = {
+            "models": {
+                "llama3": {"name": "llama3:8b", "hf_name": "meta-llama/Llama-3"},
+                "mistral": {"name": "NA", "hf_name": "mistralai/Mistral"},
+            }
+        }
+        with patch("llmflux.cli.Path.exists", return_value=True):
+            with patch("builtins.open", mock_open()):
+                with patch("yaml.safe_load", return_value=yaml_content):
+                    result = _show_models_command(args)
+        assert result == 0
+        out = capsys.readouterr().out
+        assert "llama3" in out
+        assert "mistral" in out
 
 
 if __name__ == "__main__":

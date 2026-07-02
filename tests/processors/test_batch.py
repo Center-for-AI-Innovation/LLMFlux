@@ -293,5 +293,88 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertEqual(output["object"], "text_completion")
         self.assertEqual(output["choices"][0]["text"], "blue")
 
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_completion_endpoint_rejects_mismatched_model(self, mock_client_class):
+        """_get_validated_model raises on mismatch for /v1/completions requests."""
+        mock_client = MagicMock()
+        mock_client.chat.return_value = "blue"
+        mock_client_class.return_value = mock_client
+
+        completions_jsonl = self.test_dir / "completions_mismatch.jsonl"
+        entry = {
+            "custom_id": "completion-mismatch",
+            "method": "POST",
+            "url": "/v1/completions",
+            "body": {
+                "model": "different/model",
+                "prompt": "Complete this:",
+                "temperature": 0.7,
+                "max_tokens": 100,
+            },
+        }
+        with open(completions_jsonl, "w") as f:
+            f.write(json.dumps(entry) + "\n")
+
+        processor = BatchProcessor(model_config=self.model_config)
+        results = processor.run(completions_jsonl, self.output_path, "vllm")
+
+        self.assertEqual(len(results), 1)
+        self.assertIsNone(results[0].output)
+        self.assertIn("does not match requested model", results[0].error)
+        self.assertTrue(results[0].metadata.get("error"))
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_completion_endpoint_accepts_matching_model(self, mock_client_class):
+        """_get_validated_model accepts matching model field on /v1/completions."""
+        mock_client = MagicMock()
+        # Tuple form matches the (content, usage) contract client.chat() returns
+        # with return_usage=True, used once benchmarking's batch.py changes land.
+        mock_client.chat.return_value = ("blue", {})
+        mock_client_class.return_value = mock_client
+
+        completions_jsonl = self.test_dir / "completions_match.jsonl"
+        entry = {
+            "custom_id": "completion-match",
+            "method": "POST",
+            "url": "/v1/completions",
+            "body": {
+                "model": "test/test-model",
+                "prompt": "Complete this:",
+                "temperature": 0.7,
+                "max_tokens": 100,
+            },
+        }
+        with open(completions_jsonl, "w") as f:
+            f.write(json.dumps(entry) + "\n")
+
+        processor = BatchProcessor(model_config=self.model_config)
+        results = processor.run(completions_jsonl, self.output_path, "vllm")
+
+        self.assertEqual(len(results), 1)
+        self.assertIsNone(results[0].error)
+        self.assertIsNotNone(results[0].output)
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_get_validated_model_no_model_field_uses_config(self, mock_client_class):
+        """_get_validated_model returns the config model name when body has no model key."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        processor = BatchProcessor(model_config=self.model_config)
+        result = processor._get_validated_model({})
+        self.assertEqual(result, "test/test-model")
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_get_validated_model_mismatch_raises(self, mock_client_class):
+        """_get_validated_model raises ValueError when model field doesn't match config."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        processor = BatchProcessor(model_config=self.model_config)
+        with self.assertRaises(ValueError) as ctx:
+            processor._get_validated_model({"model": "wrong/model"})
+        self.assertIn("does not match requested model", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main() 

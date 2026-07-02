@@ -166,6 +166,132 @@ class TestSlurmRunner(unittest.TestCase):
         self.assertEqual(job_id, "12345")
 
     @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_run_multi_gpu_auto_sets_tensor_parallel(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """run() with gpus_per_node>1 auto-sets tensor-parallel-size in VLLM_ENGINE_ARGS."""
+        from llmflux.core.config import EngineConfig
+
+        multi_gpu_slurm = SlurmConfig(
+            partition="gpu",
+            nodes=1,
+            ntasks=1,
+            time="01:00:00",
+            mem="64G",
+            ntasks_per_node=1,
+            cpus_per_task=4,
+            gpus_per_node=4,
+            account="project1",
+        )
+        config = Config(
+            data_dir=str(self.data_dir),
+            models_dir=str(self.models_dir),
+            logs_dir=str(self.logs_dir),
+            containers_dir=str(self.containers_dir),
+            slurm=multi_gpu_slurm,
+            models=[self.model_config],
+        )
+        mock_config_manager.return_value.get_config.return_value = config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        engine_config = EngineConfig(engine="vllm", home=str(self.test_dir / ".vllm"))
+        runner = SlurmRunner(config=multi_gpu_slurm, engine_config=engine_config)
+        runner.run(
+            input_path=str(self.jsonl_path),
+            output_path=str(self.output_path),
+            model="test:7b",
+        )
+
+        _, call_kwargs = mock_run.call_args
+        env = call_kwargs["env"]
+        self.assertIn("VLLM_ENGINE_ARGS", env)
+        self.assertIn("--tensor-parallel-size", env["VLLM_ENGINE_ARGS"])
+        self.assertIn("4", env["VLLM_ENGINE_ARGS"])
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_run_multi_gpu_respects_user_tensor_parallel(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """run() with gpus_per_node>1 does not override user-supplied tensor-parallel-size."""
+        from llmflux.core.config import EngineConfig
+
+        multi_gpu_slurm = SlurmConfig(
+            partition="gpu",
+            nodes=1,
+            ntasks=1,
+            time="01:00:00",
+            mem="64G",
+            ntasks_per_node=1,
+            cpus_per_task=4,
+            gpus_per_node=4,
+            account="project1",
+        )
+        config = Config(
+            data_dir=str(self.data_dir),
+            models_dir=str(self.models_dir),
+            logs_dir=str(self.logs_dir),
+            containers_dir=str(self.containers_dir),
+            slurm=multi_gpu_slurm,
+            models=[self.model_config],
+        )
+        mock_config_manager.return_value.get_config.return_value = config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        engine_config = EngineConfig(engine="vllm", home=str(self.test_dir / ".vllm"))
+        runner = SlurmRunner(config=multi_gpu_slurm, engine_config=engine_config)
+        runner.run(
+            input_path=str(self.jsonl_path),
+            output_path=str(self.output_path),
+            model="test:7b",
+            vllm_engine_args={"tensor-parallel-size": 2},
+        )
+
+        _, call_kwargs = mock_run.call_args
+        env = call_kwargs["env"]
+        self.assertIn("VLLM_ENGINE_ARGS", env)
+        self.assertIn("--tensor-parallel-size", env["VLLM_ENGINE_ARGS"])
+        self.assertIn("2", env["VLLM_ENGINE_ARGS"])
+        self.assertNotIn("4", env["VLLM_ENGINE_ARGS"])
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_run_single_gpu_no_tensor_parallel(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """run() with gpus_per_node=1 does not inject tensor-parallel-size."""
+        from llmflux.core.config import EngineConfig
+
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        engine_config = EngineConfig(engine="vllm", home=str(self.test_dir / ".vllm"))
+        runner = SlurmRunner(config=self.slurm_config, engine_config=engine_config)
+        runner.run(
+            input_path=str(self.jsonl_path),
+            output_path=str(self.output_path),
+            model="test:7b",
+        )
+
+        _, call_kwargs = mock_run.call_args
+        env = call_kwargs["env"]
+        self.assertIn("VLLM_ENGINE_ARGS", env)
+        self.assertNotIn("tensor-parallel-size", env["VLLM_ENGINE_ARGS"])
+
+    @patch("llmflux.slurm.runner.ConfigManager")
     @patch("llmflux.core.config.Config.load_model_config")
     @patch("llmflux.slurm.runner.subprocess.run")
     def test_run_error_handling(self, mock_run, mock_load_model_config, mock_config_manager):
@@ -437,6 +563,251 @@ class TestSlurmRunnerServe(unittest.TestCase):
         result = runner.serve(email="user@example.com", model="test:7b")
 
         self.assertIsNone(result)
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_vllm_sets_engine_env_vars(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() with vllm engine sets VLLM_MODEL_NAME, VLLM_HOST, and VLLM_ENGINE_ARGS."""
+        from llmflux.core.config import EngineConfig
+
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 55555"
+
+        engine_config = EngineConfig(engine="vllm", home=str(self.test_dir / ".vllm"))
+        runner = SlurmRunner(config=self.slurm_config, engine_config=engine_config)
+        runner.serve(email="user@example.com", model="test:7b")
+
+        _, call_kwargs = mock_run.call_args
+        env = call_kwargs["env"]
+        self.assertIn("VLLM_MODEL_NAME", env)
+        self.assertEqual(env["VLLM_MODEL_NAME"], "test/test-model")
+        self.assertIn("VLLM_HOST", env)
+        self.assertIn("VLLM_ENGINE_ARGS", env)
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_multi_gpu_auto_sets_tensor_parallel(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() with gpus_per_node>1 auto-sets tensor-parallel-size in VLLM_ENGINE_ARGS."""
+        from llmflux.core.config import EngineConfig
+
+        multi_gpu_slurm = SlurmConfig(
+            partition="gpu",
+            nodes=1,
+            ntasks=1,
+            time="02:00:00",
+            mem="128G",
+            ntasks_per_node=1,
+            cpus_per_task=8,
+            gpus_per_node=2,
+            account="project1",
+        )
+        config = Config(
+            data_dir=str(self.test_dir / "data"),
+            models_dir=str(self.test_dir / "models"),
+            logs_dir=str(self.test_dir / "logs"),
+            containers_dir=str(self.test_dir / "containers"),
+            slurm=multi_gpu_slurm,
+            models=[self.model_config],
+        )
+        mock_config_manager.return_value.get_config.return_value = config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 55555"
+
+        engine_config = EngineConfig(engine="vllm", home=str(self.test_dir / ".vllm"))
+        runner = SlurmRunner(config=multi_gpu_slurm, engine_config=engine_config)
+        runner.serve(email="user@example.com", model="test:7b")
+
+        _, call_kwargs = mock_run.call_args
+        env = call_kwargs["env"]
+        self.assertIn("VLLM_ENGINE_ARGS", env)
+        self.assertIn("--tensor-parallel-size", env["VLLM_ENGINE_ARGS"])
+        self.assertIn("2", env["VLLM_ENGINE_ARGS"])
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_multi_gpu_respects_user_tensor_parallel(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() with gpus_per_node>1 does not override user-supplied tensor-parallel-size."""
+        from llmflux.core.config import EngineConfig
+
+        multi_gpu_slurm = SlurmConfig(
+            partition="gpu",
+            nodes=1,
+            ntasks=1,
+            time="02:00:00",
+            mem="128G",
+            ntasks_per_node=1,
+            cpus_per_task=8,
+            gpus_per_node=4,
+            account="project1",
+        )
+        config = Config(
+            data_dir=str(self.test_dir / "data"),
+            models_dir=str(self.test_dir / "models"),
+            logs_dir=str(self.test_dir / "logs"),
+            containers_dir=str(self.test_dir / "containers"),
+            slurm=multi_gpu_slurm,
+            models=[self.model_config],
+        )
+        mock_config_manager.return_value.get_config.return_value = config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 55555"
+
+        engine_config = EngineConfig(engine="vllm", home=str(self.test_dir / ".vllm"))
+        runner = SlurmRunner(config=multi_gpu_slurm, engine_config=engine_config)
+        runner.serve(
+            email="user@example.com",
+            model="test:7b",
+            vllm_engine_args={"tensor-parallel-size": 2},
+        )
+
+        _, call_kwargs = mock_run.call_args
+        env = call_kwargs["env"]
+        self.assertIn("VLLM_ENGINE_ARGS", env)
+        self.assertIn("--tensor-parallel-size", env["VLLM_ENGINE_ARGS"])
+        self.assertIn("2", env["VLLM_ENGINE_ARGS"])
+        self.assertNotIn("4", env["VLLM_ENGINE_ARGS"])
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_single_gpu_no_tensor_parallel(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """serve() with gpus_per_node=1 does not inject tensor-parallel-size."""
+        from llmflux.core.config import EngineConfig
+
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 55555"
+
+        engine_config = EngineConfig(engine="vllm", home=str(self.test_dir / ".vllm"))
+        runner = SlurmRunner(config=self.slurm_config, engine_config=engine_config)
+        runner.serve(email="user@example.com", model="test:7b")
+
+        _, call_kwargs = mock_run.call_args
+        env = call_kwargs["env"]
+        self.assertIn("VLLM_ENGINE_ARGS", env)
+        self.assertNotIn("tensor-parallel-size", env["VLLM_ENGINE_ARGS"])
+
+
+class TestLoadVllmEngineArgs(unittest.TestCase):
+    def _make_runner(self):
+        with patch("llmflux.slurm.runner.ConfigManager") as mock_cm:
+            mock_cm.return_value.get_config.return_value = MagicMock()
+            return SlurmRunner()
+
+    def test_none_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args(None, "test"), {})
+
+    def test_dict_returned_as_is(self):
+        runner = self._make_runner()
+        d = {"max_model_len": 4096}
+        self.assertEqual(runner._load_vllm_engine_args(d, "test"), d)
+
+    def test_empty_string_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args("", "test"), {})
+        self.assertEqual(runner._load_vllm_engine_args("   ", "test"), {})
+
+    def test_valid_json_object_string(self):
+        runner = self._make_runner()
+        result = runner._load_vllm_engine_args('{"max_model_len": 4096}', "test")
+        self.assertEqual(result, {"max_model_len": 4096})
+
+    def test_invalid_json_string_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args("{bad json}", "test"), {})
+
+    def test_json_array_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args("[1, 2, 3]", "test"), {})
+
+    def test_non_string_non_dict_returns_empty(self):
+        runner = self._make_runner()
+        self.assertEqual(runner._load_vllm_engine_args(42, "test"), {})
+        self.assertEqual(runner._load_vllm_engine_args(["a"], "test"), {})
+
+
+class TestBuildVllmEngineArgs(unittest.TestCase):
+    def _make_runner(self):
+        with patch("llmflux.slurm.runner.ConfigManager") as mock_cm:
+            mock_cm.return_value.get_config.return_value = MagicMock()
+            return SlurmRunner()
+
+    def test_bool_true_emits_flag_only(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"enable-prefix-caching": True})
+        self.assertIn("--enable-prefix-caching", result)
+        # No value after the flag
+        parts = result.split()
+        idx = parts.index("--enable-prefix-caching")
+        self.assertEqual(idx, len(parts) - 1)
+
+    def test_bool_false_omits_flag(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"enable-prefix-caching": False})
+        self.assertNotIn("enable-prefix-caching", result)
+
+    def test_none_value_omits_key(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"max_model_len": None})
+        self.assertEqual(result.strip(), "")
+
+    def test_int_value(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"max_model_len": 4096})
+        self.assertIn("--max_model_len", result)
+        self.assertIn("4096", result)
+
+    def test_key_already_prefixed(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"--max_model_len": 512})
+        parts = result.split()
+        flags = [p for p in parts if p.startswith("--")]
+        # Should appear exactly once, not doubled
+        self.assertEqual(flags.count("--max_model_len"), 1)
+
+    def test_unsupported_type_omitted(self):
+        runner = self._make_runner()
+        result = runner._build_vllm_engine_args({"bad_arg": [1, 2, 3]})
+        self.assertEqual(result.strip(), "")
+
+
+class TestBuildJobName(unittest.TestCase):
+    def _make_runner(self):
+        with patch("llmflux.slurm.runner.ConfigManager") as mock_cm:
+            mock_cm.return_value.get_config.return_value = MagicMock()
+            return SlurmRunner()
+
+    def test_special_chars_replaced(self):
+        runner = self._make_runner()
+        name = runner._build_job_name("meta-llama/Llama-3.2-3B")
+        self.assertRegex(name, r"^llmflux_[a-zA-Z0-9_]+_")
+
+    def test_empty_identifier_uses_fallback(self):
+        runner = self._make_runner()
+        name = runner._build_job_name("---")
+        self.assertIn("llmflux_model_", name)
+
+    def test_name_truncated_to_120(self):
+        runner = self._make_runner()
+        name = runner._build_job_name("a" * 200)
+        self.assertLessEqual(len(name), 120)
 
 
 if __name__ == "__main__":
