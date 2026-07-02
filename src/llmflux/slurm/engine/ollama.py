@@ -45,26 +45,16 @@ def create_ollama_batch_script(
             f"#SBATCH --mail-user={email}",
         ])
 
+    # NOTE: Do NOT `module purge` (or load host gcc/cuda) here. The batch
+    # processor further down runs on the *host* and does `import llmflux`, which
+    # resolves via the environment that `module load llmflux` put on PATH.
+    # Purging it left `python3` as a base interpreter without llmflux, so the
+    # processor died with `ModuleNotFoundError: No module named 'llmflux'` while
+    # the ollama server (in the container) was otherwise healthy. The container
+    # ships its own CUDA, so no host toolchain modules are needed here, and the
+    # hardcoded gcc/cuda module names matched nothing on our clusters anyway.
+    # vllm.py never purged, which is why the vLLM engine was unaffected.
     job_script.extend([
-        "",
-        "# Load required modules",
-        "module purge",
-        "",
-        "# Try loading GCC",
-        "for gcc_version in '11.4.0' '11.3.0'; do",
-        "    if module load gcc/$gcc_version &>/dev/null; then",
-        "        echo \"Loaded gcc/$gcc_version\"",
-        "        break",
-        "    fi",
-        "done",
-        "",
-        "# Try loading CUDA",
-        "for cuda_version in '12.2.1' '11.7.0'; do",
-        "    if module load cuda/$cuda_version &>/dev/null; then",
-        "        echo \"Loaded cuda/$cuda_version\"",
-        "        break",
-        "    fi",
-        "done",
         "",
         "# Create all necessary directories",
         "mkdir -p $DATA_INPUT_DIR $DATA_OUTPUT_DIR $MODELS_DIR $LOGS_DIR $CONTAINERS_DIR $APPTAINER_TMPDIR $APPTAINER_CACHEDIR",
