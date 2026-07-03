@@ -128,6 +128,21 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     name = args.name or f"benchmark_{args.model}"
     num_prompts = getattr(args, "num_prompts", 50)
 
+    # Collect SLURM config from CLI args (filter out None values)
+    config = Config()
+
+    # Resolve the models.yaml key to the name the target engine actually expects
+    # (e.g. the HuggingFace repo for vLLM) so generated prompts' "model" field
+    # matches what BatchProcessor._get_validated_model will check it against.
+    model_cfg = config.load_model_config(
+        args.model, custom_config_path=getattr(args, "custom_config_path", None)
+    )
+    if model_cfg is None:
+        print(f"Error: model '{args.model}' not found. Check available models in models.yaml.", file=sys.stderr)
+        return 1
+    model_cfg.engine = args.engine
+    resolved_model_name = model_cfg.get_model_name_for_engine()
+
     if args.input:
         input_path = Path(args.input)
         # Read number of prompts from the input file
@@ -140,8 +155,8 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         temperature = 0.7 if args.temperature is None else args.temperature
         max_tokens = 500 if args.max_tokens is None else args.max_tokens
 
-        input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens, model=args.model)
-        
+        input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens, model=resolved_model_name)
+
     # Set output path
     if args.output:
         output_path = args.output
@@ -149,8 +164,6 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         output_path = f"results/benchmarks/{name}_results.json"
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-    # Collect SLURM config from CLI args (filter out None values)
-    config = Config()
     if not getattr(args, "rebuild", False) and not _ensure_container(config):
         return 1
     slurm_overrides = {
