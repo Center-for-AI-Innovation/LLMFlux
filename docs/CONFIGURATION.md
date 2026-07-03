@@ -56,8 +56,6 @@ You can configure LLMFlux in multiple ways, depending on your preference and nee
 
 For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts.
 
-For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts.
-
 ### Method 1: Environment Variables (.env file)
 
 The simplest way to configure LLMFlux is by creating a `.env` file in your project root:

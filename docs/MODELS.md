@@ -29,6 +29,15 @@ Some example model keys are:
 In addition, if a matching model on HuggingFace was identified and the engine choice is vLLM, then the model also includes an HF Name.
 This is the actual model that vLLM will attempt to use.
 
+## Using a Model Not in the List
+
+If the model you want is not listed below, you can add it via a custom YAML file without modifying the built-in templates. See the [Custom Model Configuration](#custom-model-configuration) section at the bottom of this page for a step-by-step example. The short version:
+
+1. Create a YAML file (e.g. `custom-models.yaml`) with your model's HuggingFace repo name and parameters.
+2. Pass `--custom-config-path custom-models.yaml` to `llmflux run` (or the equivalent `custom_config_path=` argument in Python).
+
+Custom configs are supported by the **vLLM engine only**.
+
 ## Supported Models
 
 ### Llama 3.2
