@@ -211,9 +211,10 @@ class TestCLIParser:
 class TestRunCommand:
     """Test the run command functionality."""
     
+    @patch('llmflux.cli._ensure_container', return_value=True)
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
-    def test_run_command_basic(self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl):
+    def test_run_command_basic(self, mock_config_class, mock_runner_class, mock_ensure_container, temp_dir, sample_jsonl):
         """Test basic run command execution."""
         # Setup mocks
         mock_config = MagicMock()
@@ -364,19 +365,20 @@ class TestRunCommand:
 class TestBenchmarkCommand:
     """Test the benchmark command functionality."""
     
-    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
+    @patch('llmflux.cli._ensure_container', return_value=True)
     @patch('llmflux.cli.create_test_prompts_file')
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_benchmark_command_generate_prompts(
         self, mock_config_class, mock_runner_class,
-        mock_create_prompts, mock_wait, temp_dir
+        mock_create_prompts, mock_ensure_container, temp_dir
     ):
         """Test benchmark command with prompt generation."""
         # Setup mocks
         mock_config = MagicMock()
         mock_slurm_config = MagicMock()
         mock_config.get_slurm_config.return_value = mock_slurm_config
+        mock_config.load_model_config.return_value.get_model_name_for_engine.return_value = "Llama-3.2-3B-Instruct"
         mock_config_class.return_value = mock_config
 
         mock_runner = MagicMock()
@@ -407,19 +409,96 @@ class TestBenchmarkCommand:
         args.debug = False
 
         # Run command
-        with patch('builtins.print'):
+        with patch('builtins.print'), patch('pathlib.Path.write_text') as mock_write_text:
             result = _benchmark_command(args)
 
         # Verify
         assert result == 0
         mock_create_prompts.assert_called_once_with(num_prompts=50, temperature=0.7, max_tokens=500, model="Llama-3.2-3B-Instruct")
         mock_runner.run.assert_called_once()
-    
-    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
+        mock_write_text.assert_called_once()
+        submitted_summary = json.loads(mock_write_text.call_args[0][0])
+        assert submitted_summary["status"] == "submitted"
+        assert submitted_summary["job_id"] == "12345"
+        assert submitted_summary["num_prompts"] == 50
+        assert submitted_summary["output_path"] == "results/benchmarks/benchmark_Llama-3.2-3B-Instruct_results.json"
+
+    @patch('llmflux.cli._ensure_container', return_value=True)
+    @patch('llmflux.cli.create_test_prompts_file')
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
+    def test_benchmark_command_uses_resolved_model_name_for_prompts(
+        self, mock_config_class, mock_runner_class,
+        mock_create_prompts, mock_ensure_container, temp_dir
+    ):
+        """Regression test for #115: generated prompts must embed the engine-resolved
+        model name (e.g. the HF repo for vLLM), not the raw models.yaml key, since
+        BatchProcessor._get_validated_model checks the JSONL "model" field against
+        the resolved name and rejects a mismatch on every single request."""
+        mock_config = MagicMock()
+        mock_slurm_config = MagicMock()
+        mock_config.get_slurm_config.return_value = mock_slurm_config
+        mock_config.load_model_config.return_value.get_model_name_for_engine.return_value = "Qwen/Qwen2.5-7B-Instruct"
+        mock_config_class.return_value = mock_config
+
+        mock_runner = MagicMock()
+        mock_runner.run.return_value = "12345"
+        mock_runner_class.return_value = mock_runner
+
+        mock_create_prompts.return_value = temp_dir / "prompts.jsonl"
+
+        args = MagicMock()
+        args.model = "Qwen2.5-7B-Instruct"
+        args.engine = "vllm"
+        args.name = None
+        args.num_prompts = 50
+        args.input = None
+        args.output = None
+        args.batch_size = 4
+        args.max_tokens = None
+        args.temperature = None
+        args.account = None
+        args.partition = None
+        args.nodes = None
+        args.gpus_per_node = None
+        args.time = None
+        args.mem = None
+        args.cpus_per_task = None
+        args.sbatch_arg = None
+        args.rebuild = False
+        args.debug = False
+        args.custom_config_path = None
+
+        with patch('builtins.print'), patch('pathlib.Path.write_text'):
+            result = _benchmark_command(args)
+
+        assert result == 0
+        mock_config.load_model_config.assert_called_once_with("Qwen2.5-7B-Instruct", custom_config_path=None)
+        assert mock_config.load_model_config.return_value.engine == "vllm"
+        mock_create_prompts.assert_called_once_with(
+            num_prompts=50, temperature=0.7, max_tokens=500, model="Qwen/Qwen2.5-7B-Instruct"
+        )
+
+    @patch('llmflux.cli.Config')
+    def test_benchmark_command_unknown_model_errors(self, mock_config_class):
+        """Unknown --model fails fast instead of submitting a job doomed to reject every request."""
+        mock_config = MagicMock()
+        mock_config.load_model_config.return_value = None
+        mock_config_class.return_value = mock_config
+
+        args = MagicMock()
+        args.model = "does-not-exist"
+        args.custom_config_path = None
+
+        with patch('builtins.print'):
+            result = _benchmark_command(args)
+
+        assert result == 1
+
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_benchmark_command_with_existing_input(
-        self, mock_config_class, mock_runner_class, mock_wait, temp_dir, sample_jsonl
+        self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl
     ):
         """Test benchmark command with existing input file."""
         # Setup mocks
@@ -454,7 +533,7 @@ class TestBenchmarkCommand:
         args.debug = True
         
         # Run command
-        with patch('builtins.print'):
+        with patch('builtins.print'), patch('pathlib.Path.write_text') as mock_write_text:
             result = _benchmark_command(args)
         
         # Verify
@@ -466,6 +545,12 @@ class TestBenchmarkCommand:
         assert call_kwargs["batch_size"] == 8
         assert call_kwargs["rebuild"] is True
         assert call_kwargs["debug"] is True
+        mock_write_text.assert_called_once()
+        submitted_summary = json.loads(mock_write_text.call_args[0][0])
+        assert submitted_summary["status"] == "submitted"
+        assert submitted_summary["job_id"] == "67890"
+        assert submitted_summary["num_prompts"] == 2
+        assert submitted_summary["output_path"] == str(temp_dir / "benchmark_results.json")
 
 
 class TestMainFunction:
@@ -1188,10 +1273,11 @@ class TestEnvironmentVariablePrefixes:
 class TestCommandLineIntegration:
     """Integration tests for CLI commands."""
     
+    @patch('llmflux.cli._ensure_container', return_value=True)
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_cli_run_integration(
-        self, mock_config_class, mock_runner_class, temp_dir, sample_jsonl
+        self, mock_config_class, mock_runner_class, mock_ensure_container, temp_dir, sample_jsonl
     ):
         """Integration test for full CLI run command."""
         # Setup mocks
@@ -1225,19 +1311,20 @@ class TestCommandLineIntegration:
         assert call_kwargs["batch_size"] == 8
         assert call_kwargs["input_path"] == str(sample_jsonl)
     
-    @patch('llmflux.cli._wait_for_slurm_elapsed_seconds', return_value=None)
+    @patch('llmflux.cli._ensure_container', return_value=True)
     @patch('llmflux.cli.create_test_prompts_file')
     @patch('llmflux.cli.SlurmRunner')
     @patch('llmflux.cli.Config')
     def test_cli_benchmark_integration(
         self, mock_config_class, mock_runner_class,
-        mock_create_prompts, mock_wait
+        mock_create_prompts, mock_ensure_container
     ):
         """Integration test for full CLI benchmark command."""
         # Setup mocks
         mock_config = MagicMock()
         mock_slurm_config = MagicMock()
         mock_config.get_slurm_config.return_value = mock_slurm_config
+        mock_config.load_model_config.return_value.get_model_name_for_engine.return_value = "Llama-3.2-3B-Instruct"
         mock_config_class.return_value = mock_config
 
         mock_runner = MagicMock()

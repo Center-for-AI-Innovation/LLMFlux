@@ -110,7 +110,7 @@ class TestBatchProcessor(unittest.TestCase):
         """Test processing a batch of items."""
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = "This is a test response."
+        mock_client.chat.return_value = ("This is a test response.", {})
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
@@ -135,14 +135,15 @@ class TestBatchProcessor(unittest.TestCase):
             temperature=0.7,
             max_tokens=500,
             top_p=0.9,
-            stop=None
+            stop=None,
+            return_usage=True
         )
 
     @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch_accepts_matching_jsonl_model(self, mock_client_class):
         """Model in JSONL body is accepted when it matches requested llmflux model."""
         mock_client = MagicMock()
-        mock_client.chat.return_value = "This is a test response."
+        mock_client.chat.return_value = ("This is a test response.", {})
         mock_client_class.return_value = mock_client
 
         matching_entry = {
@@ -169,13 +170,14 @@ class TestBatchProcessor(unittest.TestCase):
             max_tokens=500,
             top_p=0.9,
             stop=None,
+            return_usage=True,
         )
 
     @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch_rejects_mismatched_jsonl_model(self, mock_client_class):
         """Model mismatch between JSONL body and requested llmflux model returns error."""
         mock_client = MagicMock()
-        mock_client.chat.return_value = "This is a test response."
+        mock_client.chat.return_value = ("This is a test response.", {})
         mock_client_class.return_value = mock_client
 
         mismatch_entry = {
@@ -203,28 +205,40 @@ class TestBatchProcessor(unittest.TestCase):
         """Test running the processor with a JSONL file."""
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = "This is a test response."
+        mock_client.chat.return_value = (
+            "This is a test response.",
+            {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8},
+        )
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
 
         # Run processor
         results = processor.run(self.jsonl_path, self.output_path, "vllm")
-        
+
         # Check results
         self.assertEqual(len(results), 2)
-        
+        self.assertIsNone(results[0].error)
+        self.assertIsNone(results[1].error)
+
         # Check that output file was created
         self.assertTrue(os.path.exists(self.output_path))
-        
+
         # Read output file
         with open(self.output_path, "r") as f:
             output_data = json.load(f)
-        
-        # Check output data
-        self.assertEqual(len(output_data), 2)
-        self.assertEqual(output_data[0]["input"]["custom_id"], "test-1")
-        self.assertEqual(output_data[1]["input"]["custom_id"], "test-2")
+
+        # Output is now {"results": [...], "vllm_metrics": {...}}
+        rows = output_data["results"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["input"]["custom_id"], "test-1")
+        self.assertEqual(rows[1]["input"]["custom_id"], "test-2")
+        self.assertIn("run_metrics", output_data)
+        self.assertIn("elapsed_sec", output_data["run_metrics"])
+        self.assertIn("request_latency_p95_ms", output_data["run_metrics"])
+        self.assertIn("error_rate_by_type_pct", output_data["run_metrics"])
+        self.assertIn("retry_rate_pct", output_data["run_metrics"])
+        self.assertEqual(output_data["run_metrics"]["output_tokens_avg"], 5)
     
     @patch('llmflux.processors.batch.LLMClient')
     def test_error_handling(self, mock_client_class):
@@ -246,6 +260,39 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertIsNone(results[0].output)
         self.assertEqual(results[0].error, "Test error")
         self.assertTrue(results[0].metadata.get("error"))
+        self.assertEqual(results[0].metadata.get("retry_count"), 3)
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_compute_run_metrics_includes_retry_and_error_breakdown(self, mock_client_class):
+        """Test aggregate run metrics include retry and error taxonomy fields."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+
+        processor = BatchProcessor(model_config=self.model_config)
+        results = [
+            OutputResult(
+                input={"custom_id": "ok-1"},
+                output={"usage": {"completion_tokens": 12}},
+                metadata={"request_latency_ms": 10.0, "retry_count": 1},
+            ),
+            OutputResult(
+                input={"custom_id": "ok-2"},
+                output={"usage": {"completion_tokens": 8}},
+                metadata={"request_latency_ms": 20.0, "retry_count": 0},
+            ),
+            OutputResult(
+                input={"custom_id": "bad-1"},
+                output=None,
+                error="timeout exceeded",
+                metadata={"request_latency_ms": 30.0, "retry_count": 2},
+            ),
+        ]
+
+        metrics = processor._compute_run_metrics(results, elapsed_sec=2.0)
+        self.assertEqual(metrics["retry_count_total"], 3)
+        self.assertAlmostEqual(metrics["retry_rate_pct"], 66.67, places=2)
+        self.assertEqual(metrics["error_rate_by_type_pct"]["timeout"], 33.33)
+        self.assertEqual(metrics["output_tokens_avg"], 10)
     
     @patch('llmflux.processors.batch.LLMClient')
     def test_completion_endpoint(self, mock_client_class):
@@ -268,7 +315,7 @@ class TestBatchProcessor(unittest.TestCase):
         
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = "blue"
+        mock_client.chat.return_value = ("blue", {})
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
@@ -284,7 +331,8 @@ class TestBatchProcessor(unittest.TestCase):
             temperature=0.7,
             max_tokens=500,
             top_p=0.9,
-            stop=None
+            stop=None,
+            return_usage=True
         )
         
         # Check output format

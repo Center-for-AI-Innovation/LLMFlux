@@ -190,23 +190,27 @@ class LLMClient:
         model: str,
         engine: str,
         messages: List[Dict[str, Any]],
+        return_usage: bool = False,
         **kwargs
-    ) -> str:
+    ):
         """Generate response using OpenAI-compatible chat completions endpoint.
-        
+
         Args:
             model: Name of the model to use
             messages: Array of messages in OpenAI format
             engine: Either 'ollama' or 'vllm'
+            return_usage: If True, return a (content, usage_dict) tuple instead
+                of a bare string. usage_dict is the OpenAI-style "usage" object
+                from the response (empty dict if the server didn't provide one).
             **kwargs: Additional model parameters:
                 - temperature: float
                 - top_p: float
                 - max_tokens: int
                 - stop: List[str]
-            
+
         Returns:
-            Model response
-            
+            Model response text, or (text, usage_dict) if return_usage is True
+
         Raises:
             requests.exceptions.RequestException: If API call fails
             ValueError: If model is not available
@@ -245,20 +249,23 @@ class LLMClient:
             response_data = response.json()
             
             # Extract the content from the response
+            usage = response_data.get('usage') or {}
             if (
-                'choices' in response_data and 
+                'choices' in response_data and
                 len(response_data['choices']) > 0 and
                 'message' in response_data['choices'][0] and
                 'content' in response_data['choices'][0]['message']
             ):
-                return response_data['choices'][0]['message']['content']
+                content = response_data['choices'][0]['message']['content']
             else:
                 logger.warning(f"Unexpected response format: {response_data}")
-                return ""
-            
+                content = ""
+
+            return (content, usage) if return_usage else content
+
         except requests.exceptions.RequestException as e:
             logger.error(f"Error generating response: {e}")
             raise
         except ValueError as e:
             logger.error(f"Error decoding response: {e}")
-            return response.text 
+            return (response.text, {}) if return_usage else response.text

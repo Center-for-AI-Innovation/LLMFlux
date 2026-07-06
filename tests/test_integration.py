@@ -101,7 +101,7 @@ class TestBatchProcessorPipeline(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertTrue(self.output.exists())
-        saved = json.loads(self.output.read_text())
+        saved = json.loads(self.output.read_text())["results"]
         self.assertEqual(len(saved), 1)
         self.assertEqual(saved[0]["input"]["custom_id"], "req-1")
         self.assertIn("Hi there!", str(saved[0]["output"]))
@@ -148,7 +148,7 @@ class TestBatchProcessorPipeline(unittest.TestCase):
         entries = [dict(CHAT_ENTRY, custom_id="alpha"), dict(CHAT_ENTRY, custom_id="beta")]
         self._run(mock_cls, entries, response="response")
 
-        saved = json.loads(self.output.read_text())
+        saved = json.loads(self.output.read_text())["results"]
         ids = [r["input"]["custom_id"] for r in saved]
         self.assertEqual(ids, ["alpha", "beta"])
 
@@ -480,7 +480,7 @@ class TestJsonToJsonlToBatchProcessorPipeline(unittest.TestCase):
         results = processor.run(str(jsonl_path), output_path, "vllm")
 
         self.assertEqual(len(results), 3)
-        saved = json.loads(Path(output_path).read_text())
+        saved = json.loads(Path(output_path).read_text())["results"]
         self.assertEqual(len(saved), 3)
 
     @patch("llmflux.processors.batch.LLMClient")

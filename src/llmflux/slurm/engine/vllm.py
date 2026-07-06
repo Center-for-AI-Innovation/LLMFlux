@@ -79,6 +79,8 @@ def create_vllm_batch_script(
         "    export APPTAINERENV_HF_TOKEN=\"$HF_TOKEN\"",
         "fi",
         "",
+        "# Pass SLURM-allocated GPU(s) into the container (--cleanenv strips CUDA_VISIBLE_DEVICES)",
+        "export APPTAINERENV_CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}",
         *([
             "# Find a consecutive free port on this compute node",
             "find_free_port() {",

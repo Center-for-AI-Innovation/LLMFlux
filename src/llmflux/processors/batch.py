@@ -7,6 +7,7 @@ import time
 import datetime
 import uuid
 import json
+import statistics
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Generator, Union
 import tempfile
@@ -15,6 +16,7 @@ from ..core.client import LLMClient
 from ..core.config import ModelConfig
 from ..io.base import OutputHandler, OutputResult
 from ..converters.utils import read_jsonl
+from ..benchmark_utils import VllmMetricsScraper, GpuUtilScraper
 
 # Configure logging
 logging.basicConfig(
@@ -54,6 +56,8 @@ class BatchProcessor:
         self.retry_delay = retry_delay
         self.output_handler = output_handler
         self.client = None
+        self._vllm_metrics: Dict[str, Any] = {}
+        self._gpu_metrics: Dict[str, Any] = {}
         self.temp_dir = temp_dir or tempfile.gettempdir()
         self.temp_file = os.path.join(self.temp_dir, f"llmflux_{int(time.time())}.jsonl")
         
@@ -71,6 +75,107 @@ class BatchProcessor:
             )
 
         return jsonl_model or requested_model
+
+    @staticmethod
+    def _percentile(values: List[float], pct: float) -> Optional[float]:
+        """Return percentile using linear interpolation."""
+        if not values:
+            return None
+        sorted_values = sorted(values)
+        if len(sorted_values) == 1:
+            return float(sorted_values[0])
+        rank = (len(sorted_values) - 1) * (pct / 100.0)
+        low = int(rank)
+        high = min(low + 1, len(sorted_values) - 1)
+        weight = rank - low
+        return float(sorted_values[low] + (sorted_values[high] - sorted_values[low]) * weight)
+
+    def _categorize_error(self, message: str) -> str:
+        """Map an error message to a coarse error category."""
+        text = (message or "").lower()
+        if "timeout" in text or "timed out" in text:
+            return "timeout"
+        if "429" in text or "rate limit" in text:
+            return "rate_limit"
+        if any(code in text for code in ["500", "502", "503", "504"]) or "server" in text:
+            return "server"
+        if any(term in text for term in ["valueerror", "validation", "invalid", "unsupported url"]):
+            return "validation"
+        return "other"
+
+    def _extract_token_count(self, item: Dict[str, Any]) -> int:
+        """Best-effort token estimate from OpenAI-style usage payload."""
+        usage = item.get("usage") or {}
+        value = usage.get("completion_tokens")
+        if isinstance(value, (int, float)):
+            return int(value)
+        return 0
+
+    def _compute_run_metrics(self, results: List[OutputResult], elapsed_sec: float) -> Dict[str, Any]:
+        """Compute aggregate run metrics from output rows metadata."""
+        total = len(results)
+        successful = [r for r in results if not r.error]
+        failed = [r for r in results if r.error]
+
+        latencies_ms = [
+            float(r.metadata.get("request_latency_ms"))
+            for r in results
+            if isinstance(r.metadata.get("request_latency_ms"), (int, float))
+        ]
+        retries = [
+            int(r.metadata.get("retry_count", 0))
+            for r in results
+            if isinstance(r.metadata.get("retry_count"), int)
+        ]
+        retried_results = [
+            r for r in results
+            if isinstance(r.metadata.get("retry_count"), int) and r.metadata.get("retry_count", 0) > 0
+        ]
+
+        error_counts = {
+            "timeout": 0,
+            "rate_limit": 0,
+            "server": 0,
+            "validation": 0,
+            "other": 0,
+        }
+        for row in failed:
+            category = self._categorize_error(row.error or "")
+            error_counts[category] = error_counts.get(category, 0) + 1
+
+        error_rates_pct = {
+            key: round((count * 100.0 / total), 2) if total else 0.0
+            for key, count in error_counts.items()
+        }
+
+        output_tokens = []
+        for row in successful:
+            if isinstance(row.output, dict):
+                output_tokens.append(self._extract_token_count(row.output))
+            else:
+                output_tokens.append(0)
+
+        retry_count_total = sum(retries)
+        retried_requests = sum(1 for count in retries if count > 0)
+
+        return {
+            "elapsed_sec": round(elapsed_sec, 3),
+            "successful_req_per_sec": round(len(successful) / elapsed_sec, 3) if elapsed_sec else None,
+            "request_latency_p50_ms": round(self._percentile(latencies_ms, 50), 2) if latencies_ms else None,
+            "request_latency_p95_ms": round(self._percentile(latencies_ms, 95), 2) if latencies_ms else None,
+            "request_latency_p99_ms": round(self._percentile(latencies_ms, 99), 2) if latencies_ms else None,
+            "retry_count_total": retry_count_total,
+            "retry_rate_pct": round((retried_requests * 100.0 / total), 2) if total else 0.0,
+            "avg_retries_per_request": round(retry_count_total / total, 3) if total else 0.0,
+            "retry_success_rate_pct": (
+                round(sum(1 for r in retried_results if not r.error) * 100.0 / len(retried_results), 2)
+                if retried_results else None
+            ),
+            "error_rate_by_type_pct": error_rates_pct,
+            "output_tokens_avg": round(statistics.mean(output_tokens), 2) if output_tokens else 0.0,
+            "output_tokens_p95": round(self._percentile(output_tokens, 95), 2) if output_tokens else 0.0,
+            "successful_tok_per_sec": round(sum(output_tokens) / elapsed_sec, 1) if elapsed_sec else None,
+        }
     
     def setup(self, engine: str = "ollama"):
         """Initialize LLM client and warm up model."""
@@ -116,50 +221,72 @@ class BatchProcessor:
         results = []
         
         for item in batch:
-            try:
-                # Extract request details from JSONL item
-                custom_id = item.get('custom_id', str(uuid.uuid4()))
-                method = item.get('method', 'POST')
-                url = item.get('url', '/v1/chat/completions')
-                body = item.get('body', {})
-                metadata = item.get('metadata', {})
-                
-                # Process with client based on URL endpoint
-                if url == '/v1/chat/completions':
-                    response = self._process_chat_completion(engine, body)
-                elif url == '/v1/completions':
-                    response = self._process_completion(engine, body)
-                else:
-                    raise ValueError(f"Unsupported URL: {url}")
-                
-                # Build result
-                result = OutputResult(
-                    input=item,
-                    output=response,
-                    metadata={
-                        "model": self.model_config.get_model_name_for_engine(),
-                        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
-                        **metadata
-                    }
-                )
-                results.append(result)
-                logger.debug(f"Processed item with ID: {custom_id}")
+            custom_id = item.get('custom_id', str(uuid.uuid4()))
+            method = item.get('method', 'POST')
+            url = item.get('url', '/v1/chat/completions')
+            body = item.get('body', {})
+            metadata = item.get('metadata', {})
+            request_start = time.perf_counter()
+            retries_used = 0
 
-            except Exception as e:
-                logger.error(f"Error processing item: {e}")
-                # Add error result
-                result = OutputResult(
-                    input=item,
-                    output=None,
-                    error=str(e),
-                    metadata={
-                        "model": self.model_config.get_model_name_for_engine(),
-                        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
-                        "error": True,
-                        **item.get("metadata", {})
-                    }
-                )
-                results.append(result)
+            for attempt in range(self.max_retries + 1):
+                try:
+                    # Process with client based on URL endpoint
+                    if url == '/v1/chat/completions':
+                        response = self._process_chat_completion(engine, body)
+                    elif url == '/v1/completions':
+                        response = self._process_completion(engine, body)
+                    else:
+                        raise ValueError(f"Unsupported URL: {url}")
+
+                    request_latency_ms = (time.perf_counter() - request_start) * 1000.0
+                    # Build result
+                    result = OutputResult(
+                        input=item,
+                        output=response,
+                        metadata={
+                            "model": self.model_config.get_model_name_for_engine(),
+                            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+                            "request_latency_ms": round(request_latency_ms, 2),
+                            "retry_count": retries_used,
+                            "method": method,
+                            "url": url,
+                            **metadata
+                        }
+                    )
+                    results.append(result)
+                    logger.debug(f"Processed item with ID: {custom_id}")
+                    break
+
+                except Exception as e:
+                    if attempt < self.max_retries:
+                        retries_used += 1
+                        logger.warning(
+                            f"Error processing item {custom_id} (attempt {attempt + 1}/{self.max_retries + 1}): {e}"
+                        )
+                        time.sleep(self.retry_delay)
+                        continue
+
+                    logger.error(f"Error processing item: {e}")
+                    # Add error result
+                    request_latency_ms = (time.perf_counter() - request_start) * 1000.0
+                    result = OutputResult(
+                        input=item,
+                        output=None,
+                        error=str(e),
+                        metadata={
+                            "model": self.model_config.get_model_name_for_engine(),
+                            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+                            "error": True,
+                            "request_latency_ms": round(request_latency_ms, 2),
+                            "retry_count": retries_used,
+                            "method": method,
+                            "url": url,
+                            **item.get("metadata", {})
+                        }
+                    )
+                    results.append(result)
+                    break
         
         return results
     
@@ -181,18 +308,19 @@ class BatchProcessor:
         max_tokens = body.get('max_tokens', self.model_config.parameters.max_tokens)
         top_p = body.get('top_p', self.model_config.parameters.top_p)
         stop = body.get('stop', self.model_config.parameters.stop_sequences)
-        
+
         # Generate response
-        response = self.client.chat(
+        response, usage = self.client.chat(
             model=model,
             engine=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             top_p=top_p,
-            stop=stop
+            stop=stop,
+            return_usage=True
         )
-        
+
         # Format in OpenAI-compatible format
         return {
             "id": str(uuid.uuid4()),
@@ -208,7 +336,8 @@ class BatchProcessor:
                     },
                     "finish_reason": "stop"
                 }
-            ]
+            ],
+            "usage": usage
         }
     
     def _process_completion(self, engine: str, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -234,16 +363,17 @@ class BatchProcessor:
         messages = [{"role": "user", "content": prompt}]
 
         # Generate response
-        response = self.client.chat(
+        response, usage = self.client.chat(
             model=model,
             engine=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             top_p=top_p,
-            stop=stop
+            stop=stop,
+            return_usage=True
         )
-        
+
         # Format in OpenAI-compatible format
         return {
             "id": str(uuid.uuid4()),
@@ -256,7 +386,8 @@ class BatchProcessor:
                     "index": 0,
                     "finish_reason": "stop"
                 }
-            ]
+            ],
+            "usage": usage
         }
     
     def run(self, input_path: str, output_path: str, engine: str, **kwargs) -> List[Dict[str, Any]]:
@@ -276,30 +407,41 @@ class BatchProcessor:
             
         self.setup(engine)
         print("Setup complete")
+        run_start = time.perf_counter()
+
+        # Start vLLM metrics scraper (vLLM only — Ollama doesn't expose the same endpoint)
+        scraper = None
+        if engine == "vllm":
+            scraper = VllmMetricsScraper(base_url=self.client.base_url)
+            scraper.start()
+
+        # GPU utilization scraper runs for all engines
+        gpu_scraper = GpuUtilScraper()
+        gpu_scraper.start()
 
         try:
             # Process JSONL file
             all_results = []
             current_batch = []
             processed_count = 0
-            
+
             # Read JSONL file line by line
             for item in read_jsonl(input_path):
                 current_batch.append(item)
-                
+
                 # Process batch when it reaches batch size
                 if len(current_batch) >= self.batch_size:
                     print("processing batch")
                     batch_results = self.process_batch(engine, current_batch)
                     all_results.extend(batch_results)
                     current_batch = []
-                    
+
                     # Save intermediate results
                     processed_count += len(batch_results)
                     if processed_count % self.save_frequency == 0:
                         self._save_intermediate_results(all_results, output_path)
                         logger.info(f"Processed {processed_count} items")
-            
+
             # Process remaining items
             if current_batch:
                 print("processing  batch")
@@ -307,14 +449,24 @@ class BatchProcessor:
                 all_results.extend(batch_results)
                 processed_count += len(batch_results)
                 logger.info(f"Processed {processed_count} items")
-            
+
+            # Stop scrapers before saving so metrics are included in output
+            if scraper:
+                self._vllm_metrics = scraper.stop()
+            self._gpu_metrics = gpu_scraper.stop()
+
             # Save final results
-            self._save_results(all_results, output_path)
+            run_metrics = self._compute_run_metrics(all_results, time.perf_counter() - run_start)
+            self._save_results(all_results, output_path, run_metrics=run_metrics)
             logger.info(f"Processing complete. Results saved to {output_path}")
-            
+
             return all_results
-            
+
         finally:
+            if scraper and scraper._thread and scraper._thread.is_alive():
+                scraper.stop()
+            if gpu_scraper._thread and gpu_scraper._thread.is_alive():
+                gpu_scraper.stop()
             self.cleanup()
     
     def _save_intermediate_results(self, results: List[OutputResult], output_path: str):
@@ -336,7 +488,7 @@ class BatchProcessor:
         except Exception as e:
             logger.error(f"Error saving intermediate results: {e}")
     
-    def _save_results(self, results: List[OutputResult], output_path: str):
+    def _save_results(self, results: List[OutputResult], output_path: str, run_metrics: Optional[Dict[str, Any]] = None):
         """Save final results using the output handler.
         
         Args:
@@ -353,10 +505,16 @@ class BatchProcessor:
             if self.output_handler:
                 self.output_handler.save(results, output_path)
             else:
-                # Default to JSON output
                 serializable_results = [result.to_dict() for result in results]
+                output = {"results": serializable_results}
+                if self._vllm_metrics:
+                    output["vllm_metrics"] = self._vllm_metrics
+                if self._gpu_metrics:
+                    output["gpu_metrics"] = self._gpu_metrics
+                if run_metrics:
+                    output["run_metrics"] = run_metrics
                 with open(output_path, 'w') as f:
-                    json.dump(serializable_results, f, indent=2)
+                    json.dump(output, f, indent=2)
             
             # Clean up temporary file
             if os.path.exists(self.temp_file):

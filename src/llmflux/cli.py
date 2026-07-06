@@ -5,6 +5,7 @@ Provides the `llmflux` executable with subcommands.
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 import time
@@ -19,6 +20,7 @@ from .slurm.runner import SlurmRunner
 from .slurm.connection import connect, read_connection_info
 from .slurm.commands import (
     ACTIVE_STATES,
+    TERMINAL_STATES,
     SlurmCommandError,
     cancel_job,
     get_active_job_details,
@@ -31,7 +33,7 @@ from .slurm.commands import (
 from .processors import BatchProcessor
 from .core.config import Config, EngineConfig
 from .core.registry import JobRegistry
-from .benchmark_utils import create_test_prompts_file
+from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
 
 
 def _get_llmflux_version() -> str:
@@ -63,33 +65,57 @@ def _parse_sbatch_args(sbatch_arg_list: Optional[List[str]]) -> Optional[Dict[st
 
     return result if result else None
 
-def _wait_for_slurm_elapsed_seconds(job_id: str, poll_seconds: int = 30, timeout_seconds: int = 6 * 3600) -> str | None:
-    """Return elapsed runtime (seconds) once SLURM job completes; None when unavailable."""
-    start = time.monotonic()
-    while time.monotonic() - start < timeout_seconds:
-        result = subprocess.run(
-            [
-                "sacct",
-                "-n",
-                "-P",
-                "-j",
-                f"{job_id}.batch",
-                "--format=State,Elapsed"
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            rows = [row for row in result.stdout.splitlines() if row.strip()]
-            if rows:
-                state, elapsed = rows[0].split("|", 1)
-                state = state.upper()
-                if state in {"COMPLETED", "FAILED", "CANCELLED", "TIMEOUT"}:
-                    return str(elapsed)
-        print(f"Job {job_id} is still running... Waiting for {poll_seconds} seconds")
-        time.sleep(poll_seconds)
-    return None
+def _parse_elapsed_to_seconds(elapsed: str) -> float:
+    """Parse a sacct elapsed string (HH:MM:SS or D-HH:MM:SS) to total seconds."""
+    try:
+        day_seconds = 0
+        rest = elapsed
+        if "-" in elapsed:
+            days, rest = elapsed.split("-", 1)
+            day_seconds = int(days) * 86400
+        h, m, s = rest.split(":")
+        return day_seconds + int(h) * 3600 + int(m) * 60 + int(s)
+    except Exception:
+        return 0.0
+
+
+def _ensure_container(config: "Config") -> bool:
+    """Build the Apptainer image on the current node if it does not exist.
+
+    Returns True if the image is ready, False on failure.
+    """
+    import os
+    sif_path = Path(config.containers_dir) / "llm_processor.sif"
+    if sif_path.exists():
+        return True
+
+    container_def = Path(__file__).parent / "container" / "container.def"
+    if not container_def.exists():
+        print(f"Error: container.def not found at {container_def}", file=sys.stderr)
+        return False
+
+    containers_dir = Path(config.containers_dir)
+    apptainer_tmp = Path(config.workspace) / "tmp"
+    apptainer_cache = apptainer_tmp / "cache"
+    apptainer_tmp.mkdir(parents=True, exist_ok=True)
+    apptainer_cache.mkdir(parents=True, exist_ok=True)
+    containers_dir.mkdir(parents=True, exist_ok=True)
+
+    print("Container image not found — building now (this may take a few minutes)...")
+    print(f"  Definition: {container_def}")
+    print(f"  Output:     {sif_path}")
+
+    result = subprocess.run(
+        ["apptainer", "build", "--force", str(sif_path), str(container_def)],
+        env={**os.environ, "APPTAINER_TMPDIR": str(apptainer_tmp), "APPTAINER_CACHEDIR": str(apptainer_cache)},
+    )
+    if result.returncode != 0:
+        print(f"Error: apptainer build failed (exit {result.returncode}).", file=sys.stderr)
+        return False
+
+    print(f"Container built successfully: {sif_path}")
+    return True
+
 
 def _benchmark_command(args: argparse.Namespace) -> int:
     """Handle the `benchmark` subcommand.
@@ -101,6 +127,21 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     # Generate or use provided dataset
     name = args.name or f"benchmark_{args.model}"
     num_prompts = getattr(args, "num_prompts", 50)
+
+    # Collect SLURM config from CLI args (filter out None values)
+    config = Config()
+
+    # Resolve the models.yaml key to the name the target engine actually expects
+    # (e.g. the HuggingFace repo for vLLM) so generated prompts' "model" field
+    # matches what BatchProcessor._get_validated_model will check it against.
+    model_cfg = config.load_model_config(
+        args.model, custom_config_path=getattr(args, "custom_config_path", None)
+    )
+    if model_cfg is None:
+        print(f"Error: model '{args.model}' not found. Check available models in models.yaml.", file=sys.stderr)
+        return 1
+    model_cfg.engine = args.engine
+    resolved_model_name = model_cfg.get_model_name_for_engine()
 
     if args.input:
         input_path = Path(args.input)
@@ -114,8 +155,8 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         temperature = 0.7 if args.temperature is None else args.temperature
         max_tokens = 500 if args.max_tokens is None else args.max_tokens
 
-        input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens, model=args.model)
-        
+        input_path = create_test_prompts_file(num_prompts=num_prompts, temperature=temperature, max_tokens=max_tokens, model=resolved_model_name)
+
     # Set output path
     if args.output:
         output_path = args.output
@@ -123,8 +164,8 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         output_path = f"results/benchmarks/{name}_results.json"
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-    # Collect SLURM config from CLI args (filter out None values)
-    config = Config()
+    if not getattr(args, "rebuild", False) and not _ensure_container(config):
+        return 1
     slurm_overrides = {
         key: value for key, value in {
             "account": args.account,
@@ -177,22 +218,24 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
     print(f"Job ID: {job_id}")
 
-    # Create a metrics file that log the time taken to run the batch inference and the number of prompts processed
-    elapsed_seconds = _wait_for_slurm_elapsed_seconds(job_id)
-    try:
-        if elapsed_seconds is None:
-            print("Job finished but elapsed runtime could not be retrieved from sacct.")
-            return 0
+    summary = {
+        "status": "submitted",
+        "job_id": job_id,
+        "benchmark_name": name,
+        "model": args.model,
+        "num_prompts": num_prompts,
+        "input_path": str(input_path),
+        "output_path": output_path,
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+    }
 
-        metrics_path = Path(f"results/benchmarks/{name}_metrics.txt")
-        metrics_path.parent.mkdir(parents=True, exist_ok=True)
-        metrics_path.write_text(
-            f"Time taken to run the batch inference: {elapsed_seconds}\n"
-            f"Number of prompts processed: {num_prompts}\n"
-        )
-    except Exception as e:
-        print(f"Error writing metrics file: {e}")
-        return 0
+    summary_path = Path(f"results/benchmarks/{name}_submission.json")
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2))
+
+    print("Benchmark job submitted (detached mode).")
+    print(f"Submission details saved to {summary_path}")
+    print(f"Benchmark output will be written to {output_path} once the job completes.")
 
     return 0
 
@@ -250,6 +293,8 @@ def _run_command(args: argparse.Namespace) -> int:
 
     # Initialize config - engine will be automatically detected from SLURM_ENGINE env var
     config = Config()
+    if not getattr(args, "rebuild", False) and not _ensure_container(config):
+        return 1
 
     # Override engine if provided via CLI
     if args.engine:
@@ -675,6 +720,15 @@ def _status_command(args: argparse.Namespace) -> int:
         print(f"\nTip: Run `llmflux connect {job_id}` to get the full connection details.")
     else:
         print(f"\nTip: Run `llmflux logs {job_id}` to view job logs (stdout and stderr).")
+
+    if not is_serve and state in TERMINAL_STATES:
+        output_path = metadata.get("output") if metadata else None
+        if output_path and Path(output_path).exists():
+            try:
+                print(format_metrics_table(compute_benchmark_metrics(output_path)))
+            except Exception as exc:
+                print(f"(could not read metrics from {output_path}: {exc})", file=sys.stderr)
+
     return 0
 
 
