@@ -39,7 +39,7 @@ def run_slurm_jsonl_job():
     slurm_config = config.get_slurm_config()
     slurm_config.account = os.getenv('SLURM_ACCOUNT', '')
     slurm_config.time = "01:00:00"  # 1 hour
-    slurm_config.mem = "16G"        # 16GB memory
+    slurm_config.memory = "16G"        # 16GB memory
     slurm_config.gpus_per_node = 1  # 1 GPU
     slurm_config.partition = "a100"  # A100 GPU partition
     
@@ -55,7 +55,7 @@ def run_slurm_jsonl_job():
     print("\n===== LLMFLUX SLURM JSONL PROCESSING DEMO =====")
     print(f"Input JSONL: {jsonl_path}")
     print(f"Output path: {output_path}")
-    print(f"SLURM settings: {slurm_config.partition}, {slurm_config.time}, {slurm_config.mem}, {slurm_config.gpus_per_node} GPU(s)")
+    print(f"SLURM settings: {slurm_config.partition}, {slurm_config.time}, {slurm_config.memory}, {slurm_config.gpus_per_node} GPU(s)")
     
     # Create runner with standard configuration
     slurm_runner = SlurmRunner(

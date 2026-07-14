@@ -147,9 +147,6 @@ class SlurmConfig(BaseModel):
     time: str = Field(
         default_factory=lambda: os.getenv('SLURM_TIME', '00:30:00')
     )
-    mem: str = Field(
-        default_factory=lambda: os.getenv('SLURM_MEM', '32G')
-    )
     memory: str = Field(
         default_factory=lambda: os.getenv('SLURM_MEM', '32G')
     )
@@ -251,7 +248,7 @@ class Config:
             'SLURM_NODES': str(self.slurm.nodes),
             'SLURM_GPUS_PER_NODE': str(self.slurm.gpus_per_node),
             'SLURM_TIME': self.slurm.time,
-            'SLURM_MEM': self.slurm.mem,
+            'SLURM_MEM': self.slurm.memory,
             'SLURM_CPUS_PER_TASK': str(self.slurm.cpus_per_task),
             'OLLAMA_ORIGINS': '*',
             'OLLAMA_INSECURE': 'true',
@@ -429,7 +426,7 @@ class Config:
             'SLURM_NODES': str(slurm_config.nodes),
             'SLURM_GPUS_PER_NODE': str(slurm_config.gpus_per_node),
             'SLURM_TIME': slurm_config.time,
-            'SLURM_MEM': slurm_config.mem,
+            'SLURM_MEM': slurm_config.memory,
             'SLURM_CPUS_PER_TASK': str(slurm_config.cpus_per_task),
             'VLLM_ORIGINS': self.engine.origins,
             'VLLM_INSECURE': self.engine.insecure,
@@ -538,7 +535,7 @@ class Config:
             'SLURM_NODES': str(slurm_config.nodes),
             'SLURM_GPUS_PER_NODE': str(slurm_config.gpus_per_node),
             'SLURM_TIME': slurm_config.time,
-            'SLURM_MEM': slurm_config.mem,
+            'SLURM_MEM': slurm_config.memory,
             'SLURM_CPUS_PER_TASK': str(slurm_config.cpus_per_task)
         }
         
