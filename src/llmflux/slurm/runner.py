@@ -155,7 +155,7 @@ class SlurmRunner:
         }
         
         # Add HuggingFace token if available (for accessing gated models)
-        hf_token = os.getenv('HUGGINGFACE_TOKEN')
+        hf_token = os.getenv('HUGGINGFACE_TOKEN') or os.getenv('HF_TOKEN')
         if hf_token:
             container_vars['APPTAINERENV_HF_TOKEN'] = hf_token
         
