@@ -195,3 +195,6 @@ data/*
 
 # Benchmark data
 src/llmflux/benchmark_data/*
+
+# Claude Code personal overrides (keep settings.json and hooks tracked)
+.claude/settings.local.json
