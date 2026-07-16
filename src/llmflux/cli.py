@@ -173,7 +173,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
             "nodes": args.nodes,
             "gpus_per_node": args.gpus_per_node,
             "time": args.time,
-            "mem": args.mem,
+            "memory": args.mem,
             "cpus_per_task": args.cpus_per_task,
             "engine": args.engine,
         }.items() if value is not None
@@ -320,7 +320,7 @@ def _run_command(args: argparse.Namespace) -> int:
             "nodes": args.nodes,
             "gpus_per_node": args.gpus_per_node,
             "time": args.time,
-            "mem": args.mem,
+            "memory": args.mem,
             "cpus_per_task": args.cpus_per_task,
         }.items() if value is not None
     }
@@ -424,7 +424,7 @@ def _serve_command(args: argparse.Namespace) -> int:
             "nodes": args.nodes,
             "gpus_per_node": args.gpus_per_node,
             "time": args.time,
-            "mem": args.mem,
+            "memory": args.mem,
             "cpus_per_task": args.cpus_per_task,
         }.items() if value is not None
     }

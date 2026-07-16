@@ -325,7 +325,13 @@ class TestRunCommand:
         assert call_kwargs["top_k"] == 50
         assert call_kwargs["rebuild"] is True
         assert call_kwargs["debug"] is True
-    
+
+        # --mem must land on the 'memory' field; a "mem" key would be
+        # silently dropped by get_slurm_config's hasattr check (#119)
+        slurm_overrides = mock_config.get_slurm_config.call_args[0][0]
+        assert slurm_overrides["memory"] == "64G"
+        assert "mem" not in slurm_overrides
+
     def test_run_command_missing_input(self):
         """Test run command fails when input is missing."""
         args = MagicMock()

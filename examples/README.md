@@ -19,7 +19,7 @@ config = Config()
 slurm_config = config.get_slurm_config()
 slurm_config.account = os.getenv('SLURM_ACCOUNT', '')
 slurm_config.time = "01:00:00"
-slurm_config.mem = "16G"
+slurm_config.memory = "16G"
 slurm_config.gpus_per_node = 1
 
 # Create runner with configuration
