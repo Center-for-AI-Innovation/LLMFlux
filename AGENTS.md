@@ -58,3 +58,16 @@ python -m pytest tests/slurm/test_connection.py::TestValidateNode
 
 Test layout mirrors the package: tests live under `tests/`, named `test_*.py`.
 See `docs/TESTING.md` for coverage reports, parallel runs, and more detail.
+
+## Automated reminder (Claude Code hook)
+
+This repo ships a committed Claude Code `Stop` hook
+(`.claude/settings.json` → `.claude/hooks/check-tests.sh`). When a turn leaves
+uncommitted changes under `src/` or `tests/`, it runs the suite and surfaces the
+result, and nudges you if `src/` changed without any accompanying test change.
+
+It is **warn-only** — it never blocks — and is a backstop for the rule above,
+not a substitute for it. Review or disable it via `/hooks`. Contributors using a
+different assistant won't get the reminder, so the "tests with every change"
+rule stands on its own regardless of tooling.
+
