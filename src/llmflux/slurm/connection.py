@@ -4,6 +4,7 @@ import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import time
 import urllib.request
@@ -29,6 +30,17 @@ def _sanitize(value: str) -> str:
     return value.encode("ascii", errors="replace").decode("ascii")
 
 
+def _is_forbidden_address(addr: "ipaddress._BaseAddress") -> bool:
+    """True if addr is a loopback, link-local, multicast, unspecified, or reserved IP."""
+    return (
+        addr.is_loopback
+        or addr.is_link_local
+        or addr.is_multicast
+        or addr.is_unspecified
+        or addr.is_reserved
+    )
+
+
 def _validate_node(node: str) -> None:
     """Reject node values that could redirect the request to an unintended target.
 
@@ -52,13 +64,7 @@ def _validate_node(node: str) -> None:
     except ValueError:
         pass  # a hostname, not an IP literal
     else:
-        if (
-            addr.is_loopback
-            or addr.is_link_local
-            or addr.is_multicast
-            or addr.is_unspecified
-            or addr.is_reserved
-        ):
+        if _is_forbidden_address(addr):
             raise ValueError(
                 f"node {node!r} is a loopback, link-local, or reserved address"
             )
@@ -73,6 +79,29 @@ def _validate_node(node: str) -> None:
         if not matched:
             raise ValueError(
                 f"node {node!r} does not match LLMFLUX_NODE_PATTERN ({pattern!r})"
+            )
+    # ipaddress.ip_address() only accepts canonical dotted-quad IPv4, but the
+    # OS resolver urllib uses also honors legacy encodings — decimal
+    # (2852039166), hex (0xA9FEA9FE), octal, and short (127.1) forms — which
+    # slip past the literal check above as "hostnames" yet still resolve to
+    # loopback/metadata targets. Resolve the node the same way urllib will and
+    # re-check every address it maps to (also catches a hostname pointed at an
+    # internal IP). Unresolvable names are left alone: _ping_endpoint simply
+    # fails on them, so there is no SSRF reach to guard against.
+    try:
+        resolved = socket.getaddrinfo(node, None)
+    except socket.gaierror:
+        return
+    for *_, sockaddr in resolved:
+        ip = sockaddr[0]
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if _is_forbidden_address(addr):
+            raise ValueError(
+                f"node {node!r} resolves to a loopback, link-local, or "
+                f"reserved address ({ip})"
             )
 
 

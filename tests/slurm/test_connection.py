@@ -1,6 +1,7 @@
 """Tests for llmflux.slurm.connection helpers."""
 
 import json
+import socket
 import tempfile
 import unittest
 import urllib.error
@@ -208,6 +209,33 @@ class TestValidateNode(unittest.TestCase):
         # Colons fail the hostname pattern, which also covers ::1
         with self.assertRaises(ValueError):
             _validate_node("::1")
+
+    def test_rejects_encoded_loopback_ip(self):
+        # Legacy IPv4 encodings that ipaddress.ip_address() rejects but the
+        # OS resolver maps to 127.0.0.1 (getaddrinfo parses these locally).
+        for node in ("2130706433", "0x7f000001", "0177.0.0.1", "127.1"):
+            with self.assertRaises(ValueError):
+                _validate_node(node)
+
+    def test_rejects_encoded_metadata_ip(self):
+        # Decimal/hex/short forms of the 169.254.169.254 cloud metadata IP.
+        for node in ("2852039166", "0xA9FEA9FE", "169.254.43518"):
+            with self.assertRaises(ValueError):
+                _validate_node(node)
+
+    @patch("llmflux.slurm.connection.socket.getaddrinfo")
+    def test_rejects_hostname_resolving_to_internal_ip(self, mock_getaddrinfo):
+        mock_getaddrinfo.return_value = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0))
+        ]
+        with self.assertRaises(ValueError):
+            _validate_node("innocent-looking-host")
+
+    @patch("llmflux.slurm.connection.socket.getaddrinfo", side_effect=socket.gaierror)
+    def test_allows_unresolvable_hostname(self, mock_getaddrinfo):
+        # An unresolvable name can't be pinged, so there is no SSRF reach to
+        # guard against; validation must not reject it.
+        _validate_node("gpub073")  # must not raise
 
     def test_rejects_empty_and_malformed(self):
         for node in ("", "-leading-hyphen", "trailing-hyphen-.x", "has space", "a/b", "node:8000"):
