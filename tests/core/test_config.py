@@ -14,6 +14,7 @@ from llmflux.core.config import (
     Config,
     ModelConfig,
     ModelParameters,
+    SlurmConfig,
     ValidationConfig,
     _parse_extra_sbatch_args,
     parse_gpu_memory,
@@ -187,6 +188,23 @@ class TestConfigGetSetting(unittest.TestCase):
             os.environ.pop("TOTALLY_UNKNOWN", None)
             result = self.cfg.get_setting("TOTALLY_UNKNOWN")
         self.assertIsNone(result)
+
+
+class TestGetSlurmConfigMemory(unittest.TestCase):
+    def test_memory_override_is_applied(self):
+        cfg = Config()
+        slurm = cfg.get_slurm_config({"memory": "64G"})
+        self.assertEqual(slurm.memory, "64G")
+
+    def test_mem_field_stays_removed(self):
+        # get_slurm_config routes overrides through hasattr, so reintroducing
+        # a duplicate 'mem' field would silently swallow memory overrides
+        # while job scripts read 'memory' (#119)
+        self.assertNotIn("mem", SlurmConfig.model_fields)
+
+    def test_memory_defaults_from_slurm_mem_env(self):
+        with patch.dict(os.environ, {"SLURM_MEM": "48G"}):
+            self.assertEqual(SlurmConfig().memory, "48G")
 
 
 class TestLoadModelConfig(unittest.TestCase):

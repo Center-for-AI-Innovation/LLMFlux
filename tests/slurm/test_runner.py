@@ -122,6 +122,42 @@ class TestSlurmRunner(unittest.TestCase):
         self.assertEqual(env_vars["PROJECT_ROOT"], "test_workspace")
 
     @patch("llmflux.slurm.runner.ConfigManager")
+    def test_setup_environment_prefers_huggingface_token(self, mock_config_manager):
+        """HUGGINGFACE_TOKEN wins when both token env vars are set."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+
+        runner = SlurmRunner()
+        with patch.dict(os.environ, {"HUGGINGFACE_TOKEN": "hf_primary", "HF_TOKEN": "hf_secondary"}):
+            env_vars = runner._setup_environment("test_workspace")
+
+        self.assertEqual(env_vars["APPTAINERENV_HF_TOKEN"], "hf_primary")
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    def test_setup_environment_falls_back_to_hf_token(self, mock_config_manager):
+        """HF_TOKEN is used when HUGGINGFACE_TOKEN is not set."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+
+        runner = SlurmRunner()
+        with patch.dict(os.environ, {"HF_TOKEN": "hf_secondary"}, clear=False):
+            os.environ.pop("HUGGINGFACE_TOKEN", None)
+            env_vars = runner._setup_environment("test_workspace")
+
+        self.assertEqual(env_vars["APPTAINERENV_HF_TOKEN"], "hf_secondary")
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    def test_setup_environment_without_hf_token(self, mock_config_manager):
+        """No token env vars set means no token is forwarded to the container."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+
+        runner = SlurmRunner()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("HUGGINGFACE_TOKEN", None)
+            os.environ.pop("HF_TOKEN", None)
+            env_vars = runner._setup_environment("test_workspace")
+
+        self.assertNotIn("APPTAINERENV_HF_TOKEN", env_vars)
+
+    @patch("llmflux.slurm.runner.ConfigManager")
     @patch("llmflux.slurm.runner.socket.socket")
     def test_find_available_port(self, mock_socket, mock_config_manager):
         """Test finding an available port."""
