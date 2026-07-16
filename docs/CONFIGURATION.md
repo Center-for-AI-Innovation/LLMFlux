@@ -23,7 +23,7 @@ The tables below show each parameter with its environment variable name, code se
 | Account | `SLURM_ACCOUNT` | `slurm_config.account = "myaccount"` | (required) | SLURM account name with GPU access |
 | Partition | `SLURM_PARTITION` | `slurm_config.partition = "a100"` | `gpuA100x4` | GPU partition to use |
 | Time | `SLURM_TIME` | `slurm_config.time = "01:00:00"` | `00:30:00` | Job time limit (HH:MM:SS) |
-| Memory | `SLURM_MEM` | `slurm_config.mem = "32G"` | `32G` | Memory allocation per node |
+| Memory | `SLURM_MEM` | `slurm_config.memory = "32G"` | `32G` | Memory allocation per node |
 | GPUs per node | `SLURM_GPUS_PER_NODE` | `slurm_config.gpus_per_node = 2` | `1` | Number of GPUs to allocate |
 | Nodes | `SLURM_NODES` | `slurm_config.nodes = 1` | `1` | Number of nodes to request |
 | CPUs per task | `SLURM_CPUS_PER_TASK` | `slurm_config.cpus_per_task = 8` | `4` | CPUs per task |
@@ -87,7 +87,7 @@ slurm_config = config.get_slurm_config()
 slurm_config.account = "my-account"
 slurm_config.partition = "a100"
 slurm_config.time = "02:00:00"
-slurm_config.mem = "64G"
+slurm_config.memory = "64G"
 
 # Submit job with additional processing options
 runner = SlurmRunner(config=slurm_config)
