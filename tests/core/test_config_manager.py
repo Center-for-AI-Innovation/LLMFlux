@@ -32,6 +32,11 @@ class TestConfigManagerSingleton(unittest.TestCase):
         self.assertEqual(config.data_dir, "/tmp/mydata")
         self.assertEqual(config.logs_dir, "/tmp/mylogs")
 
+    def test_reset_config_with_workspace(self):
+        config = ConfigManager.reset_config(workspace="/tmp/myworkspace")
+        self.assertEqual(str(config.workspace), "/tmp/myworkspace")
+        self.assertEqual(config.data_dir, "/tmp/myworkspace/data")
+
 
 class TestGetParameter(unittest.TestCase):
     def test_code_value_highest_priority(self):
@@ -136,4 +141,19 @@ class TestUpdateConfig(unittest.TestCase):
     def test_update_refreshes_derived_paths(self):
         ConfigManager.get_config()
         updated = ConfigManager.update_config(data_dir="/tmp/newdata")
-        self.assertIn("input", str(updated.default_paths.get("DATA_INPUT_DIR", "")))
+        self.assertEqual(str(updated.default_paths["DATA_INPUT_DIR"]), "/tmp/newdata/input")
+        self.assertEqual(str(updated.default_paths["DATA_OUTPUT_DIR"]), "/tmp/newdata/output")
+
+    def test_update_with_separate_input_output_dirs(self):
+        ConfigManager.get_config()
+        updated = ConfigManager.update_config(
+            data_input_dir="/projects/prompts", data_output_dir="/scratch/results"
+        )
+        self.assertEqual(str(updated.default_paths["DATA_INPUT_DIR"]), "/projects/prompts")
+        self.assertEqual(str(updated.default_paths["DATA_OUTPUT_DIR"]), "/scratch/results")
+
+    def test_update_data_dir_rederives_input_output(self):
+        ConfigManager.reset_config(data_input_dir="/old/inputs")
+        updated = ConfigManager.update_config(data_dir="/tmp/newdata")
+        self.assertEqual(updated.data_input_dir, "/tmp/newdata/input")
+        self.assertEqual(updated.data_output_dir, "/tmp/newdata/output")

@@ -138,6 +138,82 @@ class TestConfigDirectoryResolution(unittest.TestCase):
         self.assertEqual(cfg.data_dir, "/tmp/explicit")
 
 
+class TestConfigWorkspace(unittest.TestCase):
+    def test_default_workspace_is_cwd(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LLMFLUX_WORKSPACE", None)
+            cfg = Config()
+        self.assertEqual(cfg.workspace, Path.cwd())
+
+    def test_explicit_workspace_used(self):
+        cfg = Config(workspace="/tmp/myworkspace")
+        self.assertEqual(cfg.workspace, Path("/tmp/myworkspace"))
+
+    def test_env_var_workspace_used(self):
+        with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": "/tmp/envworkspace"}):
+            cfg = Config()
+        self.assertEqual(cfg.workspace, Path("/tmp/envworkspace"))
+
+    def test_code_param_beats_env_var(self):
+        with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": "/tmp/envworkspace"}):
+            cfg = Config(workspace="/tmp/explicit")
+        self.assertEqual(cfg.workspace, Path("/tmp/explicit"))
+
+    def test_directories_derive_from_workspace(self):
+        with patch.dict(os.environ, {}, clear=False):
+            for var in ("LLMFLUX_DATA_DIR", "LLMFLUX_MODELS_DIR", "LLMFLUX_LOGS_DIR", "LLMFLUX_CONTAINERS_DIR"):
+                os.environ.pop(var, None)
+            cfg = Config(workspace="/tmp/myworkspace")
+        self.assertEqual(cfg.data_dir, "/tmp/myworkspace/data")
+        self.assertEqual(cfg.models_dir, "/tmp/myworkspace/models")
+        self.assertEqual(cfg.logs_dir, "/tmp/myworkspace/logs")
+        self.assertEqual(cfg.containers_dir, "/tmp/myworkspace/containers")
+        self.assertEqual(cfg.default_paths["APPTAINER_TMPDIR"], Path("/tmp/myworkspace/tmp"))
+
+    def test_explicit_dir_beats_workspace_derived_default(self):
+        with patch.dict(os.environ, {"LLMFLUX_DATA_DIR": "/tmp/envdata"}):
+            cfg = Config(workspace="/tmp/myworkspace")
+        self.assertEqual(cfg.data_dir, "/tmp/envdata")
+
+
+class TestConfigInputOutputDirs(unittest.TestCase):
+    def test_default_derive_from_data_dir(self):
+        cfg = Config(data_dir="/tmp/mydata")
+        self.assertEqual(cfg.data_input_dir, "/tmp/mydata/input")
+        self.assertEqual(cfg.data_output_dir, "/tmp/mydata/output")
+        self.assertEqual(cfg.default_paths["DATA_INPUT_DIR"], Path("/tmp/mydata/input"))
+        self.assertEqual(cfg.default_paths["DATA_OUTPUT_DIR"], Path("/tmp/mydata/output"))
+
+    def test_explicit_separate_input_output(self):
+        cfg = Config(data_input_dir="/projects/prompts", data_output_dir="/scratch/results")
+        self.assertEqual(cfg.data_input_dir, "/projects/prompts")
+        self.assertEqual(cfg.data_output_dir, "/scratch/results")
+        self.assertEqual(cfg.default_paths["DATA_INPUT_DIR"], Path("/projects/prompts"))
+        self.assertEqual(cfg.default_paths["DATA_OUTPUT_DIR"], Path("/scratch/results"))
+
+    def test_env_var_input_output(self):
+        with patch.dict(os.environ, {
+            "LLMFLUX_DATA_INPUT_DIR": "/env/inputs",
+            "LLMFLUX_DATA_OUTPUT_DIR": "/env/outputs",
+        }):
+            cfg = Config()
+        self.assertEqual(cfg.data_input_dir, "/env/inputs")
+        self.assertEqual(cfg.data_output_dir, "/env/outputs")
+
+    def test_code_param_beats_env_var(self):
+        with patch.dict(os.environ, {"LLMFLUX_DATA_INPUT_DIR": "/env/inputs"}):
+            cfg = Config(data_input_dir="/explicit/inputs")
+        self.assertEqual(cfg.data_input_dir, "/explicit/inputs")
+
+    def test_get_path_reflects_explicit_dirs(self):
+        cfg = Config(data_input_dir="/projects/prompts", data_output_dir="/scratch/results")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DATA_INPUT_DIR", None)
+            os.environ.pop("DATA_OUTPUT_DIR", None)
+            self.assertEqual(cfg.get_path("DATA_INPUT_DIR"), Path("/projects/prompts"))
+            self.assertEqual(cfg.get_path("DATA_OUTPUT_DIR"), Path("/scratch/results"))
+
+
 class TestConfigGetPath(unittest.TestCase):
     def setUp(self):
         self.cfg = Config(data_dir="/tmp/data", logs_dir="/tmp/logs")

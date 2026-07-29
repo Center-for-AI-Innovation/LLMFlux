@@ -80,7 +80,10 @@ class ConfigManager:
         return default
     
     @staticmethod
-    def reset_config(data_dir: Optional[str] = None,
+    def reset_config(workspace: Optional[str] = None,
+                     data_dir: Optional[str] = None,
+                     data_input_dir: Optional[str] = None,
+                     data_output_dir: Optional[str] = None,
                      models_dir: Optional[str] = None,
                      logs_dir: Optional[str] = None,
                      containers_dir: Optional[str] = None,
@@ -88,22 +91,28 @@ class ConfigManager:
                      models: Optional[List[ModelConfig]] = None,
                      engine: Optional[EngineConfig] = None) -> Config:
         """Reset the singleton Config instance with new values.
-        
+
         Args:
+            workspace: Optional path to workspace directory (defaults to current working directory)
             data_dir: Optional path to data directory
+            data_input_dir: Optional path to input directory (defaults to {data_dir}/input)
+            data_output_dir: Optional path to output directory (defaults to {data_dir}/output)
             models_dir: Optional path to models directory
             logs_dir: Optional path to logs directory
             containers_dir: Optional path to containers directory
             slurm: Optional SLURM configuration
             models: Optional list of model configurations
             engine: Whether to use VLLM or OLLAMA
-            
+
         Returns:
             Config: The new singleton Config instance
         """
         global _config_instance
         _config_instance = Config(
+            workspace=workspace,
             data_dir=data_dir,
+            data_input_dir=data_input_dir,
+            data_output_dir=data_output_dir,
             models_dir=models_dir,
             logs_dir=logs_dir,
             containers_dir=containers_dir,
@@ -115,6 +124,8 @@ class ConfigManager:
     
     @staticmethod
     def update_config(data_dir: Optional[str] = None,
+                      data_input_dir: Optional[str] = None,
+                      data_output_dir: Optional[str] = None,
                       models_dir: Optional[str] = None,
                       logs_dir: Optional[str] = None,
                       containers_dir: Optional[str] = None,
@@ -122,11 +133,13 @@ class ConfigManager:
                       models: Optional[List[ModelConfig]] = None,
                       engine: Optional[EngineConfig] = None) -> Config:
         """Update the singleton Config instance with new values.
-        
+
         Only updates the provided values, keeping the rest unchanged.
-        
+
         Args:
             data_dir: Optional path to data directory
+            data_input_dir: Optional path to input directory (defaults to {data_dir}/input)
+            data_output_dir: Optional path to output directory (defaults to {data_dir}/output)
             models_dir: Optional path to models directory
             logs_dir: Optional path to logs directory
             containers_dir: Optional path to containers directory
@@ -142,6 +155,14 @@ class ConfigManager:
         # Update only the provided values
         if data_dir:
             config.data_dir = data_dir
+            # Re-derive input/output so they follow the new data_dir unless
+            # explicitly overridden below
+            config.data_input_dir = str(Path(data_dir) / "input")
+            config.data_output_dir = str(Path(data_dir) / "output")
+        if data_input_dir:
+            config.data_input_dir = data_input_dir
+        if data_output_dir:
+            config.data_output_dir = data_output_dir
         if models_dir:
             config.models_dir = models_dir
         if logs_dir:
@@ -157,8 +178,8 @@ class ConfigManager:
         
         # Update the derived paths
         config.default_paths.update({
-            'DATA_INPUT_DIR': Path(config.data_dir) / "input",
-            'DATA_OUTPUT_DIR': Path(config.data_dir) / "output",
+            'DATA_INPUT_DIR': Path(config.data_input_dir),
+            'DATA_OUTPUT_DIR': Path(config.data_output_dir),
             'MODELS_DIR': Path(config.models_dir),
             'LOGS_DIR': Path(config.logs_dir),
             'CONTAINERS_DIR': Path(config.containers_dir),

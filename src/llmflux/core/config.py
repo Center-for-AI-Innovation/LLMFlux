@@ -176,8 +176,11 @@ def parse_gpu_memory(memory_str: str) -> int:
 class Config:
     """Central configuration management."""
     
-    def __init__(self, 
+    def __init__(self,
+                 workspace: Optional[str] = None,
                  data_dir: Optional[str] = None,
+                 data_input_dir: Optional[str] = None,
+                 data_output_dir: Optional[str] = None,
                  models_dir: Optional[str] = None,
                  logs_dir: Optional[str] = None,
                  containers_dir: Optional[str] = None,
@@ -185,9 +188,12 @@ class Config:
                  models: Optional[List[ModelConfig]] = None,
                  engine: Optional[str] = None):
         """Initialize configuration.
-        
+
         Args:
+            workspace: Optional path to workspace directory (defaults to current working directory)
             data_dir: Optional path to data directory
+            data_input_dir: Optional path to input directory (defaults to {data_dir}/input)
+            data_output_dir: Optional path to output directory (defaults to {data_dir}/output)
             models_dir: Optional path to models directory
             logs_dir: Optional path to logs directory
             containers_dir: Optional path to containers directory
@@ -197,15 +203,17 @@ class Config:
         """
         self.package_dir = Path(__file__).parent.parent
         self.templates_dir = self.package_dir / 'templates'
-        
+
         # Load environment variables from .env file if it exists
         self._load_env_file()
-        
+
         # Initialize workspace paths
-        self.workspace = Path.cwd()
+        self.workspace = Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd())
         
         # Set directories from parameters or environment variables
         self.data_dir = data_dir or os.getenv('LLMFLUX_DATA_DIR') or str(self.workspace / "data")
+        self.data_input_dir = data_input_dir or os.getenv('LLMFLUX_DATA_INPUT_DIR') or str(Path(self.data_dir) / "input")
+        self.data_output_dir = data_output_dir or os.getenv('LLMFLUX_DATA_OUTPUT_DIR') or str(Path(self.data_dir) / "output")
         self.models_dir = models_dir or os.getenv('LLMFLUX_MODELS_DIR') or str(self.workspace / "models")
         self.logs_dir = logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or str(self.workspace / "logs")
         self.containers_dir = containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or str(self.workspace / "containers")
@@ -231,8 +239,8 @@ class Config:
 
         # Define default paths
         self.default_paths = {
-            'DATA_INPUT_DIR': Path(self.data_dir) / "input",
-            'DATA_OUTPUT_DIR': Path(self.data_dir) / "output",
+            'DATA_INPUT_DIR': Path(self.data_input_dir),
+            'DATA_OUTPUT_DIR': Path(self.data_output_dir),
             'MODELS_DIR': Path(self.models_dir),
             'LOGS_DIR': Path(self.logs_dir),
             'CONTAINERS_DIR': Path(self.containers_dir),
