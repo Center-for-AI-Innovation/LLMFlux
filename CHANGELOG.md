@@ -19,9 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   generated `#SBATCH --mem` line. Previously `SlurmConfig` had two fields for
   the same setting (`mem` and `memory`); the CLI and examples set `mem`, but
   the job scripts were built from `memory`, so user-specified memory was
-  silently ignored and jobs always got the `SLURM_MEM` env default (#119).
+  silently ignored and jobs always got the `SLURM_MEM` env default (see [#119](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/119)).
 - HuggingFace token for gated models is now also read from `HF_TOKEN` when
-  `HUGGINGFACE_TOKEN` is not set (#119).
+  `HUGGINGFACE_TOKEN` is not set (see [#119](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/119)).
 
 ### Removed
 
@@ -31,11 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `logs_dir`, `containers_dir`); SLURM settings from `get_slurm_config()`.
   As a consequence the unprefixed `DATA_INPUT_DIR` / `DATA_OUTPUT_DIR`
   environment variables are no longer read — use `LLMFLUX_DATA_INPUT_DIR` and
-  `LLMFLUX_DATA_OUTPUT_DIR`.
+  `LLMFLUX_DATA_OUTPUT_DIR` (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
 - **Breaking:** the duplicate `SlurmConfig.mem` field. Use
   `slurm_config.memory` instead. Note that `SlurmConfig(mem=...)` is silently
   ignored by pydantic, while attribute assignment (`slurm_config.mem = ...`)
-  raises a `ValueError` (#119).
+  raises a `ValueError` (see [#119](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/119)).
 
 ## [1.0.0] - 2026-07-06
 
