@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+
+### Changed
+
+
 ### Fixed
 
 - `--mem` CLI flag and programmatic memory settings now actually reach the
@@ -19,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Breaking:** `Config.get_path()`, `Config.get_setting()`, `Config.default_paths`
+  and `Config.default_settings`. Directories are read directly from the
+  `Config` attributes (`data_input_dir`, `data_output_dir`, `models_dir`,
+  `logs_dir`, `containers_dir`); SLURM settings from `get_slurm_config()`.
+  As a consequence the unprefixed `DATA_INPUT_DIR` / `DATA_OUTPUT_DIR`
+  environment variables are no longer read — use `LLMFLUX_DATA_INPUT_DIR` and
+  `LLMFLUX_DATA_OUTPUT_DIR`.
 - **Breaking:** the duplicate `SlurmConfig.mem` field. Use
   `slurm_config.memory` instead. Note that `SlurmConfig(mem=...)` is silently
   ignored by pydantic, while attribute assignment (`slurm_config.mem = ...`)
