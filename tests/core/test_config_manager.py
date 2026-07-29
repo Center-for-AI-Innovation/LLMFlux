@@ -138,19 +138,13 @@ class TestUpdateConfig(unittest.TestCase):
         ConfigManager.update_config()
         self.assertEqual(ConfigManager.get_config().data_dir, original_data_dir)
 
-    def test_update_refreshes_derived_paths(self):
-        ConfigManager.get_config()
-        updated = ConfigManager.update_config(data_dir="/tmp/newdata")
-        self.assertEqual(str(updated.default_paths["DATA_INPUT_DIR"]), "/tmp/newdata/input")
-        self.assertEqual(str(updated.default_paths["DATA_OUTPUT_DIR"]), "/tmp/newdata/output")
-
     def test_update_with_separate_input_output_dirs(self):
         ConfigManager.get_config()
         updated = ConfigManager.update_config(
             data_input_dir="/projects/prompts", data_output_dir="/scratch/results"
         )
-        self.assertEqual(str(updated.default_paths["DATA_INPUT_DIR"]), "/projects/prompts")
-        self.assertEqual(str(updated.default_paths["DATA_OUTPUT_DIR"]), "/scratch/results")
+        self.assertEqual(updated.data_input_dir, "/projects/prompts")
+        self.assertEqual(updated.data_output_dir, "/scratch/results")
 
     def test_update_data_dir_rederives_input_output(self):
         ConfigManager.reset_config(data_input_dir="/old/inputs")

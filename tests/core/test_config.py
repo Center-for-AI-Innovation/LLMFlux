@@ -168,7 +168,6 @@ class TestConfigWorkspace(unittest.TestCase):
         self.assertEqual(cfg.models_dir, "/tmp/myworkspace/models")
         self.assertEqual(cfg.logs_dir, "/tmp/myworkspace/logs")
         self.assertEqual(cfg.containers_dir, "/tmp/myworkspace/containers")
-        self.assertEqual(cfg.default_paths["APPTAINER_TMPDIR"], Path("/tmp/myworkspace/tmp"))
 
     def test_explicit_dir_beats_workspace_derived_default(self):
         with patch.dict(os.environ, {"LLMFLUX_DATA_DIR": "/tmp/envdata"}):
@@ -181,15 +180,11 @@ class TestConfigInputOutputDirs(unittest.TestCase):
         cfg = Config(data_dir="/tmp/mydata")
         self.assertEqual(cfg.data_input_dir, "/tmp/mydata/input")
         self.assertEqual(cfg.data_output_dir, "/tmp/mydata/output")
-        self.assertEqual(cfg.default_paths["DATA_INPUT_DIR"], Path("/tmp/mydata/input"))
-        self.assertEqual(cfg.default_paths["DATA_OUTPUT_DIR"], Path("/tmp/mydata/output"))
 
     def test_explicit_separate_input_output(self):
         cfg = Config(data_input_dir="/projects/prompts", data_output_dir="/scratch/results")
         self.assertEqual(cfg.data_input_dir, "/projects/prompts")
         self.assertEqual(cfg.data_output_dir, "/scratch/results")
-        self.assertEqual(cfg.default_paths["DATA_INPUT_DIR"], Path("/projects/prompts"))
-        self.assertEqual(cfg.default_paths["DATA_OUTPUT_DIR"], Path("/scratch/results"))
 
     def test_env_var_input_output(self):
         with patch.dict(os.environ, {
@@ -205,65 +200,18 @@ class TestConfigInputOutputDirs(unittest.TestCase):
             cfg = Config(data_input_dir="/explicit/inputs")
         self.assertEqual(cfg.data_input_dir, "/explicit/inputs")
 
-    def test_get_path_reflects_explicit_dirs(self):
-        cfg = Config(data_input_dir="/projects/prompts", data_output_dir="/scratch/results")
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("DATA_INPUT_DIR", None)
-            os.environ.pop("DATA_OUTPUT_DIR", None)
-            self.assertEqual(cfg.get_path("DATA_INPUT_DIR"), Path("/projects/prompts"))
-            self.assertEqual(cfg.get_path("DATA_OUTPUT_DIR"), Path("/scratch/results"))
-
-
-class TestConfigGetPath(unittest.TestCase):
-    def setUp(self):
-        self.cfg = Config(data_dir="/tmp/data", logs_dir="/tmp/logs")
-
-    def test_code_path_highest_priority(self):
-        result = self.cfg.get_path("DATA_INPUT_DIR", code_path="/override/path")
-        self.assertEqual(result, Path("/override/path"))
-
-    def test_env_var_used_when_no_code_path(self):
-        with patch.dict(os.environ, {"DATA_INPUT_DIR": "/env/input"}):
-            result = self.cfg.get_path("DATA_INPUT_DIR")
-        self.assertEqual(result, Path("/env/input"))
-
-    def test_default_path_used_as_fallback(self):
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("DATA_INPUT_DIR", None)
-            result = self.cfg.get_path("DATA_INPUT_DIR")
-        self.assertIn("input", str(result))
-
-    def test_unknown_path_falls_back_to_workspace(self):
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("UNKNOWN_KEY", None)
-            result = self.cfg.get_path("UNKNOWN_KEY")
-        self.assertIn("unknown_key", str(result))
-
-
-class TestConfigGetSetting(unittest.TestCase):
-    def setUp(self):
-        self.cfg = Config()
-
-    def test_code_value_beats_all(self):
-        result = self.cfg.get_setting("SLURM_PARTITION", code_value="my-partition")
-        self.assertEqual(result, "my-partition")
-
-    def test_env_var_beats_default(self):
-        with patch.dict(os.environ, {"SLURM_PARTITION": "env-partition"}):
-            result = self.cfg.get_setting("SLURM_PARTITION")
-        self.assertEqual(result, "env-partition")
-
-    def test_default_returned_when_nothing_set(self):
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SLURM_PARTITION", None)
-            result = self.cfg.get_setting("SLURM_PARTITION")
-        self.assertIsNotNone(result)
-
-    def test_none_returned_for_unknown_setting(self):
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("TOTALLY_UNKNOWN", None)
-            result = self.cfg.get_setting("TOTALLY_UNKNOWN")
-        self.assertIsNone(result)
+    def test_legacy_unprefixed_env_vars_are_ignored(self):
+        # DATA_INPUT_DIR/DATA_OUTPUT_DIR are no longer read by any config code;
+        # only LLMFLUX_-prefixed vars and explicit params resolve directories
+        with patch.dict(os.environ, {
+            "DATA_INPUT_DIR": "/legacy/inputs",
+            "DATA_OUTPUT_DIR": "/legacy/outputs",
+        }):
+            os.environ.pop("LLMFLUX_DATA_INPUT_DIR", None)
+            os.environ.pop("LLMFLUX_DATA_OUTPUT_DIR", None)
+            cfg = Config(data_dir="/tmp/mydata")
+        self.assertEqual(cfg.data_input_dir, "/tmp/mydata/input")
+        self.assertEqual(cfg.data_output_dir, "/tmp/mydata/output")
 
 
 class TestGetSlurmConfigMemory(unittest.TestCase):

@@ -3,7 +3,7 @@ import os
 import re
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 import yaml
 import logging
 from pydantic import BaseModel, Field, field_validator
@@ -237,36 +237,6 @@ class Config:
                 home=str(self.workspace / ".vllm")
             )
 
-        # Define default paths
-        self.default_paths = {
-            'DATA_INPUT_DIR': Path(self.data_input_dir),
-            'DATA_OUTPUT_DIR': Path(self.data_output_dir),
-            'MODELS_DIR': Path(self.models_dir),
-            'LOGS_DIR': Path(self.logs_dir),
-            'CONTAINERS_DIR': Path(self.containers_dir),
-            'APPTAINER_TMPDIR': self.workspace / "tmp",
-            'APPTAINER_CACHEDIR': self.workspace / "tmp" / "cache",
-            'OLLAMA_HOME': self.workspace / ".ollama",
-            'VLLM_HOME': self.workspace / ".vllm",
-        }
-        
-        # Define default settings
-        self.default_settings = {
-            'SLURM_PARTITION': self.slurm.partition,
-            'SLURM_NODES': str(self.slurm.nodes),
-            'SLURM_GPUS_PER_NODE': str(self.slurm.gpus_per_node),
-            'SLURM_TIME': self.slurm.time,
-            'SLURM_MEM': self.slurm.memory,
-            'SLURM_CPUS_PER_TASK': str(self.slurm.cpus_per_task),
-            'OLLAMA_ORIGINS': '*',
-            'OLLAMA_INSECURE': 'true',
-            'CURL_CA_BUNDLE': '',
-            'SSL_CERT_FILE': '',
-            'VLLM_ORIGINS': '*',
-            'VLLM_INSECURE': 'true',
-            'VLLM_HOME': self.workspace / ".vllm",
-        }
-    
     def _load_env_file(self):
         """Load environment variables from .env file in project root."""
         # Try to find .env file in current directory or parent directories
@@ -320,56 +290,6 @@ class Config:
             import logging
             logging.warning(f"Error loading .env file: {str(e)}")
             pass
-    
-    def get_path(self, path_name: str, code_path: Optional[Union[str, Path]] = None) -> Path:
-        """Get a resolved path following precedence: code path > env var > default.
-        
-        Args:
-            path_name: Name of the path (e.g., 'DATA_INPUT_DIR')
-            code_path: Optional explicit path from code
-            
-        Returns:
-            Resolved Path object
-        """
-        # 1. Code path (highest priority)
-        if code_path is not None:
-            return Path(code_path)
-        
-        # 2. Environment variable (middle priority)
-        if path_name in os.environ and os.environ[path_name]:
-            return Path(os.environ[path_name])
-        
-        # 3. Default value (lowest priority)
-        if path_name in self.default_paths:
-            return self.default_paths[path_name]
-        
-        # Fallback to workspace if no match
-        return self.workspace / path_name.lower()
-    
-    def get_setting(self, setting_name: str, code_value: Optional[Any] = None) -> Any:
-        """Get a resolved setting following precedence: code value > env var > default.
-        
-        Args:
-            setting_name: Name of the setting (e.g., 'SLURM_PARTITION')
-            code_value: Optional explicit value from code
-            
-        Returns:
-            Resolved setting value
-        """
-        # 1. Code value (highest priority)
-        if code_value is not None:
-            return code_value
-        
-        # 2. Environment variable (middle priority)
-        if setting_name in os.environ and os.environ[setting_name]:
-            return os.environ[setting_name]
-        
-        # 3. Default value (lowest priority)
-        if setting_name in self.default_settings:
-            return self.default_settings[setting_name]
-        
-        # Return None if no match
-        return None
     
     def ensure_directory(self, path: Path) -> Path:
         """Ensure a directory exists.

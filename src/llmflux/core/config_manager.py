@@ -175,14 +175,5 @@ class ConfigManager:
             config.models = models
         if engine:
             config.engine = engine
-        
-        # Update the derived paths
-        config.default_paths.update({
-            'DATA_INPUT_DIR': Path(config.data_input_dir),
-            'DATA_OUTPUT_DIR': Path(config.data_output_dir),
-            'MODELS_DIR': Path(config.models_dir),
-            'LOGS_DIR': Path(config.logs_dir),
-            'CONTAINERS_DIR': Path(config.containers_dir),
-        })
-        
-        return config 
+
+        return config
