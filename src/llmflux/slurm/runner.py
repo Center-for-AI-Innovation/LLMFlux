@@ -277,9 +277,7 @@ class SlurmRunner:
 
         if not input_file.exists():
             # If it doesn't exist, check if it's relative to the data input directory
-            config = self.config_manager.get_config()
-            data_input_dir = config.get_path('DATA_INPUT_DIR')
-            potential_path = data_input_dir / input_file.name
+            potential_path = self.data_input_dir / input_file.name
             if potential_path.exists():
                 input_file = potential_path
             else:
@@ -291,9 +289,7 @@ class SlurmRunner:
         if output_path:
             output_file = Path(output_path).resolve()
         else:
-            config = self.config_manager.get_config()
-            output_dir = config.get_path('DATA_OUTPUT_DIR')
-            output_file = output_dir / f"results_{int(time.time())}.json"
+            output_file = self.data_output_dir / f"results_{int(time.time())}.json"
         
         # Ensure directories exist
         config = self.config_manager.get_config()
