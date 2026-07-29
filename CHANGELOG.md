@@ -9,12 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Configurable workspace via `LLMFLUX_WORKSPACE` or `workspace="/path"` on
+  `Config` / `ConfigManager.reset_config()`, resolved as code argument →
+  environment variable → current working directory. Every workspace-derived
+  path follows it: the `data`/`models`/`logs`/`containers` defaults, the
+  `.ollama` / `.vllm` engine homes, and the Apptainer `tmp` / `tmp/cache`
+  directories. Previously `Config.workspace` was hardcoded to the current
+  working directory, and the `WORKSPACE` variable named in the docs was never
+  read by any code. `workspace` is deliberately not accepted by
+  `update_config()`, since changing it on a live config would leave already
+  derived values stale — use `reset_config()`
+  (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
+- Input and output directories are now configurable independently of
+  `data_dir`, via `LLMFLUX_DATA_INPUT_DIR` / `LLMFLUX_DATA_OUTPUT_DIR` or the
+  new `data_input_dir` / `data_output_dir` arguments on `Config`,
+  `reset_config()` and `update_config()`, defaulting to `{data_dir}/input` and
+  `{data_dir}/output`. This allows a read-only input location on one filesystem
+  and results written to another
+  (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
 
 ### Changed
 
+- All directory environment variables are now `LLMFLUX_`-prefixed
+  (`LLMFLUX_WORKSPACE`, `LLMFLUX_DATA_INPUT_DIR`, `LLMFLUX_DATA_OUTPUT_DIR`),
+  replacing the unprefixed `WORKSPACE` / `DATA_INPUT_DIR` / `DATA_OUTPUT_DIR`
+  names in `.env.example` and `docs/CONFIGURATION.md`
+  (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
+- `SlurmRunner` resolves the input and output directories from the `Config`
+  attributes it already uses for the SLURM job environment and the Apptainer
+  bind mounts, instead of resolving them separately at use time
+  (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
 
 ### Fixed
 
+- `update_config()` no longer discards the directory overrides passed to it.
+  After applying its arguments it rebuilt `DATA_INPUT_DIR`, `DATA_OUTPUT_DIR`,
+  `MODELS_DIR`, `LOGS_DIR` and `CONTAINERS_DIR` from hardcoded
+  `config.workspace / ...` paths, so a `data_dir` or `models_dir` passed in the
+  same call was silently ignored by everything reading the derived paths. They
+  are now derived from the configured directory attributes
+  (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
+- Directory overrides now reach the Apptainer bind mounts. Path resolution and
+  the bind mounts were computed from two different sources, so an override
+  could change where the runner looked for input while the container was still
+  bound to the default location
+  (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
 - `--mem` CLI flag and programmatic memory settings now actually reach the
   generated `#SBATCH --mem` line. Previously `SlurmConfig` had two fields for
   the same setting (`mem` and `memory`); the CLI and examples set `mem`, but
@@ -25,10 +64,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- **Breaking:** `Config.get_environment()`, which built a full environment
+  dictionary by iterating `default_paths` and `default_settings`. It had no
+  callers; `SlurmRunner` builds the job environment itself
+  (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
 - **Breaking:** `Config.get_path()`, `Config.get_setting()`, `Config.default_paths`
-  and `Config.default_settings`. Directories are read directly from the
-  `Config` attributes (`data_input_dir`, `data_output_dir`, `models_dir`,
-  `logs_dir`, `containers_dir`); SLURM settings from `get_slurm_config()`.
+  and `Config.default_settings`, the layer `get_environment()` was built on.
+  Directories are read directly from the `Config` attributes
+  (`data_input_dir`, `data_output_dir`, `models_dir`, `logs_dir`,
+  `containers_dir`); SLURM settings from `get_slurm_config()`.
   As a consequence the unprefixed `DATA_INPUT_DIR` / `DATA_OUTPUT_DIR`
   environment variables are no longer read — use `LLMFLUX_DATA_INPUT_DIR` and
   `LLMFLUX_DATA_OUTPUT_DIR` (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
