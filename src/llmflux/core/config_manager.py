@@ -2,6 +2,7 @@
 """Configuration Manager for LLMFlux."""
 
 from typing import Optional, Dict, Any, List
+from pathlib import Path
 from .config import Config, ModelConfig, SlurmConfig, EngineConfig
 import os
 
@@ -156,11 +157,11 @@ class ConfigManager:
         
         # Update the derived paths
         config.default_paths.update({
-            'DATA_INPUT_DIR': config.workspace / "data" / "input",
-            'DATA_OUTPUT_DIR': config.workspace / "data" / "output",
-            'MODELS_DIR': config.workspace / "models",
-            'LOGS_DIR': config.workspace / "logs",
-            'CONTAINERS_DIR': config.workspace / "containers",
+            'DATA_INPUT_DIR': Path(config.data_dir) / "input",
+            'DATA_OUTPUT_DIR': Path(config.data_dir) / "output",
+            'MODELS_DIR': Path(config.models_dir),
+            'LOGS_DIR': Path(config.logs_dir),
+            'CONTAINERS_DIR': Path(config.containers_dir),
         })
         
         return config 
