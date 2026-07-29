@@ -386,64 +386,6 @@ class Config:
             path.parent.mkdir(parents=True, exist_ok=True)
         return path
     
-    def get_environment(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
-        """Get a complete environment dictionary with all settings.
-        
-        Args:
-            overrides: Optional dictionary of override values
-            
-        Returns:
-            Dictionary of environment variables
-        """
-        # Start with current environment
-        env = os.environ.copy()
-        
-        # Add all paths
-        for path_name in self.default_paths:
-            code_path = overrides.get(path_name) if overrides else None
-            env[path_name] = str(self.get_path(path_name, code_path))
-        
-        # Add all settings
-        for setting_name in self.default_settings:
-            code_value = overrides.get(setting_name) if overrides else None
-            env[setting_name] = str(self.get_setting(setting_name, code_value))
-        
-        # Add SLURM config
-        # Create a filtered dictionary with SLURM-specific overrides
-        slurm_overrides = {}
-        if overrides:
-            # Map SLURM_* keys to their corresponding field names in SlurmConfig
-            slurm_field_mapping = {
-                'SLURM_ACCOUNT': 'account',
-                'SLURM_PARTITION': 'partition',
-                'SLURM_NODES': 'nodes',
-                'SLURM_GPUS_PER_NODE': 'gpus_per_node',
-                'SLURM_TIME': 'time',
-                'SLURM_MEM': 'memory',
-                'SLURM_CPUS_PER_TASK': 'cpus_per_task'
-            }
-            
-            for env_key, field_name in slurm_field_mapping.items():
-                if env_key in overrides:
-                    slurm_overrides[field_name] = overrides[env_key]
-        
-        slurm_config = self.get_slurm_config(slurm_overrides)
-        env.update({
-            'SLURM_ACCOUNT': slurm_config.account,
-            'SLURM_PARTITION': slurm_config.partition,
-            'SLURM_NODES': str(slurm_config.nodes),
-            'SLURM_GPUS_PER_NODE': str(slurm_config.gpus_per_node),
-            'SLURM_TIME': slurm_config.time,
-            'SLURM_MEM': slurm_config.memory,
-            'SLURM_CPUS_PER_TASK': str(slurm_config.cpus_per_task),
-            'VLLM_ORIGINS': self.engine.origins,
-            'VLLM_INSECURE': self.engine.insecure,
-            'VLLM_HOME': self.engine.home,
-        })
-        
-        # Filter out None values
-        return {k: v for k, v in env.items() if v is not None}
-    
     def load_model_config(
         self,
         model_key: str,
