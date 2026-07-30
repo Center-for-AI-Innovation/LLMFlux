@@ -414,6 +414,58 @@ class TestSlurmRunner(unittest.TestCase):
         # Verify the job was submitted, confirming the input file was resolved
         mock_run.assert_called_once()
 
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_input_resolution_and_bind_mount_share_data_input_dir(
+        self,
+        mock_run,
+        mock_load_model_config,
+        mock_registry,
+        mock_config_manager,
+    ):
+        """A data_input_dir override must resolve input files and set up the
+        Apptainer bind mount from the same directory, not two different ones."""
+        custom_input_dir = self.test_dir / "custom_inputs"
+        custom_input_dir.mkdir()
+        custom_jsonl = custom_input_dir / "external.jsonl"
+        custom_jsonl.write_text(self.jsonl_path.read_text())
+
+        config = Config(
+            data_dir=str(self.data_dir),
+            data_input_dir=str(custom_input_dir),
+            models_dir=str(self.models_dir),
+            logs_dir=str(self.logs_dir),
+            containers_dir=str(self.containers_dir),
+            slurm=self.slurm_config,
+            models=[self.model_config],
+        )
+        mock_config_manager.return_value.get_config.return_value = config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        runner = SlurmRunner()
+        # runner.data_input_dir is what run() uses to resolve a bare filename
+        # (runner.py's "relative to the data input directory" fallback).
+        self.assertEqual(runner.data_input_dir, custom_input_dir.resolve())
+
+        # Only exists under the overridden data_input_dir, not {data_dir}/input.
+        runner.run(
+            input_path="external.jsonl",
+            output_path=str(self.output_path),
+            model="test:7b",
+        )
+
+        mock_run.assert_called_once()
+        submitted_env = mock_run.call_args.kwargs["env"]
+        # The Apptainer bind mount must be built from that same directory
+        # runner.data_input_dir resolved input against, not a separately
+        # computed default.
+        self.assertEqual(submitted_env["DATA_INPUT_DIR"], str(runner.data_input_dir))
+
 
 class TestSlurmRunnerServe(unittest.TestCase):
     """Tests for SlurmRunner.serve()."""

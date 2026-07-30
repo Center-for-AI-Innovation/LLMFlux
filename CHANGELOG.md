@@ -49,10 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same call was silently ignored by everything reading the derived paths. They
   are now derived from the configured directory attributes
   (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
-- Directory overrides now reach the Apptainer bind mounts. Path resolution and
-  the bind mounts were computed from two different sources, so an override
-  could change where the runner looked for input while the container was still
-  bound to the default location
+- `SlurmRunner.run()` resolved the input-file fallback and default output path
+  via `Config.get_path()`, while the Apptainer bind mounts used
+  `self.data_input_dir` / `self.data_output_dir` — two different reads of the
+  same config, so a `data_input_dir` / `data_output_dir` override could reach
+  one and not the other. Both now use `self.data_input_dir` /
+  `self.data_output_dir`
   (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
 - `--mem` CLI flag and programmatic memory settings now actually reach the
   generated `#SBATCH --mem` line. Previously `SlurmConfig` had two fields for
