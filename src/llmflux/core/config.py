@@ -211,12 +211,12 @@ class Config:
         self.workspace = Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd()).expanduser().resolve()
         
         # Set directories from parameters or environment variables
-        self.data_dir = data_dir or os.getenv('LLMFLUX_DATA_DIR') or str(self.workspace / "data")
-        self.data_input_dir = data_input_dir or os.getenv('LLMFLUX_DATA_INPUT_DIR') or str(Path(self.data_dir) / "input")
-        self.data_output_dir = data_output_dir or os.getenv('LLMFLUX_DATA_OUTPUT_DIR') or str(Path(self.data_dir) / "output")
-        self.models_dir = models_dir or os.getenv('LLMFLUX_MODELS_DIR') or str(self.workspace / "models")
-        self.logs_dir = logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or str(self.workspace / "logs")
-        self.containers_dir = containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or str(self.workspace / "containers")
+        self.data_dir = str(Path(data_dir or os.getenv('LLMFLUX_DATA_DIR') or self.workspace / "data").expanduser().resolve())
+        self.data_input_dir = str(Path(data_input_dir or os.getenv('LLMFLUX_DATA_INPUT_DIR') or Path(self.data_dir) / "input").expanduser().resolve())
+        self.data_output_dir = str(Path(data_output_dir or os.getenv('LLMFLUX_DATA_OUTPUT_DIR') or Path(self.data_dir) / "output").expanduser().resolve())
+        self.models_dir = str(Path(models_dir or os.getenv('LLMFLUX_MODELS_DIR') or self.workspace / "models").expanduser().resolve())
+        self.logs_dir = str(Path(logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or self.workspace / "logs").expanduser().resolve())
+        self.containers_dir = str(Path(containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or self.workspace / "containers").expanduser().resolve())
         
         # Set SLURM configuration
         self.slurm = slurm or SlurmConfig()

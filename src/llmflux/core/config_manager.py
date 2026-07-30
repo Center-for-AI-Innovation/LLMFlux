@@ -154,21 +154,21 @@ class ConfigManager:
         
         # Update only the provided values
         if data_dir:
-            config.data_dir = data_dir
+            config.data_dir = str(Path(data_dir).expanduser().resolve())
             # Re-derive input/output so they follow the new data_dir unless
             # explicitly overridden below
-            config.data_input_dir = str(Path(data_dir) / "input")
-            config.data_output_dir = str(Path(data_dir) / "output")
+            config.data_input_dir = str(Path(config.data_dir) / "input")
+            config.data_output_dir = str(Path(config.data_dir) / "output")
         if data_input_dir:
-            config.data_input_dir = data_input_dir
+            config.data_input_dir = str(Path(data_input_dir).expanduser().resolve())
         if data_output_dir:
-            config.data_output_dir = data_output_dir
+            config.data_output_dir = str(Path(data_output_dir).expanduser().resolve())
         if models_dir:
-            config.models_dir = models_dir
+            config.models_dir = str(Path(models_dir).expanduser().resolve())
         if logs_dir:
-            config.logs_dir = logs_dir
+            config.logs_dir = str(Path(logs_dir).expanduser().resolve())
         if containers_dir:
-            config.containers_dir = containers_dir
+            config.containers_dir = str(Path(containers_dir).expanduser().resolve())
         if slurm:
             config.slurm = slurm
         if models:
