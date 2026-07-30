@@ -208,7 +208,7 @@ class Config:
         self._load_env_file()
 
         # Initialize workspace paths
-        self.workspace = Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd())
+        self.workspace = Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd()).expanduser().resolve()
         
         # Set directories from parameters or environment variables
         self.data_dir = data_dir or os.getenv('LLMFLUX_DATA_DIR') or str(self.workspace / "data")
