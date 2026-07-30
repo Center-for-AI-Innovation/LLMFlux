@@ -425,7 +425,7 @@ class SlurmRunner:
         # Add additional parameters from kwargs through config manager
         for key, value in kwargs.items():
             # Skip parameters that are already handled
-            if key in ['model', 'batch_size', 'save_frequency', 'vllm_engine_args']:
+            if key in ['model', 'batch_size', 'save_frequency', 'vllm_engine_args', 'custom_config_path']:
                 continue
                 
             # Use config manager to get the value with proper priority
