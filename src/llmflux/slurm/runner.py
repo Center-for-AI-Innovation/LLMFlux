@@ -112,6 +112,12 @@ class SlurmRunner:
         # Resolve HuggingFace cache directory with a default under workspace.
         hf_home = os.getenv('HF_HOME') or str(workspace_path / ".cache" / "huggingface")
 
+        # Cache locations for engine-side JIT artifacts (e.g. FlashInfer kernels).
+        # These must also be host vars: the batch script uses them for mkdir and
+        # --bind, and an unbound cache dir is read-only inside the container.
+        xdg_cache_home = str(workspace_path / ".cache")
+        flashinfer_workspace_base = str(workspace_path)
+
         # HOST-ONLY variables (used by bash script, NOT passed to container)
         host_vars = {
             'DATA_INPUT_DIR': str(self.data_input_dir),
@@ -129,6 +135,8 @@ class SlurmRunner:
             'VLLM_HOME': str(self.workspace / ".vllm"),
             'VLLM_MODELS': str(self.workspace / ".vllm" / "models"),
             'HF_HOME': hf_home,  # Used for mkdir and --bind
+            'XDG_CACHE_HOME': xdg_cache_home,  # Used for mkdir and --bind
+            'FLASHINFER_WORKSPACE_BASE': flashinfer_workspace_base,  # Used for mkdir and --bind
             'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
         }
 
@@ -146,8 +154,8 @@ class SlurmRunner:
             'APPTAINERENV_OLLAMA_SCHED_SPREAD': ollama_sched_spread,
             'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
             'APPTAINERENV_HF_HOME': hf_home,
-            'APPTAINERENV_XDG_CACHE_HOME': str(workspace_path / ".cache"),
-            'APPTAINERENV_FLASHINFER_WORKSPACE_BASE': str(workspace_path),
+            'APPTAINERENV_XDG_CACHE_HOME': xdg_cache_home,
+            'APPTAINERENV_FLASHINFER_WORKSPACE_BASE': flashinfer_workspace_base,
             # Use system CA bundle for HTTPS (e.g. HuggingFace model downloads).
             # Empty values break downloads with "No CA certificates were loaded".
             'APPTAINERENV_CURL_CA_BUNDLE': '/etc/ssl/certs/ca-certificates.crt',
