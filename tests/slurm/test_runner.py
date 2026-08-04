@@ -466,6 +466,79 @@ class TestSlurmRunner(unittest.TestCase):
         # computed default.
         self.assertEqual(submitted_env["DATA_INPUT_DIR"], str(runner.data_input_dir))
 
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_input_already_in_data_input_dir_not_rewritten(
+        self,
+        mock_run,
+        mock_load_model_config,
+        mock_registry,
+        mock_config_manager,
+    ):
+        """An input file already inside data_input_dir must be used in place,
+        not copied onto itself."""
+        config = Config(
+            data_dir=str(self.data_dir),
+            data_input_dir=str(self.data_dir),
+            models_dir=str(self.models_dir),
+            logs_dir=str(self.logs_dir),
+            containers_dir=str(self.containers_dir),
+            slurm=self.slurm_config,
+            models=[self.model_config],
+        )
+        mock_config_manager.return_value.get_config.return_value = config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        mtime_before = self.jsonl_path.stat().st_mtime_ns
+
+        runner = SlurmRunner()
+        runner.run(
+            input_path=str(self.jsonl_path),
+            output_path=str(self.output_path),
+            model="test:7b",
+        )
+
+        mock_run.assert_called_once()
+        self.assertEqual(self.jsonl_path.stat().st_mtime_ns, mtime_before)
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_directory_input_raises_and_is_preserved(
+        self,
+        mock_run,
+        mock_load_model_config,
+        mock_registry,
+        mock_config_manager,
+    ):
+        """A directory passed as input must raise instead of being staged —
+        the old copytree path could rmtree the original directory."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+
+        prompts_dir = self.test_dir / "prompts"
+        prompts_dir.mkdir()
+        prompts_file = prompts_dir / "prompts.jsonl"
+        prompts_file.write_text(self.jsonl_path.read_text())
+
+        runner = SlurmRunner()
+        with self.assertRaises(ValueError):
+            runner.run(
+                input_path=str(prompts_dir),
+                output_path=str(self.output_path),
+                model="test:7b",
+            )
+
+        mock_run.assert_not_called()
+        self.assertTrue(prompts_file.exists())
+
 
 class TestSlurmRunnerServe(unittest.TestCase):
     """Tests for SlurmRunner.serve()."""

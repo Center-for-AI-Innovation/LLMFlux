@@ -48,7 +48,7 @@ class SlurmRunner:
         self.slurm_config = config or self.config_manager.get_config().get_slurm_config()
         
         # Set workspace
-        self.workspace = Path(workspace) if workspace else Path(self.config_manager.get_config().workspace)
+        self.workspace = Path(workspace).expanduser().resolve() if workspace else Path(self.config_manager.get_config().workspace)
         
         # Get paths from config if available
         config = self.config_manager.get_config()
@@ -296,17 +296,19 @@ class SlurmRunner:
         config.ensure_directory(input_file.parent if input_file.is_file() else input_file)
         config.ensure_directory(output_file.parent)
         
-        # Copy input to workspace if needed
-        if not input_file.is_relative_to(self.workspace) and input_file.exists():
+        # Copy input into the data input dir only if the job can't already see it
+        already_visible = (
+            input_file.is_relative_to(self.workspace)
+            or input_file.is_relative_to(self.data_input_dir)
+        )
+        if not already_visible and input_file.exists():
+            if input_file.is_dir():
+                raise ValueError(
+                    f"Input must be a JSONL file, got a directory: {input_file}"
+                )
             workspace_input = self.data_input_dir / input_file.name
-            if input_file.is_file():
-                workspace_input.parent.mkdir(parents=True, exist_ok=True)
-                workspace_input.write_bytes(input_file.read_bytes())
-            else:
-                # If directory exists, remove it first to avoid FileExistsError
-                if workspace_input.exists():
-                    shutil.rmtree(workspace_input)
-                shutil.copytree(input_file, workspace_input)
+            workspace_input.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(input_file, workspace_input)
             input_file = workspace_input
         
         # Setup environment
