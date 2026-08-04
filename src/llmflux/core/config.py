@@ -284,6 +284,7 @@ class Config:
         2. Variables from .env file (middle priority)
         3. Default values (lowest priority)
         """
+        logging.info(f"Loading environment variables from {env_file}")
         try:
             with open(env_file, 'r') as f:
                 for line in f:
@@ -307,7 +308,6 @@ class Config:
                             os.environ[key] = value
         except Exception as e:
             # Log the error but continue execution
-            import logging
             logging.warning(f"Error loading .env file: {str(e)}")
             pass
     
