@@ -618,7 +618,6 @@ class TestRunnerEnvironmentVariables:
         # Setup config manager mock
         mock_manager = MagicMock()
         mock_config = MagicMock()
-        mock_config.get_path.return_value = temp_dir
         mock_config.ensure_directory = MagicMock()
         mock_config.get_slurm_config.return_value = MagicMock(
             account="test-account",
@@ -737,7 +736,6 @@ class TestRunnerEnvironmentVariables:
         # Setup mocks (same as above)
         mock_manager = MagicMock()
         mock_config = MagicMock()
-        mock_config.get_path.return_value = temp_dir
         mock_config.ensure_directory = MagicMock()
         mock_config.get_slurm_config.return_value = MagicMock(
             account="test-account",
@@ -799,7 +797,6 @@ class TestRunnerEnvironmentVariables:
         # Setup mocks
         mock_manager = MagicMock()
         mock_config = MagicMock()
-        mock_config.get_path.return_value = temp_dir
         mock_config.ensure_directory = MagicMock()
         mock_config.get_slurm_config.return_value = MagicMock(
             account="test-account",
@@ -872,7 +869,6 @@ class TestEnvironmentVariablePrefixes:
         # Setup mocks
         mock_manager = MagicMock()
         mock_config = MagicMock()
-        mock_config.get_path.return_value = temp_dir
         mock_config.ensure_directory = MagicMock()
         mock_config.get_slurm_config.return_value = MagicMock(
             account="test-account",
@@ -994,7 +990,6 @@ class TestEnvironmentVariablePrefixes:
         # Setup mocks (same as above)
         mock_manager = MagicMock()
         mock_config = MagicMock()
-        mock_config.get_path.return_value = temp_dir
         mock_config.ensure_directory = MagicMock()
         mock_config.get_slurm_config.return_value = MagicMock(
             account="test-account",
@@ -1107,7 +1102,6 @@ class TestEnvironmentVariablePrefixes:
         # Setup mocks
         mock_manager = MagicMock()
         mock_config = MagicMock()
-        mock_config.get_path.return_value = temp_dir
         mock_config.ensure_directory = MagicMock()
         mock_config.get_slurm_config.return_value = MagicMock(
             account="test-account",
@@ -1206,7 +1200,6 @@ class TestEnvironmentVariablePrefixes:
         # Setup mocks
         mock_manager = MagicMock()
         mock_config = MagicMock()
-        mock_config.get_path.return_value = temp_dir
         mock_config.ensure_directory = MagicMock()
         mock_config.get_slurm_config.return_value = MagicMock(
             account="test-account",

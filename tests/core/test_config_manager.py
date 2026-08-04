@@ -2,6 +2,7 @@
 
 import os
 import unittest
+from pathlib import Path
 
 import llmflux.core.config_manager as cm_module
 from llmflux.core.config_manager import ConfigManager
@@ -29,8 +30,14 @@ class TestConfigManagerSingleton(unittest.TestCase):
 
     def test_reset_config_with_custom_dirs(self):
         config = ConfigManager.reset_config(data_dir="/tmp/mydata", logs_dir="/tmp/mylogs")
-        self.assertEqual(config.data_dir, "/tmp/mydata")
-        self.assertEqual(config.logs_dir, "/tmp/mylogs")
+        self.assertEqual(config.data_dir, str(Path("/tmp/mydata").resolve()))
+        self.assertEqual(config.logs_dir, str(Path("/tmp/mylogs").resolve()))
+
+    def test_reset_config_with_workspace(self):
+        config = ConfigManager.reset_config(workspace="/tmp/myworkspace")
+        workspace = str(Path("/tmp/myworkspace").resolve())
+        self.assertEqual(str(config.workspace), workspace)
+        self.assertEqual(config.data_dir, f"{workspace}/data")
 
 
 class TestGetParameter(unittest.TestCase):
@@ -115,12 +122,12 @@ class TestUpdateConfig(unittest.TestCase):
     def test_update_data_dir(self):
         ConfigManager.get_config()
         updated = ConfigManager.update_config(data_dir="/tmp/updated_data")
-        self.assertEqual(updated.data_dir, "/tmp/updated_data")
+        self.assertEqual(updated.data_dir, str(Path("/tmp/updated_data").resolve()))
 
     def test_update_logs_dir(self):
         ConfigManager.get_config()
         updated = ConfigManager.update_config(logs_dir="/tmp/updated_logs")
-        self.assertEqual(updated.logs_dir, "/tmp/updated_logs")
+        self.assertEqual(updated.logs_dir, str(Path("/tmp/updated_logs").resolve()))
 
     def test_update_returns_same_singleton(self):
         original = ConfigManager.get_config()
@@ -133,7 +140,17 @@ class TestUpdateConfig(unittest.TestCase):
         ConfigManager.update_config()
         self.assertEqual(ConfigManager.get_config().data_dir, original_data_dir)
 
-    def test_update_refreshes_derived_paths(self):
+    def test_update_with_separate_input_output_dirs(self):
         ConfigManager.get_config()
+        updated = ConfigManager.update_config(
+            data_input_dir="/projects/prompts", data_output_dir="/scratch/results"
+        )
+        self.assertEqual(updated.data_input_dir, "/projects/prompts")
+        self.assertEqual(updated.data_output_dir, "/scratch/results")
+
+    def test_update_data_dir_rederives_input_output(self):
+        ConfigManager.reset_config(data_input_dir="/tmp/old/inputs")
         updated = ConfigManager.update_config(data_dir="/tmp/newdata")
-        self.assertIn("input", str(updated.default_paths.get("DATA_INPUT_DIR", "")))
+        data_dir = str(Path("/tmp/newdata").resolve())
+        self.assertEqual(updated.data_input_dir, f"{data_dir}/input")
+        self.assertEqual(updated.data_output_dir, f"{data_dir}/output")

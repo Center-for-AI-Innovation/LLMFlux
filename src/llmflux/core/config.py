@@ -3,7 +3,7 @@ import os
 import re
 import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 import yaml
 import logging
 from pydantic import BaseModel, Field, field_validator
@@ -176,8 +176,11 @@ def parse_gpu_memory(memory_str: str) -> int:
 class Config:
     """Central configuration management."""
     
-    def __init__(self, 
+    def __init__(self,
+                 workspace: Optional[str] = None,
                  data_dir: Optional[str] = None,
+                 data_input_dir: Optional[str] = None,
+                 data_output_dir: Optional[str] = None,
                  models_dir: Optional[str] = None,
                  logs_dir: Optional[str] = None,
                  containers_dir: Optional[str] = None,
@@ -185,9 +188,12 @@ class Config:
                  models: Optional[List[ModelConfig]] = None,
                  engine: Optional[str] = None):
         """Initialize configuration.
-        
+
         Args:
+            workspace: Optional path to workspace directory (defaults to current working directory)
             data_dir: Optional path to data directory
+            data_input_dir: Optional path to input directory (defaults to {data_dir}/input)
+            data_output_dir: Optional path to output directory (defaults to {data_dir}/output)
             models_dir: Optional path to models directory
             logs_dir: Optional path to logs directory
             containers_dir: Optional path to containers directory
@@ -197,18 +203,20 @@ class Config:
         """
         self.package_dir = Path(__file__).parent.parent
         self.templates_dir = self.package_dir / 'templates'
-        
+
         # Load environment variables from .env file if it exists
         self._load_env_file()
-        
+
         # Initialize workspace paths
-        self.workspace = Path.cwd()
-        
+        self.workspace = self._validate_dir(Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd()).expanduser().resolve())
+
         # Set directories from parameters or environment variables
-        self.data_dir = data_dir or os.getenv('LLMFLUX_DATA_DIR') or str(self.workspace / "data")
-        self.models_dir = models_dir or os.getenv('LLMFLUX_MODELS_DIR') or str(self.workspace / "models")
-        self.logs_dir = logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or str(self.workspace / "logs")
-        self.containers_dir = containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or str(self.workspace / "containers")
+        self.data_dir = str(self._validate_dir(Path(data_dir or os.getenv('LLMFLUX_DATA_DIR') or self.workspace / "data").expanduser().resolve()))
+        self.data_input_dir = str(self._validate_dir(Path(data_input_dir or os.getenv('LLMFLUX_DATA_INPUT_DIR') or Path(self.data_dir) / "input").expanduser().resolve()))
+        self.data_output_dir = str(self._validate_dir(Path(data_output_dir or os.getenv('LLMFLUX_DATA_OUTPUT_DIR') or Path(self.data_dir) / "output").expanduser().resolve()))
+        self.models_dir = str(self._validate_dir(Path(models_dir or os.getenv('LLMFLUX_MODELS_DIR') or self.workspace / "models").expanduser().resolve()))
+        self.logs_dir = str(self._validate_dir(Path(logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or self.workspace / "logs").expanduser().resolve()))
+        self.containers_dir = str(self._validate_dir(Path(containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or self.workspace / "containers").expanduser().resolve()))
         
         # Set SLURM configuration
         self.slurm = slurm or SlurmConfig()
@@ -229,36 +237,26 @@ class Config:
                 home=str(self.workspace / ".vllm")
             )
 
-        # Define default paths
-        self.default_paths = {
-            'DATA_INPUT_DIR': Path(self.data_dir) / "input",
-            'DATA_OUTPUT_DIR': Path(self.data_dir) / "output",
-            'MODELS_DIR': Path(self.models_dir),
-            'LOGS_DIR': Path(self.logs_dir),
-            'CONTAINERS_DIR': Path(self.containers_dir),
-            'APPTAINER_TMPDIR': self.workspace / "tmp",
-            'APPTAINER_CACHEDIR': self.workspace / "tmp" / "cache",
-            'OLLAMA_HOME': self.workspace / ".ollama",
-            'VLLM_HOME': self.workspace / ".vllm",
-        }
-        
-        # Define default settings
-        self.default_settings = {
-            'SLURM_PARTITION': self.slurm.partition,
-            'SLURM_NODES': str(self.slurm.nodes),
-            'SLURM_GPUS_PER_NODE': str(self.slurm.gpus_per_node),
-            'SLURM_TIME': self.slurm.time,
-            'SLURM_MEM': self.slurm.memory,
-            'SLURM_CPUS_PER_TASK': str(self.slurm.cpus_per_task),
-            'OLLAMA_ORIGINS': '*',
-            'OLLAMA_INSECURE': 'true',
-            'CURL_CA_BUNDLE': '',
-            'SSL_CERT_FILE': '',
-            'VLLM_ORIGINS': '*',
-            'VLLM_INSECURE': 'true',
-            'VLLM_HOME': self.workspace / ".vllm",
-        }
-    
+    def _validate_dir(self, path: Path) -> Path:
+        """Ensure a directory exists and is writable, creating it if necessary.
+
+        Args:
+            path: Directory path to validate
+
+        Returns:
+            The same path
+
+        Raises:
+            OSError: If the directory cannot be created or is not writable
+        """
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            if not os.access(path, os.W_OK):
+                raise PermissionError(f"Directory is not writable: {path}")
+        except (OSError, PermissionError) as e:
+            raise OSError(f"Cannot use directory '{path}': {e}") from e
+        return path
+
     def _load_env_file(self):
         """Load environment variables from .env file in project root."""
         # Try to find .env file in current directory or parent directories
@@ -286,6 +284,7 @@ class Config:
         2. Variables from .env file (middle priority)
         3. Default values (lowest priority)
         """
+        logging.info(f"Loading environment variables from {env_file}")
         try:
             with open(env_file, 'r') as f:
                 for line in f:
@@ -309,59 +308,8 @@ class Config:
                             os.environ[key] = value
         except Exception as e:
             # Log the error but continue execution
-            import logging
             logging.warning(f"Error loading .env file: {str(e)}")
             pass
-    
-    def get_path(self, path_name: str, code_path: Optional[Union[str, Path]] = None) -> Path:
-        """Get a resolved path following precedence: code path > env var > default.
-        
-        Args:
-            path_name: Name of the path (e.g., 'DATA_INPUT_DIR')
-            code_path: Optional explicit path from code
-            
-        Returns:
-            Resolved Path object
-        """
-        # 1. Code path (highest priority)
-        if code_path is not None:
-            return Path(code_path)
-        
-        # 2. Environment variable (middle priority)
-        if path_name in os.environ and os.environ[path_name]:
-            return Path(os.environ[path_name])
-        
-        # 3. Default value (lowest priority)
-        if path_name in self.default_paths:
-            return self.default_paths[path_name]
-        
-        # Fallback to workspace if no match
-        return self.workspace / path_name.lower()
-    
-    def get_setting(self, setting_name: str, code_value: Optional[Any] = None) -> Any:
-        """Get a resolved setting following precedence: code value > env var > default.
-        
-        Args:
-            setting_name: Name of the setting (e.g., 'SLURM_PARTITION')
-            code_value: Optional explicit value from code
-            
-        Returns:
-            Resolved setting value
-        """
-        # 1. Code value (highest priority)
-        if code_value is not None:
-            return code_value
-        
-        # 2. Environment variable (middle priority)
-        if setting_name in os.environ and os.environ[setting_name]:
-            return os.environ[setting_name]
-        
-        # 3. Default value (lowest priority)
-        if setting_name in self.default_settings:
-            return self.default_settings[setting_name]
-        
-        # Return None if no match
-        return None
     
     def ensure_directory(self, path: Path) -> Path:
         """Ensure a directory exists.
@@ -377,64 +325,6 @@ class Config:
         else:
             path.parent.mkdir(parents=True, exist_ok=True)
         return path
-    
-    def get_environment(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
-        """Get a complete environment dictionary with all settings.
-        
-        Args:
-            overrides: Optional dictionary of override values
-            
-        Returns:
-            Dictionary of environment variables
-        """
-        # Start with current environment
-        env = os.environ.copy()
-        
-        # Add all paths
-        for path_name in self.default_paths:
-            code_path = overrides.get(path_name) if overrides else None
-            env[path_name] = str(self.get_path(path_name, code_path))
-        
-        # Add all settings
-        for setting_name in self.default_settings:
-            code_value = overrides.get(setting_name) if overrides else None
-            env[setting_name] = str(self.get_setting(setting_name, code_value))
-        
-        # Add SLURM config
-        # Create a filtered dictionary with SLURM-specific overrides
-        slurm_overrides = {}
-        if overrides:
-            # Map SLURM_* keys to their corresponding field names in SlurmConfig
-            slurm_field_mapping = {
-                'SLURM_ACCOUNT': 'account',
-                'SLURM_PARTITION': 'partition',
-                'SLURM_NODES': 'nodes',
-                'SLURM_GPUS_PER_NODE': 'gpus_per_node',
-                'SLURM_TIME': 'time',
-                'SLURM_MEM': 'memory',
-                'SLURM_CPUS_PER_TASK': 'cpus_per_task'
-            }
-            
-            for env_key, field_name in slurm_field_mapping.items():
-                if env_key in overrides:
-                    slurm_overrides[field_name] = overrides[env_key]
-        
-        slurm_config = self.get_slurm_config(slurm_overrides)
-        env.update({
-            'SLURM_ACCOUNT': slurm_config.account,
-            'SLURM_PARTITION': slurm_config.partition,
-            'SLURM_NODES': str(slurm_config.nodes),
-            'SLURM_GPUS_PER_NODE': str(slurm_config.gpus_per_node),
-            'SLURM_TIME': slurm_config.time,
-            'SLURM_MEM': slurm_config.memory,
-            'SLURM_CPUS_PER_TASK': str(slurm_config.cpus_per_task),
-            'VLLM_ORIGINS': self.engine.origins,
-            'VLLM_INSECURE': self.engine.insecure,
-            'VLLM_HOME': self.engine.home,
-        })
-        
-        # Filter out None values
-        return {k: v for k, v in env.items() if v is not None}
     
     def load_model_config(
         self,
