@@ -208,15 +208,15 @@ class Config:
         self._load_env_file()
 
         # Initialize workspace paths
-        self.workspace = Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd()).expanduser().resolve()
-        
+        self.workspace = self._validate_dir(Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd()).expanduser().resolve())
+
         # Set directories from parameters or environment variables
-        self.data_dir = str(Path(data_dir or os.getenv('LLMFLUX_DATA_DIR') or self.workspace / "data").expanduser().resolve())
-        self.data_input_dir = str(Path(data_input_dir or os.getenv('LLMFLUX_DATA_INPUT_DIR') or Path(self.data_dir) / "input").expanduser().resolve())
-        self.data_output_dir = str(Path(data_output_dir or os.getenv('LLMFLUX_DATA_OUTPUT_DIR') or Path(self.data_dir) / "output").expanduser().resolve())
-        self.models_dir = str(Path(models_dir or os.getenv('LLMFLUX_MODELS_DIR') or self.workspace / "models").expanduser().resolve())
-        self.logs_dir = str(Path(logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or self.workspace / "logs").expanduser().resolve())
-        self.containers_dir = str(Path(containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or self.workspace / "containers").expanduser().resolve())
+        self.data_dir = str(self._validate_dir(Path(data_dir or os.getenv('LLMFLUX_DATA_DIR') or self.workspace / "data").expanduser().resolve()))
+        self.data_input_dir = str(self._validate_dir(Path(data_input_dir or os.getenv('LLMFLUX_DATA_INPUT_DIR') or Path(self.data_dir) / "input").expanduser().resolve()))
+        self.data_output_dir = str(self._validate_dir(Path(data_output_dir or os.getenv('LLMFLUX_DATA_OUTPUT_DIR') or Path(self.data_dir) / "output").expanduser().resolve()))
+        self.models_dir = str(self._validate_dir(Path(models_dir or os.getenv('LLMFLUX_MODELS_DIR') or self.workspace / "models").expanduser().resolve()))
+        self.logs_dir = str(self._validate_dir(Path(logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or self.workspace / "logs").expanduser().resolve()))
+        self.containers_dir = str(self._validate_dir(Path(containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or self.workspace / "containers").expanduser().resolve()))
         
         # Set SLURM configuration
         self.slurm = slurm or SlurmConfig()
@@ -236,6 +236,26 @@ class Config:
                 engine="vllm",
                 home=str(self.workspace / ".vllm")
             )
+
+    def _validate_dir(self, path: Path) -> Path:
+        """Ensure a directory exists and is writable, creating it if necessary.
+
+        Args:
+            path: Directory path to validate
+
+        Returns:
+            The same path
+
+        Raises:
+            OSError: If the directory cannot be created or is not writable
+        """
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            if not os.access(path, os.W_OK):
+                raise PermissionError(f"Directory is not writable: {path}")
+        except (OSError, PermissionError) as e:
+            raise OSError(f"Cannot use directory '{path}': {e}") from e
+        return path
 
     def _load_env_file(self):
         """Load environment variables from .env file in project root."""
