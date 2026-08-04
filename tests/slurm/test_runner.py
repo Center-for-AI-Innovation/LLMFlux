@@ -116,9 +116,9 @@ class TestSlurmRunner(unittest.TestCase):
         runner = SlurmRunner()
         env_vars = runner._setup_environment("test_workspace")
 
-        self.assertEqual(env_vars["MODELS_DIR"], str(self.models_dir))
-        self.assertEqual(env_vars["LOGS_DIR"], str(self.logs_dir))
-        self.assertEqual(env_vars["CONTAINERS_DIR"], str(self.containers_dir))
+        self.assertEqual(env_vars["MODELS_DIR"], str(self.models_dir.resolve()))
+        self.assertEqual(env_vars["LOGS_DIR"], str(self.logs_dir.resolve()))
+        self.assertEqual(env_vars["CONTAINERS_DIR"], str(self.containers_dir.resolve()))
         self.assertEqual(env_vars["PROJECT_ROOT"], "test_workspace")
 
     @patch("llmflux.slurm.runner.ConfigManager")

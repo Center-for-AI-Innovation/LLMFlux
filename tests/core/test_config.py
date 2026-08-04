@@ -115,12 +115,12 @@ class TestValidationConfig(unittest.TestCase):
 class TestConfigDirectoryResolution(unittest.TestCase):
     def test_explicit_data_dir_used(self):
         cfg = Config(data_dir="/tmp/mydata")
-        self.assertEqual(cfg.data_dir, "/tmp/mydata")
+        self.assertEqual(cfg.data_dir, str(Path("/tmp/mydata").resolve()))
 
     def test_env_var_data_dir_used(self):
         with patch.dict(os.environ, {"LLMFLUX_DATA_DIR": "/tmp/envdata"}):
             cfg = Config()
-        self.assertEqual(cfg.data_dir, "/tmp/envdata")
+        self.assertEqual(cfg.data_dir, str(Path("/tmp/envdata").resolve()))
 
     def test_default_data_dir_is_cwd_relative(self):
         with patch.dict(os.environ, {}, clear=False):
@@ -130,12 +130,12 @@ class TestConfigDirectoryResolution(unittest.TestCase):
 
     def test_explicit_logs_dir(self):
         cfg = Config(logs_dir="/tmp/mylogs")
-        self.assertEqual(cfg.logs_dir, "/tmp/mylogs")
+        self.assertEqual(cfg.logs_dir, str(Path("/tmp/mylogs").resolve()))
 
     def test_code_param_beats_env_var(self):
         with patch.dict(os.environ, {"LLMFLUX_DATA_DIR": "/tmp/envdata"}):
             cfg = Config(data_dir="/tmp/explicit")
-        self.assertEqual(cfg.data_dir, "/tmp/explicit")
+        self.assertEqual(cfg.data_dir, str(Path("/tmp/explicit").resolve()))
 
 
 class TestConfigWorkspace(unittest.TestCase):
@@ -147,58 +147,60 @@ class TestConfigWorkspace(unittest.TestCase):
 
     def test_explicit_workspace_used(self):
         cfg = Config(workspace="/tmp/myworkspace")
-        self.assertEqual(cfg.workspace, Path("/tmp/myworkspace"))
+        self.assertEqual(cfg.workspace, Path("/tmp/myworkspace").resolve())
 
     def test_env_var_workspace_used(self):
         with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": "/tmp/envworkspace"}):
             cfg = Config()
-        self.assertEqual(cfg.workspace, Path("/tmp/envworkspace"))
+        self.assertEqual(cfg.workspace, Path("/tmp/envworkspace").resolve())
 
     def test_code_param_beats_env_var(self):
         with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": "/tmp/envworkspace"}):
             cfg = Config(workspace="/tmp/explicit")
-        self.assertEqual(cfg.workspace, Path("/tmp/explicit"))
+        self.assertEqual(cfg.workspace, Path("/tmp/explicit").resolve())
 
     def test_directories_derive_from_workspace(self):
         with patch.dict(os.environ, {}, clear=False):
             for var in ("LLMFLUX_DATA_DIR", "LLMFLUX_MODELS_DIR", "LLMFLUX_LOGS_DIR", "LLMFLUX_CONTAINERS_DIR"):
                 os.environ.pop(var, None)
             cfg = Config(workspace="/tmp/myworkspace")
-        self.assertEqual(cfg.data_dir, "/tmp/myworkspace/data")
-        self.assertEqual(cfg.models_dir, "/tmp/myworkspace/models")
-        self.assertEqual(cfg.logs_dir, "/tmp/myworkspace/logs")
-        self.assertEqual(cfg.containers_dir, "/tmp/myworkspace/containers")
+        workspace = str(Path("/tmp/myworkspace").resolve())
+        self.assertEqual(cfg.data_dir, f"{workspace}/data")
+        self.assertEqual(cfg.models_dir, f"{workspace}/models")
+        self.assertEqual(cfg.logs_dir, f"{workspace}/logs")
+        self.assertEqual(cfg.containers_dir, f"{workspace}/containers")
 
     def test_explicit_dir_beats_workspace_derived_default(self):
         with patch.dict(os.environ, {"LLMFLUX_DATA_DIR": "/tmp/envdata"}):
             cfg = Config(workspace="/tmp/myworkspace")
-        self.assertEqual(cfg.data_dir, "/tmp/envdata")
+        self.assertEqual(cfg.data_dir, str(Path("/tmp/envdata").resolve()))
 
 
 class TestConfigInputOutputDirs(unittest.TestCase):
     def test_default_derive_from_data_dir(self):
         cfg = Config(data_dir="/tmp/mydata")
-        self.assertEqual(cfg.data_input_dir, "/tmp/mydata/input")
-        self.assertEqual(cfg.data_output_dir, "/tmp/mydata/output")
+        data_dir = str(Path("/tmp/mydata").resolve())
+        self.assertEqual(cfg.data_input_dir, f"{data_dir}/input")
+        self.assertEqual(cfg.data_output_dir, f"{data_dir}/output")
 
     def test_explicit_separate_input_output(self):
-        cfg = Config(data_input_dir="/projects/prompts", data_output_dir="/scratch/results")
-        self.assertEqual(cfg.data_input_dir, "/projects/prompts")
-        self.assertEqual(cfg.data_output_dir, "/scratch/results")
+        cfg = Config(data_input_dir="/tmp/projects/prompts", data_output_dir="/tmp/scratch/results")
+        self.assertEqual(cfg.data_input_dir, str(Path("/tmp/projects/prompts").resolve()))
+        self.assertEqual(cfg.data_output_dir, str(Path("/tmp/scratch/results").resolve()))
 
     def test_env_var_input_output(self):
         with patch.dict(os.environ, {
-            "LLMFLUX_DATA_INPUT_DIR": "/env/inputs",
-            "LLMFLUX_DATA_OUTPUT_DIR": "/env/outputs",
+            "LLMFLUX_DATA_INPUT_DIR": "/tmp/env/inputs",
+            "LLMFLUX_DATA_OUTPUT_DIR": "/tmp/env/outputs",
         }):
             cfg = Config()
-        self.assertEqual(cfg.data_input_dir, "/env/inputs")
-        self.assertEqual(cfg.data_output_dir, "/env/outputs")
+        self.assertEqual(cfg.data_input_dir, str(Path("/tmp/env/inputs").resolve()))
+        self.assertEqual(cfg.data_output_dir, str(Path("/tmp/env/outputs").resolve()))
 
     def test_code_param_beats_env_var(self):
-        with patch.dict(os.environ, {"LLMFLUX_DATA_INPUT_DIR": "/env/inputs"}):
-            cfg = Config(data_input_dir="/explicit/inputs")
-        self.assertEqual(cfg.data_input_dir, "/explicit/inputs")
+        with patch.dict(os.environ, {"LLMFLUX_DATA_INPUT_DIR": "/tmp/env/inputs"}):
+            cfg = Config(data_input_dir="/tmp/explicit/inputs")
+        self.assertEqual(cfg.data_input_dir, str(Path("/tmp/explicit/inputs").resolve()))
 
     def test_legacy_unprefixed_env_vars_are_ignored(self):
         # DATA_INPUT_DIR/DATA_OUTPUT_DIR are no longer read by any config code;
@@ -210,8 +212,9 @@ class TestConfigInputOutputDirs(unittest.TestCase):
             os.environ.pop("LLMFLUX_DATA_INPUT_DIR", None)
             os.environ.pop("LLMFLUX_DATA_OUTPUT_DIR", None)
             cfg = Config(data_dir="/tmp/mydata")
-        self.assertEqual(cfg.data_input_dir, "/tmp/mydata/input")
-        self.assertEqual(cfg.data_output_dir, "/tmp/mydata/output")
+        data_dir = str(Path("/tmp/mydata").resolve())
+        self.assertEqual(cfg.data_input_dir, f"{data_dir}/input")
+        self.assertEqual(cfg.data_output_dir, f"{data_dir}/output")
 
 
 class TestGetSlurmConfigMemory(unittest.TestCase):
