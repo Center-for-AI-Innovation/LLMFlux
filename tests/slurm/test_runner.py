@@ -122,6 +122,28 @@ class TestSlurmRunner(unittest.TestCase):
         self.assertEqual(env_vars["PROJECT_ROOT"], "test_workspace")
 
     @patch("llmflux.slurm.runner.ConfigManager")
+    def test_setup_environment_exports_cache_vars_to_host(self, mock_config_manager):
+        """Cache dirs used by the batch script's mkdir/--bind must be host vars.
+
+        If they are only set as APPTAINERENV_*, the workspace cache dir is never
+        created or bound and FlashInfer fails with a read-only filesystem error.
+        """
+        mock_config_manager.return_value.get_config.return_value = self.config
+
+        runner = SlurmRunner()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("XDG_CACHE_HOME", None)
+            env_vars = runner._setup_environment("test_workspace")
+
+        self.assertEqual(env_vars["XDG_CACHE_HOME"], str(Path("test_workspace") / ".cache"))
+        self.assertEqual(env_vars["FLASHINFER_WORKSPACE_BASE"], "test_workspace")
+        self.assertEqual(env_vars["APPTAINERENV_XDG_CACHE_HOME"], env_vars["XDG_CACHE_HOME"])
+        self.assertEqual(
+            env_vars["APPTAINERENV_FLASHINFER_WORKSPACE_BASE"],
+            env_vars["FLASHINFER_WORKSPACE_BASE"],
+        )
+
+    @patch("llmflux.slurm.runner.ConfigManager")
     def test_setup_environment_prefers_huggingface_token(self, mock_config_manager):
         """HUGGINGFACE_TOKEN wins when both token env vars are set."""
         mock_config_manager.return_value.get_config.return_value = self.config
