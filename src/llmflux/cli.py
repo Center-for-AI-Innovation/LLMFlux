@@ -6,6 +6,7 @@ Provides the `llmflux` executable with subcommands.
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 import time
@@ -839,6 +840,111 @@ def _cancel_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _loadtest_command(args: argparse.Namespace) -> int:
+    """Handle the `loadtest` command.
+
+    Ramps concurrent users against an endpoint that is already serving, to find
+    the level at which latency stops being interactive.
+    """
+    from .loadtest import format_report, run_ramp, save_results, warm_up
+
+    endpoint = args.endpoint
+    api_key = args.api_key or os.getenv("LLMFLUX_API_KEY")
+    model = args.model
+
+    # A serve job's connection file has everything; only its owner can read it.
+    if args.job_id:
+        try:
+            info = read_connection_info(str(args.job_id))
+        except (PermissionError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+        if info is None:
+            print(
+                f"No connection file for job {args.job_id}. The model may still be "
+                f"loading — check with: llmflux status {args.job_id}",
+                file=sys.stderr,
+            )
+            return 1
+        endpoint = endpoint or f"http://{info['node']}:{info['port']}/v1"
+        api_key = api_key or info.get("api_key")
+        model = model or info.get("model")
+
+    if not endpoint:
+        print("Error: pass --endpoint or --job-id.", file=sys.stderr)
+        return 1
+    if not model:
+        print("Error: pass --model (or --job-id to take it from the serve job).", file=sys.stderr)
+        return 1
+
+    for image in args.image:
+        if not Path(image).exists():
+            print(f"Error: image not found: {image}", file=sys.stderr)
+            return 1
+
+    try:
+        levels = [int(value) for value in args.levels.split(",") if value.strip()]
+    except ValueError:
+        print(f"Error: --levels must be comma-separated integers, got {args.levels!r}", file=sys.stderr)
+        return 1
+    if not levels:
+        print("Error: --levels is empty.", file=sys.stderr)
+        return 1
+
+    print(f"Target:     {endpoint}")
+    print(f"Model:      {model}")
+    print(f"Payload:    {len(args.image)} image(s), max_tokens={args.max_tokens}")
+    print(
+        f"Think time: {args.think_time}s "
+        f"({'burst / worst case' if not args.think_time else 'realistic pacing'})"
+    )
+
+    # Fail on a bad key or model name before burning the whole ramp.
+    probe = warm_up(endpoint, model, api_key, timeout=args.timeout)
+    if probe.error:
+        print(f"\nWarm-up request failed: {probe.error}", file=sys.stderr)
+        print(
+            "Check the endpoint, API key, and exact model string (GET /v1/models lists it).",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"Warm-up OK  (ttft {probe.ttft_ms:.0f}ms, total {probe.total_ms:.0f}ms)")
+
+    def phase_start(index, total, level):
+        print(f"\n[{index + 1}/{total}] concurrency {level} for {args.phase_seconds:.0f}s...", flush=True)
+
+    def phase_end(row):
+        print(
+            f"    done={row['completed']} err={row['errors']} "
+            f"e2e_p95={row['e2e_p95_ms']}ms ttft_p95={row['ttft_p95_ms']}ms "
+            f"tok/s={row['output_tokens_per_sec']}"
+        )
+
+    rows = run_ramp(
+        endpoint=endpoint,
+        model=model,
+        api_key=api_key,
+        levels=levels,
+        phase_seconds=args.phase_seconds,
+        think_time=args.think_time,
+        max_tokens=args.max_tokens,
+        images=args.image,
+        timeout=args.timeout,
+        cooldown=args.cooldown,
+        scrape_metrics=not args.no_metrics,
+        on_phase_start=phase_start,
+        on_phase_end=phase_end,
+    )
+
+    print()
+    print(format_report(rows, args.slo_ms))
+
+    if args.output:
+        save_results(rows, args.output)
+        print(f"\nRaw results written to {args.output}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llmflux", description="LLMFlux CLI")
     parser.add_argument(
@@ -1035,6 +1141,36 @@ def build_parser() -> argparse.ArgumentParser:
     logs_parser.add_argument("--stdout-only", action="store_true", help="Show stdout only")
     logs_parser.add_argument("--stderr-only", action="store_true", help="Show stderr only")
     logs_parser.set_defaults(func=_logs_command)
+
+    # loadtest subcommand
+    loadtest_parser = subparsers.add_parser(
+        "loadtest",
+        help="Ramp concurrent users against a running serve endpoint to find its capacity",
+    )
+    loadtest_parser.add_argument("--endpoint", help="Base URL ending in /v1 (from `llmflux connect`)")
+    loadtest_parser.add_argument("--job-id", help="Serve job ID; resolves endpoint and key from its connection file")
+    loadtest_parser.add_argument("--api-key", help="Bearer token (defaults to LLMFLUX_API_KEY)")
+    loadtest_parser.add_argument("--model", help="Model string the server reports (default: from the serve job)")
+    loadtest_parser.add_argument(
+        "--levels", default="1,2,4,8,16,32", help="Comma-separated concurrency levels (default: 1,2,4,8,16,32)"
+    )
+    loadtest_parser.add_argument("--phase-seconds", type=float, default=60.0, help="Seconds of load per level")
+    loadtest_parser.add_argument(
+        "--think-time", type=float, default=0.0,
+        help="Seconds a simulated user pauses between requests (default 0 = worst-case burst)",
+    )
+    loadtest_parser.add_argument(
+        "--image", action="append", default=[], help="Image to attach; repeat for multi-image prompts"
+    )
+    loadtest_parser.add_argument("--max-tokens", type=int, default=300)
+    loadtest_parser.add_argument("--timeout", type=float, default=300.0)
+    loadtest_parser.add_argument("--cooldown", type=float, default=10.0, help="Idle seconds between levels")
+    loadtest_parser.add_argument(
+        "--slo-ms", type=float, help="End-to-end p95 budget; flags the first level that exceeds it"
+    )
+    loadtest_parser.add_argument("--no-metrics", action="store_true", help="Skip scraping the server's /metrics")
+    loadtest_parser.add_argument("--output", help="Write raw per-level results to this JSON file")
+    loadtest_parser.set_defaults(func=_loadtest_command)
 
     # cancel subcommand
     cancel_parser = subparsers.add_parser("cancel", help="Cancel a tracked running/pending job")

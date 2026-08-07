@@ -317,6 +317,16 @@ class VllmMetricsScraper:
             counts = [self._sum_metric(s, "vllm:num_requests_running") for s in self._samples]
             eff_batch = round(statistics.mean(counts), 2) if counts else None
 
+        # Queue depth: requests admitted but not yet running. Stays near zero
+        # until the server saturates, so it marks the knee under concurrent load.
+        waiting_avg: Optional[float] = None
+        waiting_max: Optional[float] = None
+        if self._samples:
+            waiting = [self._sum_metric(s, "vllm:num_requests_waiting") for s in self._samples]
+            if waiting:
+                waiting_avg = round(statistics.mean(waiting), 2)
+                waiting_max = round(max(waiting), 2)
+
         return {
             "vllm_request_throughput_req_per_sec": round(req_delta / elapsed, 3) if elapsed else None,
             "vllm_token_throughput_tok_per_sec": round(tok_delta / elapsed, 1) if elapsed else None,
@@ -327,6 +337,8 @@ class VllmMetricsScraper:
             "vllm_kv_cache_usage_avg_pct": kv_cache_pct,
             "vllm_kv_cache_peak_pct": kv_peak_pct,
             "vllm_effective_batch_size_avg": eff_batch,
+            "vllm_num_requests_waiting_avg": waiting_avg,
+            "vllm_num_requests_waiting_max": waiting_max,
             "vllm_scrape_count": len(self._samples),
         }
 

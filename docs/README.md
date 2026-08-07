@@ -349,6 +349,44 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
+### Test how many concurrent users an endpoint can take
+
+`llmflux loadtest` ramps simulated users against a serve job and reports where
+latency stops being interactive. Unlike `llmflux benchmark`, which submits its
+own job and sends one request at a time, this drives many requests concurrently
+against an endpoint that already exists — which is what exercises vLLM's
+continuous batching.
+
+```bash
+llmflux loadtest --job-id 2301062 \
+    --levels 1,2,4,8,16,32 \
+    --phase-seconds 90 \
+    --image sample.jpg \
+    --slo-ms 20000
+```
+
+`--job-id` reads the endpoint, key and model from the serve job's connection
+file (owner only); otherwise pass `--endpoint`, `--api-key` and `--model`.
+
+```
+ conc   done   err    req/s     tok/s   ttft p95    e2e p95   running   waiting   kv max%
+    1     18     0    2.179      43.6       53.9      460.6       1.0       0.0      25.0
+    4     72     0    8.683     173.7       56.2      463.0      3.88       0.0     100.0
+   16     84     0    8.751     175.0     1419.7     1827.3       4.0      12.0     100.0  <-- over SLO
+
+First level over the 20000ms p95 budget: 16 concurrent users.
+Peak output throughput: 175.0 tok/s, first reached at concurrency 4.
+```
+
+Read it as: throughput plateaus at the knee, and past that point extra users
+only add latency and queue depth (`waiting`). Useful options:
+
+- `--think-time 20` — model users who pause between prompts, instead of the
+  default worst case where every user always has a request in flight
+- `--image` — repeat it to test multi-image prompts, which are prefill-heavy
+  and saturate a GPU much earlier than text
+- `--output ramp.json` — keep the raw per-level rows
+
 ### Check status and shut down
 
 ```bash
