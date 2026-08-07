@@ -104,7 +104,27 @@ class TestBatchProcessor(unittest.TestCase):
         
         # Check that warmup was called
         mock_client.chat.assert_called_once()
-    
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_setup_forwards_api_key_to_client(self, mock_client_class):
+        """The API key must reach LLMClient, or `serve` endpoints answer 401."""
+        mock_client_class.return_value = MagicMock()
+
+        processor = BatchProcessor(model_config=self.model_config, api_key="llmflux-abc")
+        processor.setup()
+
+        self.assertEqual(mock_client_class.call_args.kwargs["api_key"], "llmflux-abc")
+
+    @patch('llmflux.processors.batch.LLMClient')
+    def test_setup_passes_none_api_key_by_default(self, mock_client_class):
+        """Without a key, LLMClient falls back to LLMFLUX_API_KEY on its own."""
+        mock_client_class.return_value = MagicMock()
+
+        processor = BatchProcessor(model_config=self.model_config)
+        processor.setup()
+
+        self.assertIsNone(mock_client_class.call_args.kwargs["api_key"])
+
     @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch(self, mock_client_class):
         """Test processing a batch of items."""

@@ -47,6 +47,40 @@ class TestLLMClientInit(unittest.TestCase):
         self.assertEqual(client.base_url, "http://localhost:9000")
 
 
+class TestLLMClientAuth(unittest.TestCase):
+    """A `serve` endpoint runs vLLM with --api-key, so requests need a bearer token."""
+
+    def test_no_auth_header_without_key(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LLMFLUX_API_KEY", None)
+            client = LLMClient(engine="vllm", host="localhost", port=8000)
+        self.assertIsNone(client.api_key)
+        self.assertNotIn("Authorization", client.session.headers)
+
+    def test_api_key_argument_sets_bearer_header(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LLMFLUX_API_KEY", None)
+            client = LLMClient(engine="vllm", host="localhost", port=8000, api_key="llmflux-abc")
+        self.assertEqual(client.session.headers["Authorization"], "Bearer llmflux-abc")
+
+    def test_api_key_env_var_fallback(self):
+        with patch.dict(os.environ, {"LLMFLUX_API_KEY": "llmflux-from-env"}):
+            client = LLMClient(engine="vllm", host="localhost", port=8000)
+        self.assertEqual(client.api_key, "llmflux-from-env")
+        self.assertEqual(client.session.headers["Authorization"], "Bearer llmflux-from-env")
+
+    def test_argument_wins_over_env_var(self):
+        with patch.dict(os.environ, {"LLMFLUX_API_KEY": "llmflux-from-env"}):
+            client = LLMClient(engine="vllm", host="localhost", port=8000, api_key="llmflux-explicit")
+        self.assertEqual(client.api_key, "llmflux-explicit")
+
+    def test_blank_env_var_treated_as_unset(self):
+        with patch.dict(os.environ, {"LLMFLUX_API_KEY": ""}):
+            client = LLMClient(engine="vllm", host="localhost", port=8000)
+        self.assertIsNone(client.api_key)
+        self.assertNotIn("Authorization", client.session.headers)
+
+
 class TestListModels(unittest.TestCase):
     def _make_client(self):
         client = LLMClient(engine="ollama", host="localhost", port=11434)
@@ -173,6 +207,25 @@ class TestChat(unittest.TestCase):
             messages=[{"role": "user", "content": "hi"}],
         )
         self.assertEqual(result, "")
+
+    def test_auth_failure_without_key_logs_actionable_hint(self):
+        import requests
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LLMFLUX_API_KEY", None)
+            client = self._make_client()
+        error = requests.exceptions.HTTPError("401 Client Error")
+        error.response = MagicMock(status_code=401)
+        client.session.post.side_effect = error
+
+        with self.assertLogs("llmflux.core.client", level="ERROR") as logs:
+            with self.assertRaises(requests.exceptions.RequestException):
+                client.chat(
+                    model="test/model",
+                    engine="vllm",
+                    messages=[{"role": "user", "content": "hi"}],
+                )
+
+        self.assertIn("LLMFLUX_API_KEY", "\n".join(logs.output))
 
     def test_raises_on_request_error(self):
         import requests

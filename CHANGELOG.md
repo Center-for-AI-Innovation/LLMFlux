@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `LLMClient` and `BatchProcessor` accept an `api_key`, falling back to the
+  `LLMFLUX_API_KEY` environment variable, and send it as a bearer token on
+  every request. `llmflux serve` starts vLLM with `--api-key`, so until now
+  LLMFlux's own client could not talk to an endpoint LLMFlux itself had
+  started — every request came back HTTP 401, leaving the OpenAI SDK as the
+  only usable client. A 401/403 with no key configured now logs where to get
+  one instead of a bare request error
+  (see [#129](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/129)).
+
 ### Fixed
 
 - `--mem` CLI flag and programmatic memory settings now actually reach the
