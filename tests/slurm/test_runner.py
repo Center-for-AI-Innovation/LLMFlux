@@ -116,10 +116,32 @@ class TestSlurmRunner(unittest.TestCase):
         runner = SlurmRunner()
         env_vars = runner._setup_environment("test_workspace")
 
-        self.assertEqual(env_vars["MODELS_DIR"], str(self.models_dir))
-        self.assertEqual(env_vars["LOGS_DIR"], str(self.logs_dir))
-        self.assertEqual(env_vars["CONTAINERS_DIR"], str(self.containers_dir))
+        self.assertEqual(env_vars["MODELS_DIR"], str(self.models_dir.resolve()))
+        self.assertEqual(env_vars["LOGS_DIR"], str(self.logs_dir.resolve()))
+        self.assertEqual(env_vars["CONTAINERS_DIR"], str(self.containers_dir.resolve()))
         self.assertEqual(env_vars["PROJECT_ROOT"], "test_workspace")
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    def test_setup_environment_exports_cache_vars_to_host(self, mock_config_manager):
+        """Cache dirs used by the batch script's mkdir/--bind must be host vars.
+
+        If they are only set as APPTAINERENV_*, the workspace cache dir is never
+        created or bound and FlashInfer fails with a read-only filesystem error.
+        """
+        mock_config_manager.return_value.get_config.return_value = self.config
+
+        runner = SlurmRunner()
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("XDG_CACHE_HOME", None)
+            env_vars = runner._setup_environment("test_workspace")
+
+        self.assertEqual(env_vars["XDG_CACHE_HOME"], str(Path("test_workspace") / ".cache"))
+        self.assertEqual(env_vars["FLASHINFER_WORKSPACE_BASE"], "test_workspace")
+        self.assertEqual(env_vars["APPTAINERENV_XDG_CACHE_HOME"], env_vars["XDG_CACHE_HOME"])
+        self.assertEqual(
+            env_vars["APPTAINERENV_FLASHINFER_WORKSPACE_BASE"],
+            env_vars["FLASHINFER_WORKSPACE_BASE"],
+        )
 
     @patch("llmflux.slurm.runner.ConfigManager")
     def test_setup_environment_prefers_huggingface_token(self, mock_config_manager):
@@ -413,6 +435,131 @@ class TestSlurmRunner(unittest.TestCase):
 
         # Verify the job was submitted, confirming the input file was resolved
         mock_run.assert_called_once()
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_input_resolution_and_bind_mount_share_data_input_dir(
+        self,
+        mock_run,
+        mock_load_model_config,
+        mock_registry,
+        mock_config_manager,
+    ):
+        """A data_input_dir override must resolve input files and set up the
+        Apptainer bind mount from the same directory, not two different ones."""
+        custom_input_dir = self.test_dir / "custom_inputs"
+        custom_input_dir.mkdir()
+        custom_jsonl = custom_input_dir / "external.jsonl"
+        custom_jsonl.write_text(self.jsonl_path.read_text())
+
+        config = Config(
+            data_dir=str(self.data_dir),
+            data_input_dir=str(custom_input_dir),
+            models_dir=str(self.models_dir),
+            logs_dir=str(self.logs_dir),
+            containers_dir=str(self.containers_dir),
+            slurm=self.slurm_config,
+            models=[self.model_config],
+        )
+        mock_config_manager.return_value.get_config.return_value = config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        runner = SlurmRunner()
+        # runner.data_input_dir is what run() uses to resolve a bare filename
+        # (runner.py's "relative to the data input directory" fallback).
+        self.assertEqual(runner.data_input_dir, custom_input_dir.resolve())
+
+        # Only exists under the overridden data_input_dir, not {data_dir}/input.
+        runner.run(
+            input_path="external.jsonl",
+            output_path=str(self.output_path),
+            model="test:7b",
+        )
+
+        mock_run.assert_called_once()
+        submitted_env = mock_run.call_args.kwargs["env"]
+        # The Apptainer bind mount must be built from that same directory
+        # runner.data_input_dir resolved input against, not a separately
+        # computed default.
+        self.assertEqual(submitted_env["DATA_INPUT_DIR"], str(runner.data_input_dir))
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_input_already_in_data_input_dir_not_rewritten(
+        self,
+        mock_run,
+        mock_load_model_config,
+        mock_registry,
+        mock_config_manager,
+    ):
+        """An input file already inside data_input_dir must be used in place,
+        not copied onto itself."""
+        config = Config(
+            data_dir=str(self.data_dir),
+            data_input_dir=str(self.data_dir),
+            models_dir=str(self.models_dir),
+            logs_dir=str(self.logs_dir),
+            containers_dir=str(self.containers_dir),
+            slurm=self.slurm_config,
+            models=[self.model_config],
+        )
+        mock_config_manager.return_value.get_config.return_value = config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        mtime_before = self.jsonl_path.stat().st_mtime_ns
+
+        runner = SlurmRunner()
+        runner.run(
+            input_path=str(self.jsonl_path),
+            output_path=str(self.output_path),
+            model="test:7b",
+        )
+
+        mock_run.assert_called_once()
+        self.assertEqual(self.jsonl_path.stat().st_mtime_ns, mtime_before)
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_directory_input_raises_and_is_preserved(
+        self,
+        mock_run,
+        mock_load_model_config,
+        mock_registry,
+        mock_config_manager,
+    ):
+        """A directory passed as input must raise instead of being staged —
+        the old copytree path could rmtree the original directory."""
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+
+        prompts_dir = self.test_dir / "prompts"
+        prompts_dir.mkdir()
+        prompts_file = prompts_dir / "prompts.jsonl"
+        prompts_file.write_text(self.jsonl_path.read_text())
+
+        runner = SlurmRunner()
+        with self.assertRaises(ValueError):
+            runner.run(
+                input_path=str(prompts_dir),
+                output_path=str(self.output_path),
+                model="test:7b",
+            )
+
+        mock_run.assert_not_called()
+        self.assertTrue(prompts_file.exists())
 
 
 class TestSlurmRunnerServe(unittest.TestCase):
