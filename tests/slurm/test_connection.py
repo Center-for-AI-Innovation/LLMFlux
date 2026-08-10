@@ -1,6 +1,7 @@
 """Tests for llmflux.slurm.connection helpers."""
 
 import json
+import socket
 import tempfile
 import unittest
 import urllib.error
@@ -10,6 +11,8 @@ from unittest.mock import MagicMock, call, patch
 
 from llmflux.slurm.connection import (
     _ping_endpoint,
+    _validate_node,
+    _validate_port,
     connect,
     read_connection_info,
     wait_for_connection_file,
@@ -178,6 +181,136 @@ class TestPingEndpoint(unittest.TestCase):
         url_used = mock_urlopen.call_args[0][0]
         self.assertIn("gpu-node-07", url_used)
         self.assertIn("9999", url_used)
+
+
+class TestValidateNode(unittest.TestCase):
+    def test_accepts_cluster_hostnames(self):
+        for node in ("gpu-node-01", "gpub073", "gpub073.delta.ncsa.illinois.edu"):
+            _validate_node(node)  # must not raise
+
+    def test_accepts_private_ipv4(self):
+        _validate_node("10.1.2.3")
+
+    def test_rejects_localhost(self):
+        for node in ("localhost", "LOCALHOST", "localhost.localdomain", "evil.localhost"):
+            with self.assertRaises(ValueError):
+                _validate_node(node)
+
+    def test_rejects_loopback_ip(self):
+        for node in ("127.0.0.1", "127.1.2.3"):
+            with self.assertRaises(ValueError):
+                _validate_node(node)
+
+    def test_rejects_link_local_metadata_ip(self):
+        with self.assertRaises(ValueError):
+            _validate_node("169.254.169.254")
+
+    def test_rejects_ipv6_loopback(self):
+        # Colons fail the hostname pattern, which also covers ::1
+        with self.assertRaises(ValueError):
+            _validate_node("::1")
+
+    def test_rejects_encoded_loopback_ip(self):
+        # Legacy IPv4 encodings that ipaddress.ip_address() rejects but the
+        # OS resolver maps to 127.0.0.1 (getaddrinfo parses these locally).
+        for node in ("2130706433", "0x7f000001", "0177.0.0.1", "127.1"):
+            with self.assertRaises(ValueError):
+                _validate_node(node)
+
+    def test_rejects_encoded_metadata_ip(self):
+        # Decimal/hex/short forms of the 169.254.169.254 cloud metadata IP.
+        for node in ("2852039166", "0xA9FEA9FE", "169.254.43518"):
+            with self.assertRaises(ValueError):
+                _validate_node(node)
+
+    @patch("llmflux.slurm.connection.socket.getaddrinfo")
+    def test_rejects_hostname_resolving_to_internal_ip(self, mock_getaddrinfo):
+        mock_getaddrinfo.return_value = [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0))
+        ]
+        with self.assertRaises(ValueError):
+            _validate_node("innocent-looking-host")
+
+    @patch("llmflux.slurm.connection.socket.getaddrinfo", side_effect=socket.gaierror)
+    def test_allows_unresolvable_hostname(self, mock_getaddrinfo):
+        # An unresolvable name can't be pinged, so there is no SSRF reach to
+        # guard against; validation must not reject it.
+        _validate_node("gpub073")  # must not raise
+
+    def test_rejects_empty_and_malformed(self):
+        for node in ("", "-leading-hyphen", "trailing-hyphen-.x", "has space", "a/b", "node:8000"):
+            with self.assertRaises(ValueError):
+                _validate_node(node)
+
+    def test_rejects_ssh_option_injection(self):
+        with self.assertRaises(ValueError):
+            _validate_node("-oProxyCommand=evil")
+
+    @patch.dict("os.environ", {"LLMFLUX_NODE_PATTERN": r"gpu-node-\d+"})
+    def test_node_pattern_env_var_enforced(self):
+        _validate_node("gpu-node-07")
+        with self.assertRaises(ValueError):
+            _validate_node("other-host")
+
+    @patch.dict("os.environ", {"LLMFLUX_NODE_PATTERN": r"gpu-node-\d+"})
+    def test_node_pattern_must_match_full_hostname(self):
+        with self.assertRaises(ValueError):
+            _validate_node("gpu-node-07.evil.example.com")
+
+    @patch.dict("os.environ", {"LLMFLUX_NODE_PATTERN": "[invalid"})
+    def test_invalid_node_pattern_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            _validate_node("gpu-node-07")
+
+
+class TestValidatePort(unittest.TestCase):
+    def test_accepts_unprivileged_ports(self):
+        for port in (1024, 8000, 11434, 65535):
+            _validate_port(port)  # must not raise
+
+    def test_rejects_privileged_and_out_of_range_ports(self):
+        for port in (0, 22, 80, 443, 1023, 65536, -1):
+            with self.assertRaises(ValueError):
+                _validate_port(port)
+
+
+class TestConnectRejectsTamperedFile(unittest.TestCase):
+    @patch("llmflux.slurm.connection._ping_endpoint")
+    @patch(
+        "llmflux.slurm.connection.read_connection_info",
+        return_value={**SAMPLE_INFO, "node": "169.254.169.254"},
+    )
+    def test_metadata_ip_returns_one_without_pinging(self, mock_read, mock_ping):
+        self.assertEqual(connect("99999"), 1)
+        mock_ping.assert_not_called()
+
+    @patch("llmflux.slurm.connection._ping_endpoint")
+    @patch(
+        "llmflux.slurm.connection.read_connection_info",
+        return_value={**SAMPLE_INFO, "node": "localhost"},
+    )
+    def test_localhost_returns_one_without_pinging(self, mock_read, mock_ping):
+        self.assertEqual(connect("99999"), 1)
+        mock_ping.assert_not_called()
+
+    @patch("llmflux.slurm.connection._ping_endpoint")
+    @patch(
+        "llmflux.slurm.connection.read_connection_info",
+        return_value={**SAMPLE_INFO, "port": 22},
+    )
+    def test_privileged_port_returns_one_without_pinging(self, mock_read, mock_ping):
+        self.assertEqual(connect("99999"), 1)
+        mock_ping.assert_not_called()
+
+    @patch(
+        "llmflux.slurm.connection.read_connection_info",
+        return_value={**SAMPLE_INFO, "node": "127.0.0.1"},
+    )
+    def test_error_message_mentions_tampering(self, mock_read):
+        stderr = StringIO()
+        with patch("sys.stderr", stderr):
+            connect("99999")
+        self.assertIn("tampered", stderr.getvalue())
 
 
 class TestConnect(unittest.TestCase):
