@@ -144,8 +144,8 @@ def create_vllm_batch_script(
         *([
             "# Write connection file for llmflux connect (restrict permissions — contains API key)",
             "# CONNECTION_FILE was defined earlier alongside the cleanup trap.",
-            "mkdir -p \"$(dirname $CONNECTION_FILE)\"",
-            "chmod 700 \"$(dirname $CONNECTION_FILE)\"",
+            "(umask 077 && mkdir -p \"$(dirname $CONNECTION_FILE)\")",
+            "chmod 700 \"$HOME/.llmflux\" \"$HOME/.llmflux/serve\" \"$(dirname $CONNECTION_FILE)\"",
             "(umask 077 && cat > \"$CONNECTION_FILE\" <<EOF",
             "{",
             "  \"job_id\": \"$SLURM_JOB_ID\",",
