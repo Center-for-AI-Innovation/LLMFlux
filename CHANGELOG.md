@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `vision_to_jsonl()` no longer drops images without telling the caller, and
+  its size limit is more realistic. `max_image_size` defaults to 25MB instead
+  of 10MB: 12MP phone JPEGs are 2-6MB, but 48MP phones, DSLR JPEGs and
+  full-screen PNG screenshots routinely pass 10MB, so legitimate inputs were
+  being skipped. Oversized or failed images are now summarized in a single
+  warning, and `return_report=True` returns a `(path, report)` tuple naming
+  each one, so a short JSONL is explained rather than silent. Note the limit
+  bounds the request path, not GPU cost — vision models tile images to a fixed
+  resolution, so per-image GPU cost saturates; use `--limit-mm-per-prompt` to
+  bound work per request
+  (see [#134](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/134)).
+
 ### Fixed
 
 - `vision_to_jsonl()` now finds images in a directory. Its default

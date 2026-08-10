@@ -15,6 +15,15 @@ logger = logging.getLogger(__name__)
 
 # Extensions vLLM/Ollama vision models accept, mapped to the MIME type used in
 # the data: URL. Also drives directory discovery when no file_pattern is given.
+"""Largest image accepted by default.
+
+Sized for real inputs rather than for the request path: 12MP phone JPEGs land
+at 2-6MB, but 48MP phones, DSLR JPEGs and full-screen PNG screenshots
+routinely pass 10MB, and dropping those loses legitimate work. Note base64
+adds about a third, so this bounds the request body at roughly 33MB per image.
+"""
+DEFAULT_MAX_IMAGE_SIZE = 25 * 1024 * 1024
+
 IMAGE_MIME_TYPES = {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
@@ -100,11 +109,12 @@ def vision_to_jsonl(
     prompts_map: Optional[Dict[str, str]] = None,
     system_prompt: Optional[str] = None,
     model: Optional[str] = None,
-    max_image_size: int = 10 * 1024 * 1024,
-    file_pattern: Optional[str] = None
-) -> str:
+    max_image_size: int = DEFAULT_MAX_IMAGE_SIZE,
+    file_pattern: Optional[str] = None,
+    return_report: bool = False
+):
     """Convert images to JSONL format.
-    
+
     Args:
         input_path: Path to image directory or single image
         output_path: Path to save JSONL output
@@ -112,14 +122,20 @@ def vision_to_jsonl(
         prompts_map: Dictionary mapping image paths to prompts
         system_prompt: Optional system prompt
         model: Vision-capable model to use
-        max_image_size: Maximum image file size in bytes
+        max_image_size: Maximum image file size in bytes. Base64 encoding adds
+            about a third, so this also bounds request body size.
         file_pattern: Optional glob pattern for image files. Defaults to every
             supported extension, matched case-insensitively and non-recursively.
             Pass e.g. "**/*.jpg" to recurse into subdirectories.
-        
+        return_report: If True, return a (path, report) tuple instead of a bare
+            path. The report names the images that did not make it into the
+            JSONL, which is otherwise only visible in the logs.
+
     Returns:
-        Path to generated JSONL file
-    
+        Path to generated JSONL file, or (path, report) if return_report is True.
+        The report is a dict with 'found', 'converted', 'skipped_too_large' and
+        'failed' keys; the latter two hold per-image detail dicts.
+
     Raises:
         FileNotFoundError: If input path doesn't exist
     """
@@ -157,18 +173,34 @@ def vision_to_jsonl(
             # Handle single image
             image_paths = [input_path]
         
+        report: Dict[str, Any] = {
+            "found": len(image_paths),
+            "converted": 0,
+            "skipped_too_large": [],
+            "failed": [],
+        }
+
         # Create JSONL file
         with open(output_path, 'w') as f:
             for image_path in image_paths:
                 # Skip directories
                 if os.path.isdir(image_path):
                     continue
-                
+
                 # Skip files that are too large
-                if os.path.getsize(image_path) > max_image_size:
-                    logger.warning(f"Skipping {image_path}: image too large ({os.path.getsize(image_path)} bytes)")
+                size = os.path.getsize(image_path)
+                if size > max_image_size:
+                    logger.warning(
+                        f"Skipping {image_path}: image too large "
+                        f"({size} bytes > max_image_size {max_image_size})"
+                    )
+                    report["skipped_too_large"].append({
+                        "path": image_path,
+                        "size": size,
+                        "limit": max_image_size,
+                    })
                     continue
-                
+
                 try:
                     # Get custom ID from filename
                     filename = os.path.basename(image_path)
@@ -232,13 +264,25 @@ def vision_to_jsonl(
                     
                     # Write to JSONL file
                     f.write(json.dumps(entry) + '\n')
-                    
+                    report["converted"] += 1
+
                 except Exception as e:
                     logger.error(f"Error processing image {image_path}: {e}")
-        
+                    report["failed"].append({"path": image_path, "error": str(e)})
+
+        # Summarize losses once, so a short JSONL is explained in one place
+        # rather than only in per-image lines scattered through the log.
+        dropped = len(report["skipped_too_large"]) + len(report["failed"])
+        if dropped:
+            logger.warning(
+                f"Converted {report['converted']} of {report['found']} images: "
+                f"{len(report['skipped_too_large'])} too large, "
+                f"{len(report['failed'])} failed. Pass return_report=True for details."
+            )
+
         logger.info(f"Created vision JSONL file at {output_path}")
-        return output_path
-        
+        return (output_path, report) if return_report else output_path
+
     except Exception as e:
         logger.error(f"Error converting vision to JSONL: {e}")
         if os.path.exists(output_path) and not output_path.startswith('/tmp'):
