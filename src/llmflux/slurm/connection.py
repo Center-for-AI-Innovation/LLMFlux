@@ -1,7 +1,10 @@
 """Connection helpers for llmflux serve jobs."""
 
+import ipaddress
 import json
 import os
+import re
+import socket
 import sys
 import time
 import urllib.request
@@ -9,10 +12,110 @@ import urllib.error
 from pathlib import Path
 from typing import Optional
 
+# RFC 1123 hostname: dot-separated labels of alphanumerics and hyphens,
+# no leading/trailing hyphen. Also matches IPv4 literals, which are
+# checked separately against reserved ranges below.
+_HOSTNAME_RE = re.compile(
+    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$"
+)
+
+# Engine servers always bind unprivileged ports; anything below 1024
+# (ssh, smtp, ...) is an SSRF probe target, not a legitimate endpoint.
+_MIN_PORT = 1024
+_MAX_PORT = 65535
+
 
 def _sanitize(value: str) -> str:
     """Strip non-ASCII bytes to prevent terminal control-character injection."""
     return value.encode("ascii", errors="replace").decode("ascii")
+
+
+def _is_forbidden_address(addr: "ipaddress._BaseAddress") -> bool:
+    """True if addr is a loopback, link-local, multicast, unspecified, or reserved IP."""
+    return (
+        addr.is_loopback
+        or addr.is_link_local
+        or addr.is_multicast
+        or addr.is_unspecified
+        or addr.is_reserved
+    )
+
+
+def _validate_node(node: str) -> None:
+    """Reject node values that could redirect the request to an unintended target.
+
+    The connection file lives on a shared filesystem; if another user managed
+    to plant one, an unvalidated node/port would let them steer our HTTP
+    request (SSRF) or inject options into the suggested ssh tunnel command.
+
+    Raises:
+        ValueError: if node is not a plausible cluster-node hostname.
+    """
+    if not node or not _HOSTNAME_RE.match(node):
+        raise ValueError(
+            f"node {node!r} is not a valid hostname "
+            f"(letters, digits, hyphens, and dots only)"
+        )
+    labels = node.lower().split(".")
+    if "localhost" in (labels[0], labels[-1]):
+        raise ValueError(f"node {node!r} is a loopback address")
+    try:
+        addr = ipaddress.ip_address(node)
+    except ValueError:
+        pass  # a hostname, not an IP literal
+    else:
+        if _is_forbidden_address(addr):
+            raise ValueError(
+                f"node {node!r} is a loopback, link-local, or reserved address"
+            )
+    pattern = os.environ.get("LLMFLUX_NODE_PATTERN")
+    if pattern:
+        try:
+            matched = re.fullmatch(pattern, node)
+        except re.error as exc:
+            raise ValueError(
+                f"LLMFLUX_NODE_PATTERN is not a valid regular expression: {exc}"
+            )
+        if not matched:
+            raise ValueError(
+                f"node {node!r} does not match LLMFLUX_NODE_PATTERN ({pattern!r})"
+            )
+    # ipaddress.ip_address() only accepts canonical dotted-quad IPv4, but the
+    # OS resolver urllib uses also honors legacy encodings — decimal
+    # (2852039166), hex (0xA9FEA9FE), octal, and short (127.1) forms — which
+    # slip past the literal check above as "hostnames" yet still resolve to
+    # loopback/metadata targets. Resolve the node the same way urllib will and
+    # re-check every address it maps to (also catches a hostname pointed at an
+    # internal IP). Unresolvable names are left alone: _ping_endpoint simply
+    # fails on them, so there is no SSRF reach to guard against.
+    try:
+        resolved = socket.getaddrinfo(node, None)
+    except socket.gaierror:
+        return
+    for *_, sockaddr in resolved:
+        ip = sockaddr[0]
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            continue
+        if _is_forbidden_address(addr):
+            raise ValueError(
+                f"node {node!r} resolves to a loopback, link-local, or "
+                f"reserved address ({ip})"
+            )
+
+
+def _validate_port(port: int) -> None:
+    """Reject ports outside the unprivileged range.
+
+    Raises:
+        ValueError: if port is not in [1024, 65535].
+    """
+    if not _MIN_PORT <= port <= _MAX_PORT:
+        raise ValueError(
+            f"port {port} is outside the allowed range "
+            f"{_MIN_PORT}-{_MAX_PORT} for serve endpoints"
+        )
 
 
 def _connection_file_path(job_id: str) -> Path:
@@ -135,6 +238,17 @@ def connect(job_id: str, local_port: int = 8000, wait_timeout: int = 600) -> int
     except (ValueError, TypeError):
         print(
             f"Error: connection file has an invalid port value: {info['port']!r}. "
+            f"Check logs with: llmflux logs {job_id}",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        _validate_node(node)
+        _validate_port(port)
+    except ValueError as exc:
+        print(
+            f"Error: refusing to connect — {exc}. "
+            f"The connection file may have been tampered with. "
             f"Check logs with: llmflux logs {job_id}",
             file=sys.stderr,
         )

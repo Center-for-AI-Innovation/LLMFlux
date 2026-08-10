@@ -45,9 +45,13 @@ The tables below show each parameter with its environment variable name, code se
 
 | Parameter | Environment Variable | Code Setting | Default | Description |
 |-----------|----------------------|-------------|---------|-------------|
-| Workspace | `WORKSPACE` | `workspace="/path/to/workspace"` in SlurmRunner | `./` | Project root directory |
-| Input directory | `DATA_INPUT_DIR` | Set via config | `data/input` | Directory for input files |
-| Output directory | `DATA_OUTPUT_DIR` | Set via config | `data/output` | Directory for output files |
+| Workspace | `LLMFLUX_WORKSPACE` | `workspace="/path/to/workspace"` in Config or SlurmRunner | `./` (current working directory) | Root directory for data, models, logs, containers, caches, and SLURM job files |
+| Data directory | `LLMFLUX_DATA_DIR` | `data_dir="/path"` in Config | `{workspace}/data` | Parent directory for input and output files |
+| Input directory | `LLMFLUX_DATA_INPUT_DIR` | `data_input_dir="/path"` in Config | `{data_dir}/input` | Directory for input files |
+| Output directory | `LLMFLUX_DATA_OUTPUT_DIR` | `data_output_dir="/path"` in Config | `{data_dir}/output` | Directory for generated responses |
+| Models directory | `LLMFLUX_MODELS_DIR` | `models_dir="/path"` in Config | `{workspace}/models` | Directory for model cache |
+| Logs directory | `LLMFLUX_LOGS_DIR` | `logs_dir="/path"` in Config | `{workspace}/logs` | Directory for log files |
+| Containers directory | `LLMFLUX_CONTAINERS_DIR` | `containers_dir="/path"` in Config | `{workspace}/containers` | Directory for Apptainer images |
 | HuggingFace cache | `HF_HOME` | Set via env | `{workspace}/.cache/huggingface` | Directory for HuggingFace model cache (used by vLLM) |
 
 ## Configuration Methods
