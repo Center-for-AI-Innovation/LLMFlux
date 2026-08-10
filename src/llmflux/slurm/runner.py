@@ -48,7 +48,7 @@ class SlurmRunner:
         self.slurm_config = config or self.config_manager.get_config().get_slurm_config()
         
         # Set workspace
-        self.workspace = Path(workspace) if workspace else Path(self.config_manager.get_config().workspace)
+        self.workspace = Path(workspace).expanduser().resolve() if workspace else Path(self.config_manager.get_config().workspace)
         
         # Get paths from config if available
         config = self.config_manager.get_config()
@@ -112,6 +112,12 @@ class SlurmRunner:
         # Resolve HuggingFace cache directory with a default under workspace.
         hf_home = os.getenv('HF_HOME') or str(workspace_path / ".cache" / "huggingface")
 
+        # Cache locations for engine-side JIT artifacts (e.g. FlashInfer kernels).
+        # These must also be host vars: the batch script uses them for mkdir and
+        # --bind, and an unbound cache dir is read-only inside the container.
+        xdg_cache_home = str(workspace_path / ".cache")
+        flashinfer_workspace_base = str(workspace_path)
+
         # HOST-ONLY variables (used by bash script, NOT passed to container)
         host_vars = {
             'DATA_INPUT_DIR': str(self.data_input_dir),
@@ -129,6 +135,8 @@ class SlurmRunner:
             'VLLM_HOME': str(self.workspace / ".vllm"),
             'VLLM_MODELS': str(self.workspace / ".vllm" / "models"),
             'HF_HOME': hf_home,  # Used for mkdir and --bind
+            'XDG_CACHE_HOME': xdg_cache_home,  # Used for mkdir and --bind
+            'FLASHINFER_WORKSPACE_BASE': flashinfer_workspace_base,  # Used for mkdir and --bind
             'PROJECT_ROOT': str(workspace_path),  # Used in bash script for Python path
         }
 
@@ -146,8 +154,8 @@ class SlurmRunner:
             'APPTAINERENV_OLLAMA_SCHED_SPREAD': ollama_sched_spread,
             'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
             'APPTAINERENV_HF_HOME': hf_home,
-            'APPTAINERENV_XDG_CACHE_HOME': str(workspace_path / ".cache"),
-            'APPTAINERENV_FLASHINFER_WORKSPACE_BASE': str(workspace_path),
+            'APPTAINERENV_XDG_CACHE_HOME': xdg_cache_home,
+            'APPTAINERENV_FLASHINFER_WORKSPACE_BASE': flashinfer_workspace_base,
             # Use system CA bundle for HTTPS (e.g. HuggingFace model downloads).
             # Empty values break downloads with "No CA certificates were loaded".
             'APPTAINERENV_CURL_CA_BUNDLE': '/etc/ssl/certs/ca-certificates.crt',
@@ -277,9 +285,7 @@ class SlurmRunner:
 
         if not input_file.exists():
             # If it doesn't exist, check if it's relative to the data input directory
-            config = self.config_manager.get_config()
-            data_input_dir = config.get_path('DATA_INPUT_DIR')
-            potential_path = data_input_dir / input_file.name
+            potential_path = self.data_input_dir / input_file.name
             if potential_path.exists():
                 input_file = potential_path
             else:
@@ -291,26 +297,26 @@ class SlurmRunner:
         if output_path:
             output_file = Path(output_path).resolve()
         else:
-            config = self.config_manager.get_config()
-            output_dir = config.get_path('DATA_OUTPUT_DIR')
-            output_file = output_dir / f"results_{int(time.time())}.json"
+            output_file = self.data_output_dir / f"results_{int(time.time())}.json"
         
         # Ensure directories exist
         config = self.config_manager.get_config()
         config.ensure_directory(input_file.parent if input_file.is_file() else input_file)
         config.ensure_directory(output_file.parent)
         
-        # Copy input to workspace if needed
-        if not input_file.is_relative_to(self.workspace) and input_file.exists():
+        # Copy input into the data input dir only if the job can't already see it
+        already_visible = (
+            input_file.is_relative_to(self.workspace)
+            or input_file.is_relative_to(self.data_input_dir)
+        )
+        if not already_visible and input_file.exists():
+            if input_file.is_dir():
+                raise ValueError(
+                    f"Input must be a JSONL file, got a directory: {input_file}"
+                )
             workspace_input = self.data_input_dir / input_file.name
-            if input_file.is_file():
-                workspace_input.parent.mkdir(parents=True, exist_ok=True)
-                workspace_input.write_bytes(input_file.read_bytes())
-            else:
-                # If directory exists, remove it first to avoid FileExistsError
-                if workspace_input.exists():
-                    shutil.rmtree(workspace_input)
-                shutil.copytree(input_file, workspace_input)
+            workspace_input.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(input_file, workspace_input)
             input_file = workspace_input
         
         # Setup environment
@@ -429,7 +435,7 @@ class SlurmRunner:
         # Add additional parameters from kwargs through config manager
         for key, value in kwargs.items():
             # Skip parameters that are already handled
-            if key in ['model', 'batch_size', 'save_frequency', 'vllm_engine_args']:
+            if key in ['model', 'batch_size', 'save_frequency', 'vllm_engine_args', 'custom_config_path']:
                 continue
                 
             # Use config manager to get the value with proper priority
