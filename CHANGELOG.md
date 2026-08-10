@@ -49,7 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `mkdir -p` and `--bind` lines: the workspace cache directory was never
   created on the host and never bound into the container, leaving it read-only
   where FlashInfer writes its JIT kernel cache. Both are now host variables as
-  well.
+  well
+  (see [#125](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/125)).
 - `update_config()` no longer discards the directory overrides passed to it.
   After applying its arguments it rebuilt `DATA_INPUT_DIR`, `DATA_OUTPUT_DIR`,
   `MODELS_DIR`, `LOGS_DIR` and `CONTAINERS_DIR` from hardcoded
@@ -57,10 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same call was silently ignored by everything reading the derived paths. They
   are now derived from the configured directory attributes
   (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
-- Directory overrides now reach the Apptainer bind mounts. Path resolution and
-  the bind mounts were computed from two different sources, so an override
-  could change where the runner looked for input while the container was still
-  bound to the default location
 - `SlurmRunner.run()` resolved the input-file fallback and default output path
   via `Config.get_path()`, while the Apptainer bind mounts used
   `self.data_input_dir` / `self.data_output_dir` — two different reads of the
