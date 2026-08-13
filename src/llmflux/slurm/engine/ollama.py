@@ -239,6 +239,8 @@ def create_ollama_batch_script(
             "",
             f"batch_processor.run('{input_file}', '{output_file}', 'ollama', **run_kwargs)",
             "\"",
+            "# Capture the processor's status before cleanup overwrites $?.",
+            "LLMFLUX_PROC_RC=$?",
         ]),
         "",
         "# Cleanup",
@@ -251,6 +253,12 @@ def create_ollama_batch_script(
         "fi",
         "if [ -d \"$APPTAINER_CACHEDIR\" ] && [ -w \"$APPTAINER_CACHEDIR\" ]; then",
         "    rm -rf \"$APPTAINER_CACHEDIR\"",
-        "fi"
+        "fi",
+        *([
+            "# Exit with the processor's status. Without this the script exits with\n"
+            "# whatever cleanup returned, so a run whose every item failed still\n"
+            "# reports success and the job looks complete.",
+            "exit ${LLMFLUX_PROC_RC:-0}",
+        ] if mode != "serve" else []),
     ])
     return job_script

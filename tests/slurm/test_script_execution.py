@@ -253,22 +253,37 @@ class TestVllmBatchExecution(unittest.TestCase):
             self.assertNotEqual(rc, 0, "an unready server must not exit 0")
             self.assertIn("Server failed to load!", out)
 
-    def test_processor_failure_is_currently_swallowed(self):
-        """Characterizes a known defect: a failing processor still exits 0.
+    def test_processor_failure_propagates_to_the_job(self):
+        """A failing batch processor must fail the job.
 
-        The inline `python3 -c` exit status is not checked, so a run whose every
-        item failed produces a complete-looking output file and a successful
-        job. This assertion documents today's behaviour; the fix flips it, and
-        this test flips with it.
+        Previously the inline `python3 -c` status was discarded and the script
+        exited with whatever cleanup returned, so a run whose every item failed
+        still reported success — a complete-looking output file and a green job.
         """
         with Sandbox() as sb:
             rc, _, _ = sb.run(
                 _build("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=1
             )
-            self.assertEqual(
-                rc, 0, "if this now fails, the processor-exit-code fix has landed — "
-                "update this test to assert non-zero"
+            self.assertEqual(rc, 1, "processor failure must not be swallowed")
+
+    def test_processor_success_still_exits_zero(self):
+        with Sandbox() as sb:
+            rc, _, _ = sb.run(
+                _build("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=0
             )
+            self.assertEqual(rc, 0)
+
+    def test_processor_status_survives_cleanup(self):
+        """Cleanup runs between the processor and the exit, and must not mask it.
+
+        pkill/rm/kill all overwrite $?, which is exactly how the status was lost.
+        """
+        with Sandbox() as sb:
+            rc, out, _ = sb.run(
+                _build("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=3
+            )
+            self.assertIn("Cleaning up", out, "cleanup must still run on failure")
+            self.assertEqual(rc, 3, "the processor's exact status must survive")
 
 
 @unittest.skipIf(BASH is None, "bash not available")

@@ -131,6 +131,8 @@ for key in ['max_tokens', 'temperature', 'top_p', 'top_k']:
 
 batch_processor.run('/data/in.jsonl', '/data/out.json', 'vllm', **run_kwargs)
 "
+# Capture the processor's status before cleanup overwrites $?.
+LLMFLUX_PROC_RC=$?
 
 # Cleanup
 pkill -f "vllm serve" || true
@@ -146,3 +148,7 @@ kill $VLLM_PID 2>/dev/null || true
 sleep 2
 kill -9 $VLLM_PID 2>/dev/null || true
 
+# Exit with the processor's status. Without this the script exits with
+# whatever cleanup returned, so a run whose every item failed still
+# reports success and the job looks complete.
+exit ${LLMFLUX_PROC_RC:-0}
