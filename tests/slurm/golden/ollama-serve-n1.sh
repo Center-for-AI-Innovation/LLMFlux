@@ -47,6 +47,11 @@ echo "Using port: $OLLAMA_PORT"
 CONNECTION_FILE="$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json"
 trap 'rm -f "$CONNECTION_FILE"; pkill -f "ollama serve" || true' EXIT TERM INT
 
+# Pass SLURM-allocated GPU(s) into the container (--cleanenv strips
+# CUDA_VISIBLE_DEVICES). Without this the container receives the list
+# synthesised from the *requested* GPU count rather than the devices
+# actually granted, and Ollama warns: "user overrode visible devices".
+export APPTAINERENV_CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}
 OLLAMA_DEBUG=1 apptainer exec --nv --cleanenv \
     --bind $DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$OLLAMA_HOME:$OLLAMA_HOME \
     $CONTAINERS_DIR/llm_processor.sif \

@@ -153,3 +153,53 @@ class TestCreateOllamaBatchScript(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestGpuVisibilityParity(unittest.TestCase):
+    """Both engines must pass SLURM's real device list into the container.
+
+    `apptainer --cleanenv` strips CUDA_VISIBLE_DEVICES, so each engine script
+    has to re-export it. vllm.py always did; ollama.py did not, so Ollama
+    received the list synthesised from the *requested* GPU count
+    (runner.py: `range(gpus_per_node)`) rather than the devices actually
+    granted. That is only correct when granted indices happen to start at 0 and
+    be contiguous, and Ollama itself warns about it:
+
+        WARN "user overrode visible devices" CUDA_VISIBLE_DEVICES=0,1,2,3
+        WARN "if GPUs are not correctly discovered, unset and try again"
+    """
+
+    EXPECTED = "export APPTAINERENV_CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}"
+
+    def _script(self, engine, mode="batch"):
+        from pathlib import Path
+        if engine == "vllm":
+            from llmflux.slurm.engine.vllm import create_vllm_batch_script as maker
+        else:
+            from llmflux.slurm.engine.ollama import create_ollama_batch_script as maker
+        kwargs = dict(
+            account="a", partition="p", nodes="1", gpus_per_node="4",
+            time="01:00:00", memory="64G", cpus_per_task="8",
+            logs_dir=Path("/logs"), input_file=Path("/in.jsonl"),
+            output_file=Path("/out.json"), job_name="j",
+            slurm_config=_make_slurm_config(), mode=mode,
+        )
+        if mode == "serve":
+            kwargs["email"] = "x@example.edu"
+        return maker(**kwargs)
+
+    def test_both_engines_export_the_real_device_list(self):
+        for engine in ("vllm", "ollama"):
+            for mode in ("batch", "serve"):
+                with self.subTest(engine=engine, mode=mode):
+                    self.assertIn(self.EXPECTED, self._script(engine, mode))
+
+    def test_export_precedes_the_container_exec(self):
+        """An export after the exec would have no effect on it."""
+        for engine in ("vllm", "ollama"):
+            with self.subTest(engine=engine):
+                script = self._script(engine)
+                export_at = script.index(self.EXPECTED)
+                exec_at = next(
+                    i for i, line in enumerate(script) if "apptainer exec" in line
+                )
+                self.assertLess(export_at, exec_at)
