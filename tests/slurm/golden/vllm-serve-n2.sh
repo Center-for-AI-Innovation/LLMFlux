@@ -180,6 +180,11 @@ LLMFLUX_MASTER_PORT=$(llmflux_free_port "${LLMFLUX_RDZV_PORT:-29500}") || \
 export LLMFLUX_MASTER_PORT
 
 echo "LLMFLUX-TOPOLOGY: nnodes=$LLMFLUX_NNODES tp=2 master=$LLMFLUX_MASTER_ADDR:$LLMFLUX_MASTER_PORT"
+# Record the fabric the ranks will actually use. Nodes here carry more
+# than one Slingshot NIC on separate subnets, so which interface each
+# rank binds is not obvious from the master address alone.
+ip -4 -o addr show 2>/dev/null | awk '$2 ~ /^hsn/ {print "LLMFLUX-TOPOLOGY: iface " $2 " " $4}'
+echo "LLMFLUX-TOPOLOGY: nccl_socket_ifname=${LLMFLUX_NCCL_SOCKET_IFNAME:-hsn0,hsn1}"
 
 cat > "$LLMFLUX_RUN_DIR/rank-launch.sh" <<'LLMFLUX_RANK_EOF'
 #!/bin/bash
@@ -197,6 +202,16 @@ echo "LLMFLUX-STAGE-A: rank ${LLMFLUX_RANK} up on $(hostname -s)"
 # --cleanenv drops these unless they are re-exported per rank.
 APPTAINERENV_CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export APPTAINERENV_CUDA_VISIBLE_DEVICES
+
+# VLLM_PORT must NOT reach the container. vLLM seeds every internal ZMQ
+# port from it and walks upward (utils/network_utils.py:_get_open_port),
+# probing with bind() on THIS node only. Each node therefore walks the
+# same sequence independently and two ranks on different nodes pick the
+# same port for a shared endpoint:
+#     zmq.error.ZMQError: Address already in use (tcp://...:53675)
+# Unset, so vLLM falls back to ephemeral ports that are genuinely free
+# per node. Rank 0's API port is still pinned, on the command line.
+unset APPTAINERENV_VLLM_PORT
 
 # vLLM's get_ip() route-probes 8.8.8.8 and returns the routed VLAN
 # address, not the fabric one. Pin what this rank advertises.

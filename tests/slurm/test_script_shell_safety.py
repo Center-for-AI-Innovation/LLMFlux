@@ -238,3 +238,31 @@ class TestNoExportCommandSubstitution(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMultiNodePortIsolation(unittest.TestCase):
+    """VLLM_PORT must not reach the container on a multi-node rank.
+
+    vLLM seeds every internal ZMQ port from VLLM_PORT and walks upward, probing
+    with bind() on the local node only. Two nodes walk the same sequence
+    independently, so ranks on different nodes select the same port for a shared
+    endpoint and the engine dies with "Address already in use". Observed on
+    job 2941612 before this was fixed.
+    """
+
+    def _rank_body(self, nodes="2"):
+        script = build_text("vllm", "batch", nodes=nodes)
+        return dict(_heredocs(script))["LLMFLUX_RANK_EOF"]
+
+    def test_rank_script_unsets_the_container_port(self):
+        self.assertIn("unset APPTAINERENV_VLLM_PORT", self._rank_body())
+
+    def test_unset_precedes_the_container_exec(self):
+        body = self._rank_body().splitlines()
+        unset_at = next(i for i, l in enumerate(body) if "unset APPTAINERENV_VLLM_PORT" in l)
+        exec_at = next(i for i, l in enumerate(body) if "apptainer exec" in l)
+        self.assertLess(unset_at, exec_at, "unsetting after the exec has no effect")
+
+    def test_rank_zero_still_pins_its_api_port_on_the_command_line(self):
+        """Unsetting the env must not lose the API port the client dials."""
+        self.assertIn('--port "$VLLM_PORT"', self._rank_body())
