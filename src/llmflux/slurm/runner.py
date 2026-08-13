@@ -249,6 +249,34 @@ class SlurmRunner:
 
         return " ".join(parts)
 
+    def _resolve_vllm_engine_args(self, kwargs: Dict[str, Any]) -> str:
+        """Merge vLLM engine args and apply parallelism implied by the topology.
+
+        Precedence: user CLI args beat environment args, and both beat anything
+        derived from the allocation — a value the user typed is never silently
+        overridden.
+
+        Shared by run() and serve(). It was previously duplicated verbatim
+        between them, which is how the two paths drift.
+        """
+        env_args = self._load_vllm_engine_args(
+            os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS"
+        )
+        cli_args = self._load_vllm_engine_args(
+            kwargs.get("vllm_engine_args"), "--vllm-engine-args"
+        )
+        merged_args = {**env_args, **cli_args}
+
+        topology = resolve_topology(
+            self.slurm_config.nodes,
+            self.slurm_config.gpus_per_node,
+            self.engine.engine,
+        )
+        if topology.tensor_parallel_size > 1 and "tensor-parallel-size" not in merged_args:
+            merged_args["tensor-parallel-size"] = topology.tensor_parallel_size
+
+        return self._build_vllm_engine_args(merged_args)
+
     def _build_job_name(self, model_identifier: str) -> str:
         """Generate a Slurm-safe, identifiable job name."""
         safe_model = "".join(
@@ -399,14 +427,7 @@ class SlurmRunner:
             env['VLLM_MODEL_NAME'] = str(selected_model_name)
             env['VLLM_HOST'] = '0.0.0.0'
             # Load vLLM engine args from environment and CLI, merging them with priority to CLI
-            env_args = self._load_vllm_engine_args(os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS")
-            cli_args = self._load_vllm_engine_args(kwargs.get("vllm_engine_args"), "--vllm-engine-args")
-            merged_args = {**env_args, **cli_args}
-            # Automatically set tensor parallelism when multiple GPUs are requested,
-            # unless the user has already specified it.
-            if self.slurm_config.gpus_per_node > 1 and "tensor-parallel-size" not in merged_args:
-                merged_args["tensor-parallel-size"] = self.slurm_config.gpus_per_node
-            env['VLLM_ENGINE_ARGS'] = self._build_vllm_engine_args(merged_args)
+            env['VLLM_ENGINE_ARGS'] = self._resolve_vllm_engine_args(kwargs)
         # Container variables (used in Python inside container)
         # Always set MODEL_IDENTIFIER for reference
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
@@ -625,14 +646,7 @@ class SlurmRunner:
         elif self.engine.engine == 'vllm':
             env['VLLM_MODEL_NAME'] = str(selected_model_name)
             env['VLLM_HOST'] = '0.0.0.0'
-            env_args = self._load_vllm_engine_args(os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS")
-            cli_args = self._load_vllm_engine_args(kwargs.get("vllm_engine_args"), "--vllm-engine-args")
-            merged_args = {**env_args, **cli_args}
-            # Automatically set tensor parallelism when multiple GPUs are requested,
-            # unless the user has already specified it.
-            if self.slurm_config.gpus_per_node > 1 and "tensor-parallel-size" not in merged_args:
-                merged_args["tensor-parallel-size"] = self.slurm_config.gpus_per_node
-            env['VLLM_ENGINE_ARGS'] = self._build_vllm_engine_args(merged_args)
+            env['VLLM_ENGINE_ARGS'] = self._resolve_vllm_engine_args(kwargs)
 
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
         env['APPTAINERENV_ENGINE'] = str(self.engine.engine)
