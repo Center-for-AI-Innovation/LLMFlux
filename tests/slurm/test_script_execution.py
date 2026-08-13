@@ -33,7 +33,8 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+
+from .helpers import build_text
 
 BASH = shutil.which("bash")
 
@@ -87,31 +88,6 @@ echo "nvidia-smi $*" >> "$STUB_LOG"
 exit 0
 """,
 }
-
-
-def _slurm_config():
-    cfg = MagicMock()
-    cfg.extra_sbatch_args = None
-    return cfg
-
-
-def _build(engine, mode, **over):
-    if engine == "vllm":
-        from llmflux.slurm.engine.vllm import create_vllm_batch_script as maker
-    else:
-        from llmflux.slurm.engine.ollama import create_ollama_batch_script as maker
-
-    kwargs = dict(
-        account="acct", partition="gpu", nodes="1", gpus_per_node="2",
-        time="01:00:00", memory="64G", cpus_per_task="8",
-        logs_dir=Path("/logs"), input_file=Path("/data/in.jsonl"),
-        output_file=Path("/data/out.json"), job_name=f"exec-{engine}-{mode}",
-        slurm_config=_slurm_config(), mode=mode,
-    )
-    if mode == "serve":
-        kwargs["email"] = "someone@example.edu"
-    kwargs.update(over)
-    return "\n".join(maker(**kwargs)) + "\n"
 
 
 class Sandbox:
@@ -220,7 +196,7 @@ class TestVllmBatchExecution(unittest.TestCase):
 
     def test_happy_path_exits_zero_and_runs_processor(self):
         with Sandbox() as sb:
-            rc, out, _ = sb.run(_build("vllm", "batch"), STUB_CURL_READY_AFTER=2)
+            rc, out, _ = sb.run(build_text("vllm", "batch"), STUB_CURL_READY_AFTER=2)
             self.assertEqual(rc, 0, out[-2000:])
             self.assertIn("Server has started!", out)
             self.assertTrue(
@@ -232,7 +208,7 @@ class TestVllmBatchExecution(unittest.TestCase):
         """Server exits before ready -> non-zero, and quickly."""
         with Sandbox() as sb:
             rc, out, elapsed = sb.run(
-                _build("vllm", "batch"),
+                build_text("vllm", "batch"),
                 STUB_SERVER_MODE="die",
                 STUB_CURL_READY_AFTER=10**9,  # never ready: force the loop to the ps check
             )
@@ -248,7 +224,7 @@ class TestVllmBatchExecution(unittest.TestCase):
         """Server never becomes ready -> the loop must end, non-zero."""
         with Sandbox() as sb:
             rc, out, _ = sb.run(
-                _build("vllm", "batch"), STUB_CURL_READY_AFTER=10**9, timeout=120
+                build_text("vllm", "batch"), STUB_CURL_READY_AFTER=10**9, timeout=120
             )
             self.assertNotEqual(rc, 0, "an unready server must not exit 0")
             self.assertIn("Server failed to load!", out)
@@ -262,14 +238,14 @@ class TestVllmBatchExecution(unittest.TestCase):
         """
         with Sandbox() as sb:
             rc, _, _ = sb.run(
-                _build("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=1
+                build_text("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=1
             )
             self.assertEqual(rc, 1, "processor failure must not be swallowed")
 
     def test_processor_success_still_exits_zero(self):
         with Sandbox() as sb:
             rc, _, _ = sb.run(
-                _build("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=0
+                build_text("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=0
             )
             self.assertEqual(rc, 0)
 
@@ -280,7 +256,7 @@ class TestVllmBatchExecution(unittest.TestCase):
         """
         with Sandbox() as sb:
             rc, out, _ = sb.run(
-                _build("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=3
+                build_text("vllm", "batch"), STUB_CURL_READY_AFTER=1, STUB_PYTHON_EXIT=3
             )
             self.assertIn("Cleaning up", out, "cleanup must still run on failure")
             self.assertEqual(rc, 3, "the processor's exact status must survive")
@@ -290,14 +266,14 @@ class TestVllmBatchExecution(unittest.TestCase):
 class TestOllamaBatchExecution(unittest.TestCase):
     def test_happy_path_exits_zero(self):
         with Sandbox() as sb:
-            rc, out, _ = sb.run(_build("ollama", "batch"), STUB_CURL_READY_AFTER=1)
+            rc, out, _ = sb.run(build_text("ollama", "batch"), STUB_CURL_READY_AFTER=1)
             self.assertEqual(rc, 0, out[-2000:])
             self.assertTrue(any(c.startswith("python3") for c in sb.calls()))
 
     def test_server_death_fails_fast(self):
         with Sandbox() as sb:
             rc, out, elapsed = sb.run(
-                _build("ollama", "batch"),
+                build_text("ollama", "batch"),
                 STUB_SERVER_MODE="die",
                 STUB_CURL_READY_AFTER=10**9,
             )
@@ -312,7 +288,7 @@ class TestSandboxSafety(unittest.TestCase):
 
     def test_pkill_is_stubbed_and_kills_nothing(self):
         with Sandbox() as sb:
-            sb.run(_build("vllm", "batch"), STUB_CURL_READY_AFTER=1)
+            sb.run(build_text("vllm", "batch"), STUB_CURL_READY_AFTER=1)
             pkills = [c for c in sb.calls() if c.startswith("pkill")]
             self.assertTrue(pkills, "expected the script to attempt a pkill")
             self.assertEqual(
@@ -325,7 +301,7 @@ class TestSandboxSafety(unittest.TestCase):
         with Sandbox() as sb:
             work = Path(sb.env["APPTAINER_TMPDIR"])
             self.assertTrue(work.exists())
-            sb.run(_build("vllm", "batch"), STUB_CURL_READY_AFTER=1)
+            sb.run(build_text("vllm", "batch"), STUB_CURL_READY_AFTER=1)
             # The script rm -rf's its tmpdir; that must be inside the sandbox.
             self.assertTrue(str(work).startswith(str(sb.root)))
             self.assertTrue(sb.root.exists(), "sandbox root itself must survive")

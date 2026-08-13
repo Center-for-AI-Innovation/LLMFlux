@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=golden-vllm-batch
+#SBATCH --job-name=test-vllm-batch
 #SBATCH --account=myaccount
 #SBATCH --partition=gpu
 #SBATCH --nodes=1

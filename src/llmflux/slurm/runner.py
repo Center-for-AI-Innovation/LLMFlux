@@ -249,6 +249,22 @@ class SlurmRunner:
 
         return " ".join(parts)
 
+    def _topology(self):
+        """Validate this runner's allocation shape and return the topology.
+
+        One definition, called by run(), serve() and the engine-args resolver.
+        Spelling it out at each call site is how the entry points drift apart —
+        the defect this branch already fixes twice over.
+
+        Raises:
+            TopologyError: if the requested shape cannot be served.
+        """
+        return resolve_topology(
+            self.slurm_config.nodes,
+            self.slurm_config.gpus_per_node,
+            self.engine.engine,
+        )
+
     def _resolve_vllm_engine_args(self, kwargs: Dict[str, Any]) -> str:
         """Merge vLLM engine args and apply parallelism implied by the topology.
 
@@ -267,11 +283,7 @@ class SlurmRunner:
         )
         merged_args = {**env_args, **cli_args}
 
-        topology = resolve_topology(
-            self.slurm_config.nodes,
-            self.slurm_config.gpus_per_node,
-            self.engine.engine,
-        )
+        topology = self._topology()
         if topology.tensor_parallel_size > 1 and "tensor-parallel-size" not in merged_args:
             merged_args["tensor-parallel-size"] = topology.tensor_parallel_size
 
@@ -308,11 +320,7 @@ class SlurmRunner:
         # Validate the requested node/GPU shape before doing anything else, so
         # an unservable request fails in milliseconds instead of after a queue
         # wait. Raises TopologyError.
-        resolve_topology(
-            self.slurm_config.nodes,
-            self.slurm_config.gpus_per_node,
-            self.engine.engine,
-        )
+        self._topology()
 
         # Setup paths following precedence: code paths > environment variables > defaults
         # Use config manager to resolve paths
@@ -606,11 +614,7 @@ class SlurmRunner:
             SLURM job ID string, or None if submission failed.
         """
         # Same topology gate as run(); serve has its own code path.
-        resolve_topology(
-            self.slurm_config.nodes,
-            self.slurm_config.gpus_per_node,
-            self.engine.engine,
-        )
+        self._topology()
 
         env = self._setup_environment()
 

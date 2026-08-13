@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=golden-ollama-serve
+#SBATCH --job-name=test-ollama-serve
 #SBATCH --account=myaccount
 #SBATCH --partition=gpu
 #SBATCH --nodes=1

@@ -31,11 +31,10 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+
+from .helpers import CASES, build_text
 
 BASH = shutil.which("bash")
-
-CASES = [("vllm", "batch"), ("vllm", "serve"), ("ollama", "batch"), ("ollama", "serve")]
 
 # Heredoc bodies that are shell CODE and must be syntax-checked. Empty today;
 # the multi-node launcher adds entries here.
@@ -57,38 +56,6 @@ _EXPORT_CMDSUB = re.compile(
     """,
     re.VERBOSE,
 )
-
-
-def _slurm_config():
-    cfg = MagicMock()
-    cfg.extra_sbatch_args = None
-    return cfg
-
-
-def _build(engine, mode):
-    if engine == "vllm":
-        from llmflux.slurm.engine.vllm import create_vllm_batch_script as maker
-    else:
-        from llmflux.slurm.engine.ollama import create_ollama_batch_script as maker
-
-    kwargs = dict(
-        account="myaccount",
-        partition="gpu",
-        nodes="1",
-        gpus_per_node="2",
-        time="01:00:00",
-        memory="64G",
-        cpus_per_task="8",
-        logs_dir=Path("/logs"),
-        input_file=Path("/data/in.jsonl"),
-        output_file=Path("/data/out.json"),
-        job_name=f"safety-{engine}-{mode}",
-        slurm_config=_slurm_config(),
-        mode=mode,
-    )
-    if mode == "serve":
-        kwargs["email"] = "someone@example.edu"
-    return "\n".join(maker(**kwargs)) + "\n"
 
 
 def _bash_n(text, label):
@@ -131,13 +98,13 @@ class TestGeneratedScriptSyntax(unittest.TestCase):
     def test_outer_script_parses(self):
         for engine, mode in CASES:
             with self.subTest(engine=engine, mode=mode):
-                ok, msg = _bash_n(_build(engine, mode), f"{engine}-{mode}")
+                ok, msg = _bash_n(build_text(engine, mode), f"{engine}-{mode}")
                 self.assertTrue(ok, msg)
 
     def test_shell_heredoc_bodies_parse(self):
         """`bash -n` on the outer script does NOT cover heredoc bodies."""
         for engine, mode in CASES:
-            for delim, body in _heredocs(_build(engine, mode)):
+            for delim, body in _heredocs(build_text(engine, mode)):
                 if delim not in SHELL_HEREDOC_DELIMS:
                     continue
                 with self.subTest(engine=engine, mode=mode, heredoc=delim):
@@ -154,7 +121,7 @@ class TestHeredocClassification(unittest.TestCase):
         """
         known = SHELL_HEREDOC_DELIMS | DATA_HEREDOC_DELIMS
         for engine, mode in CASES:
-            for delim, _ in _heredocs(_build(engine, mode)):
+            for delim, _ in _heredocs(build_text(engine, mode)):
                 with self.subTest(engine=engine, mode=mode, heredoc=delim):
                     self.assertIn(
                         delim,
@@ -220,7 +187,7 @@ class TestHeredocMachinery(unittest.TestCase):
 class TestNoExportCommandSubstitution(unittest.TestCase):
     def test_no_export_from_command_substitution(self):
         for engine, mode in CASES:
-            script = _build(engine, mode)
+            script = build_text(engine, mode)
             for n, line in enumerate(script.splitlines(), start=1):
                 with self.subTest(engine=engine, mode=mode, line=n):
                     self.assertIsNone(

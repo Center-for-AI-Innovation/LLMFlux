@@ -20,63 +20,19 @@ A golden diff that you cannot explain line by line is a bug, not a refresh.
 import os
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+
+from .helpers import CASES, build_text
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("LLMFLUX_UPDATE_GOLDEN") == "1"
 
-# Fixed inputs. Every value here is arbitrary but must stay stable, or every
-# golden churns for no reason.
-COMMON = dict(
-    account="myaccount",
-    partition="gpu",
-    nodes="1",
-    gpus_per_node="2",
-    time="01:00:00",
-    memory="64G",
-    cpus_per_task="8",
-    logs_dir=Path("/logs"),
-    input_file=Path("/data/in.jsonl"),
-    output_file=Path("/data/out.json"),
-)
-
-
-def _slurm_config(extra_sbatch_args=None):
-    cfg = MagicMock()
-    cfg.extra_sbatch_args = extra_sbatch_args
-    return cfg
-
-
-def _build(engine, mode):
-    if engine == "vllm":
-        from llmflux.slurm.engine.vllm import create_vllm_batch_script as maker
-    else:
-        from llmflux.slurm.engine.ollama import create_ollama_batch_script as maker
-
-    kwargs = dict(
-        COMMON,
-        job_name=f"golden-{engine}-{mode}",
-        slurm_config=_slurm_config(),
-        mode=mode,
-    )
-    if mode == "serve":
-        kwargs["email"] = "someone@example.edu"
-    return "\n".join(maker(**kwargs)) + "\n"
-
-
-CASES = [
-    ("vllm", "batch"),
-    ("vllm", "serve"),
-    ("ollama", "batch"),
-    ("ollama", "serve"),
-]
 
 
 class TestGoldenScripts(unittest.TestCase):
     """One test per (engine, mode); each pins a full generated script."""
 
     def _check(self, engine, mode):
-        actual = _build(engine, mode)
+        actual = build_text(engine, mode)
         path = GOLDEN_DIR / f"{engine}-{mode}-n1.sh"
 
         if UPDATE:
