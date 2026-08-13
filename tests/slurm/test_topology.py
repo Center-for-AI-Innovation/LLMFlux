@@ -30,17 +30,31 @@ class TestResolveValidShapes(unittest.TestCase):
             t.nodes = 4
 
 
-class TestResolveRejectsMultiNode(unittest.TestCase):
-    def test_multi_node_is_rejected_for_every_engine(self):
-        for engine in ("vllm", "ollama"):
-            with self.subTest(engine=engine):
-                with self.assertRaises(TopologyError):
-                    resolve(2, 4, engine)
+class TestResolveMultiNode(unittest.TestCase):
+    def test_vllm_multi_node_is_allowed(self):
+        t = resolve(2, 4, "vllm")
+        self.assertTrue(t.is_multi_node)
+        self.assertEqual(t.world_size, 8)
+
+    def test_parallelism_axes_map_to_the_allocation(self):
+        """TP within a node, PP across them — the mapping the launcher relies on."""
+        t = resolve(2, 4, "vllm")
+        self.assertEqual(t.tensor_parallel_size, 4, "TP is per node")
+        self.assertEqual(t.pipeline_parallel_size, 2, "PP is one stage per node")
+        self.assertEqual(
+            t.tensor_parallel_size * t.pipeline_parallel_size, t.world_size,
+            "TP x PP must account for every allocated GPU",
+        )
+
+    def test_ollama_multi_node_is_still_rejected(self):
+        """Ollama has no distributed-inference story; nodes > 1 would idle them."""
+        with self.assertRaises(TopologyError):
+            resolve(2, 4, "ollama")
 
     def test_message_is_actionable(self):
         """The message has to tell the user what to do, not just say no."""
         with self.assertRaises(TopologyError) as ctx:
-            resolve(4, 2, "vllm")
+            resolve(4, 2, "ollama")
         msg = str(ctx.exception)
         self.assertIn("--nodes 4", msg)
         self.assertIn("--gpus-per-node", msg, "must name the flag to use instead")
@@ -49,7 +63,7 @@ class TestResolveRejectsMultiNode(unittest.TestCase):
 
     def test_message_reports_the_wasted_node_count(self):
         with self.assertRaises(TopologyError) as ctx:
-            resolve(4, 2, "vllm")
+            resolve(4, 2, "ollama")
         self.assertIn("3 node(s)", str(ctx.exception))
 
 
@@ -91,7 +105,7 @@ class TestRunnerGatesAtSubmitTime(unittest.TestCase):
     (which `benchmark` also uses) and `serve()`, which has its own code path.
     """
 
-    def _runner(self, nodes, engine="vllm"):
+    def _runner(self, nodes, engine="ollama"):
         import tempfile
         from pathlib import Path
         from unittest.mock import patch
@@ -140,7 +154,7 @@ class TestRunnerGatesAtSubmitTime(unittest.TestCase):
 
     def test_single_node_still_reaches_past_the_gate(self):
         """The gate must not become a blanket refusal for everyone."""
-        runner = self._runner(nodes=1)
+        runner = self._runner(nodes=1, engine="vllm")
         try:
             runner.run(input_path="/nonexistent.jsonl")
         except TopologyError:

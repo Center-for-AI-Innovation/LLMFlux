@@ -34,11 +34,19 @@ from pathlib import Path
 
 from .helpers import CASES, build_text
 
+#: (engine, mode, nodes). Multi-node only exists for vllm.
+SHAPES = [(e, m, "1") for e, m in CASES] + [
+    ("vllm", "batch", "2"),
+    ("vllm", "serve", "2"),
+    ("vllm", "batch", "4"),
+]
+
 BASH = shutil.which("bash")
 
-# Heredoc bodies that are shell CODE and must be syntax-checked. Empty today;
-# the multi-node launcher adds entries here.
-SHELL_HEREDOC_DELIMS = set()
+# Heredoc bodies that are shell CODE and must be syntax-checked. These are the
+# multi-node helper library and per-rank launcher — the latter is the only code
+# that runs on nodes 2..N, so a syntax error in it is invisible everywhere else.
+SHELL_HEREDOC_DELIMS = {"LLMFLUX_LIB_EOF", "LLMFLUX_RANK_EOF"}
 
 # Heredoc bodies that are DATA (JSON, mail text) and must not be shell-checked.
 DATA_HEREDOC_DELIMS = {"EOF", "MAIL_EOF"}
@@ -96,15 +104,17 @@ def _heredocs(text):
 @unittest.skipIf(BASH is None, "bash not available")
 class TestGeneratedScriptSyntax(unittest.TestCase):
     def test_outer_script_parses(self):
-        for engine, mode in CASES:
-            with self.subTest(engine=engine, mode=mode):
-                ok, msg = _bash_n(build_text(engine, mode), f"{engine}-{mode}")
+        for engine, mode, nodes in SHAPES:
+            with self.subTest(engine=engine, mode=mode, nodes=nodes):
+                ok, msg = _bash_n(
+                    build_text(engine, mode, nodes=nodes), f"{engine}-{mode}-n{nodes}"
+                )
                 self.assertTrue(ok, msg)
 
     def test_shell_heredoc_bodies_parse(self):
         """`bash -n` on the outer script does NOT cover heredoc bodies."""
-        for engine, mode in CASES:
-            for delim, body in _heredocs(build_text(engine, mode)):
+        for engine, mode, nodes in SHAPES:
+            for delim, body in _heredocs(build_text(engine, mode, nodes=nodes)):
                 if delim not in SHELL_HEREDOC_DELIMS:
                     continue
                 with self.subTest(engine=engine, mode=mode, heredoc=delim):
@@ -120,8 +130,8 @@ class TestHeredocClassification(unittest.TestCase):
         the syntax check above.
         """
         known = SHELL_HEREDOC_DELIMS | DATA_HEREDOC_DELIMS
-        for engine, mode in CASES:
-            for delim, _ in _heredocs(build_text(engine, mode)):
+        for engine, mode, nodes in SHAPES:
+            for delim, _ in _heredocs(build_text(engine, mode, nodes=nodes)):
                 with self.subTest(engine=engine, mode=mode, heredoc=delim):
                     self.assertIn(
                         delim,
@@ -186,8 +196,8 @@ class TestHeredocMachinery(unittest.TestCase):
 
 class TestNoExportCommandSubstitution(unittest.TestCase):
     def test_no_export_from_command_substitution(self):
-        for engine, mode in CASES:
-            script = build_text(engine, mode)
+        for engine, mode, nodes in SHAPES:
+            script = build_text(engine, mode, nodes=nodes)
             for n, line in enumerate(script.splitlines(), start=1):
                 with self.subTest(engine=engine, mode=mode, line=n):
                     self.assertIsNone(

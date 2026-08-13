@@ -7,16 +7,17 @@ was previously implicit and unvalidated: `nodes` was accepted, forwarded to
 allocated nodes that no process ever used.
 
 Validation is deliberately a gate that *narrows* as capability arrives, rather
-than a permanent refusal. Today `nodes > 1` is rejected for every engine. As
-multi-node lands, the rejection narrows to the cases that genuinely cannot be
-served (Ollama, model architectures without pipeline-parallel support) instead
-of being deleted.
+than a permanent refusal. It began as a blanket rejection of `nodes > 1`; with
+the vLLM launcher in place it now narrows to the cases that genuinely cannot be
+served — Ollama, which has no distributed-inference story. Model architectures
+without pipeline-parallel support are the next narrowing.
 """
 
 from dataclasses import dataclass
 
-#: Engines that can use more than one node. Empty until the launcher lands.
-_MULTINODE_CAPABLE_ENGINES = frozenset()
+#: Engines that can use more than one node. Ollama has no distributed-inference
+#: story comparable to vLLM's, so it stays single-node and is rejected above 1.
+_MULTINODE_CAPABLE_ENGINES = frozenset({"vllm"})
 
 #: Tracking issue for multi-node support.
 _TRACKING_ISSUE = "https://github.com/Center-for-AI-Innovation/LLMFlux/issues/137"
@@ -47,6 +48,16 @@ class Topology:
     def tensor_parallel_size(self) -> int:
         """GPUs the model is sharded across within one node."""
         return self.gpus_per_node
+
+    @property
+    def pipeline_parallel_size(self) -> int:
+        """Stages the model is split across, one per node.
+
+        Pipeline parallelism is the axis that spans nodes: it exchanges only
+        activations at stage boundaries, where tensor parallelism needs an
+        all-reduce per layer and belongs on the intra-node links.
+        """
+        return self.nodes
 
     @property
     def is_multi_node(self) -> bool:

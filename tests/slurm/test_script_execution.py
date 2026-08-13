@@ -75,6 +75,29 @@ exit "${STUB_PYTHON_EXIT:-0}"
     "sleep": """#!/bin/bash
 exit 0
 """,
+    # Emulates SPMD placement: runs the rank script once per node with
+    # SLURM_PROCID set. STUB_SRUN_MODE selects the failure being tested.
+    "srun": """#!/bin/bash
+echo "srun $*" >> "$STUB_LOG"
+script="${@: -1}"
+case "${STUB_SRUN_MODE:-ok}" in
+  die)      exit 1 ;;
+  partial)  n=1 ;;
+  none)     exec /bin/sleep 120 >/dev/null 2>&1 </dev/null ;;
+  *)        n="${LLMFLUX_NNODES:-1}" ;;
+esac
+i=0
+while [ "$i" -lt "$n" ]; do
+  SLURM_PROCID="$i" "$script" &
+  i=$((i + 1))
+done
+wait
+""",
+    "ip": """#!/bin/bash
+echo "ip $*" >> "$STUB_LOG"
+echo "2: hsn0    inet ${STUB_NODE_IP:-172.28.86.64}/21 brd x scope global hsn0"
+echo "3: hsn0.561    inet 141.142.254.64/21 brd x scope global hsn0.561"
+""",
     "ss": """#!/bin/bash
 echo "ss $*" >> "$STUB_LOG"
 exit 0
@@ -314,3 +337,72 @@ class TestSandboxSafety(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(BASH is None, "bash not available")
+class TestMultiNodeLauncher(unittest.TestCase):
+    """Execute the multi-node script; the launcher is bash that must actually run."""
+
+    def _run(self, sb, nodes="2", **env):
+        env.setdefault("SLURM_JOB_NUM_NODES", nodes)
+        return sb.run(build_text("vllm", "batch", nodes=nodes), **env)
+
+    def test_all_ranks_launch_and_the_barrier_passes(self):
+        with Sandbox() as sb:
+            rc, out, _ = self._run(sb, STUB_CURL_READY_AFTER=2)
+            self.assertIn("LLMFLUX-STAGE-A: all 2 ranks launched", out)
+            self.assertIn("LLMFLUX-TOPOLOGY:", out)
+            self.assertEqual(rc, 0, out[-2500:])
+
+    def test_rank_zero_serves_and_others_are_headless(self):
+        with Sandbox() as sb:
+            self._run(sb, STUB_CURL_READY_AFTER=1)
+            calls = "\n".join(sb.calls())
+            self.assertIn("--node-rank 0", calls)
+            self.assertIn("--headless", calls, "ranks > 0 must be headless workers")
+            self.assertIn("--nnodes 2", calls)
+
+    def test_master_addr_is_the_fabric_ip_never_a_hostname(self):
+        """FQDNs resolve to IPv6 link-local here; hostnames can round-robin."""
+        with Sandbox() as sb:
+            _, out, _ = self._run(sb, STUB_CURL_READY_AFTER=1, STUB_NODE_IP="172.28.86.64")
+            topo = next(l for l in out.splitlines() if "LLMFLUX-TOPOLOGY:" in l)
+            self.assertIn("master=172.28.86.64:", topo)
+            self.assertNotIn("141.142.254", topo, "VLAN child must not be selected")
+
+    def test_srun_failure_fails_fast(self):
+        with Sandbox() as sb:
+            rc, out, elapsed = self._run(sb, STUB_SRUN_MODE="die", STUB_CURL_READY_AFTER=10**9)
+            self.assertNotEqual(rc, 0)
+            self.assertIn("LLMFLUX-ERROR", out)
+            self.assertLess(elapsed, 30, "must not spin the full readiness budget")
+
+    def test_partial_rank_start_fails_fast(self):
+        """1 of 2 ranks up must fail, not hang until walltime."""
+        with Sandbox() as sb:
+            rc, out, elapsed = self._run(
+                sb, STUB_SRUN_MODE="partial", LLMFLUX_RANK_START_TIMEOUT=3,
+                STUB_CURL_READY_AFTER=10**9,
+            )
+            self.assertNotEqual(rc, 0)
+            self.assertIn("of 2 ranks started", out)
+            self.assertIn("LLMFLUX-DIAG", out, "a failure must dump diagnostics")
+            self.assertLess(elapsed, 40)
+
+    def test_node_count_mismatch_is_caught(self):
+        """--sbatch-arg can append a second --nodes; sbatch honours the last."""
+        with Sandbox() as sb:
+            rc, out, _ = self._run(sb, SLURM_JOB_NUM_NODES="1", STUB_CURL_READY_AFTER=10**9)
+            self.assertNotEqual(rc, 0)
+            self.assertIn("expected 2", out)
+
+    def test_requeue_does_not_pass_the_barrier_on_stale_files(self):
+        """A requeued job reuses SLURM_JOB_ID; stale rendezvous files must not count."""
+        with Sandbox() as sb:
+            self._run(sb, STUB_CURL_READY_AFTER=1)                      # attempt 1
+            rc, out, _ = self._run(
+                sb, STUB_SRUN_MODE="none", SLURM_RESTART_COUNT="1",
+                LLMFLUX_RANK_START_TIMEOUT=3, STUB_CURL_READY_AFTER=10**9,
+            )
+            self.assertNotEqual(rc, 0, "stale files must not satisfy the barrier")
+            self.assertIn("0 of 2 ranks started", out)

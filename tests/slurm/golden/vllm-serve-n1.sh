@@ -33,10 +33,10 @@ fi
 echo "Using HuggingFace model: $VLLM_MODEL_NAME"
 echo "Port: $VLLM_PORT"
 
-APPTAINER_BIND_PATHS="$DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$VLLM_HOME:$VLLM_HOME,$HF_HOME:$HF_HOME,$XDG_CACHE_HOME:$XDG_CACHE_HOME,$FLASHINFER_WORKSPACE_BASE:$FLASHINFER_WORKSPACE_BASE"
+export APPTAINER_BIND_PATHS="$DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$VLLM_HOME:$VLLM_HOME,$HF_HOME:$HF_HOME,$XDG_CACHE_HOME:$XDG_CACHE_HOME,$FLASHINFER_WORKSPACE_BASE:$FLASHINFER_WORKSPACE_BASE"
 if [ -d "$VLLM_MODEL_NAME" ]; then
     echo "Bind-mounting local model path: $VLLM_MODEL_NAME"
-    APPTAINER_BIND_PATHS="$APPTAINER_BIND_PATHS,$VLLM_MODEL_NAME:$VLLM_MODEL_NAME"
+    export APPTAINER_BIND_PATHS="$APPTAINER_BIND_PATHS,$VLLM_MODEL_NAME:$VLLM_MODEL_NAME"
 fi
 
 # Set HF_TOKEN for vLLM if available (for gated models)
@@ -79,7 +79,8 @@ echo ""
 # Wait for server
 echo "[3/4] Waiting for server to be ready...":
 SERVER_READY=false
-for i in {1..300}; do
+LLMFLUX_SERVER_TIMEOUT=${LLMFLUX_SERVER_TIMEOUT:-300}
+for i in $(seq 1 $LLMFLUX_SERVER_TIMEOUT); do
     if curl -s "http://localhost:$VLLM_PORT/health" >/dev/null 2>&1; then
         echo "        ✓ Server ready!"
         SERVER_READY=true
@@ -89,7 +90,7 @@ for i in {1..300}; do
         echo "VLLM server died"
         exit 1
     fi
-    [ $((i %15)) -eq 0 ] && echo "        Still loading... ($i/300s)"
+    [ $((i %15)) -eq 0 ] && echo "        Still loading... ($i/${LLMFLUX_SERVER_TIMEOUT}s)"
     sleep 1
 done
 if [[ $SERVER_READY == "false" ]]; then

@@ -286,6 +286,8 @@ class SlurmRunner:
         topology = self._topology()
         if topology.tensor_parallel_size > 1 and "tensor-parallel-size" not in merged_args:
             merged_args["tensor-parallel-size"] = topology.tensor_parallel_size
+        if topology.pipeline_parallel_size > 1 and "pipeline-parallel-size" not in merged_args:
+            merged_args["pipeline-parallel-size"] = topology.pipeline_parallel_size
 
         return self._build_vllm_engine_args(merged_args)
 

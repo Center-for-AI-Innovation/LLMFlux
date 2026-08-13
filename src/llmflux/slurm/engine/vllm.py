@@ -1,6 +1,8 @@
 import shlex
 from pathlib import Path
 
+from . import multinode
+
 def create_vllm_batch_script(
         account: str,
         partition: str,
@@ -67,10 +69,10 @@ def create_vllm_batch_script(
         "echo \"Using HuggingFace model: $VLLM_MODEL_NAME\"",
         "echo \"Port: $VLLM_PORT\"",
         "",
-        "APPTAINER_BIND_PATHS=\"$DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$VLLM_HOME:$VLLM_HOME,$HF_HOME:$HF_HOME,$XDG_CACHE_HOME:$XDG_CACHE_HOME,$FLASHINFER_WORKSPACE_BASE:$FLASHINFER_WORKSPACE_BASE\"",
+        "export APPTAINER_BIND_PATHS=\"$DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$VLLM_HOME:$VLLM_HOME,$HF_HOME:$HF_HOME,$XDG_CACHE_HOME:$XDG_CACHE_HOME,$FLASHINFER_WORKSPACE_BASE:$FLASHINFER_WORKSPACE_BASE\"",
         "if [ -d \"$VLLM_MODEL_NAME\" ]; then",
         "    echo \"Bind-mounting local model path: $VLLM_MODEL_NAME\"",
-        "    APPTAINER_BIND_PATHS=\"$APPTAINER_BIND_PATHS,$VLLM_MODEL_NAME:$VLLM_MODEL_NAME\"",
+        "    export APPTAINER_BIND_PATHS=\"$APPTAINER_BIND_PATHS,$VLLM_MODEL_NAME:$VLLM_MODEL_NAME\"",
         "fi",
         "",
         "# Set HF_TOKEN for vLLM if available (for gated models)",
@@ -100,23 +102,31 @@ def create_vllm_batch_script(
             "trap 'rm -f \"$CONNECTION_FILE\"; pkill -f \"vllm serve\" || true' EXIT TERM INT",
             "",
         ] if mode == "serve" else []),
-        "VERBOSE=1 apptainer exec --nv --cleanenv \\",
-        "    --bind \"$APPTAINER_BIND_PATHS\" \\",
-        "    ${CONTAINERS_DIR}/llm_processor.sif \\",
-        "    python3 -m vllm.entrypoints.openai.api_server \\",
-        "        --model \"$VLLM_MODEL_NAME\" \\",
-        "        --host \"$VLLM_HOST\" \\",
-        "        --port \"$VLLM_PORT\" \\",
-        *(["        --api-key \"$LLMFLUX_API_KEY\" \\",
-        ] if mode == "serve" else []),
-        "        $VLLM_ENGINE_ARGS &",
-        "VLLM_PID=$!",
-        "echo \"        PID: $VLLM_PID\"",
+        # nodes > 1 replaces the single-node exec with an SPMD srun step; at
+        # nodes == 1 the lines below are emitted unchanged, so single-node users
+        # see a byte-identical script.
+        *(multinode.preamble(nodes, gpus_per_node) if int(nodes) > 1 else []),
+        *(multinode.launch() if int(nodes) > 1 else [
+            "VERBOSE=1 apptainer exec --nv --cleanenv \\",
+            "    --bind \"$APPTAINER_BIND_PATHS\" \\",
+            "    ${CONTAINERS_DIR}/llm_processor.sif \\",
+            "    python3 -m vllm.entrypoints.openai.api_server \\",
+            "        --model \"$VLLM_MODEL_NAME\" \\",
+            "        --host \"$VLLM_HOST\" \\",
+            "        --port \"$VLLM_PORT\" \\",
+        ] + ([
+            "        --api-key \"$LLMFLUX_API_KEY\" \\",
+        ] if mode == "serve" else []) + [
+            "        $VLLM_ENGINE_ARGS &",
+            "VLLM_PID=$!",
+            "echo \"        PID: $VLLM_PID\"",
+        ]),
         "echo \"\"",
         "# Wait for server",
         "echo \"[3/4] Waiting for server to be ready...\":",
         "SERVER_READY=false",
-        "for i in {1..300}; do",
+        "LLMFLUX_SERVER_TIMEOUT=${LLMFLUX_SERVER_TIMEOUT:-300}",
+        "for i in $(seq 1 $LLMFLUX_SERVER_TIMEOUT); do",
         "    if curl -s \"http://localhost:$VLLM_PORT/health\" >/dev/null 2>&1; then",
         "        echo \"        ✓ Server ready!\"",
         "        SERVER_READY=true",
@@ -126,7 +136,7 @@ def create_vllm_batch_script(
         "        echo \"VLLM server died\"",
         "        exit 1",
         "    fi",
-        "    [ $((i %15)) -eq 0 ] && echo \"        Still loading... ($i/300s)\"",
+        "    [ $((i %15)) -eq 0 ] && echo \"        Still loading... ($i/${LLMFLUX_SERVER_TIMEOUT}s)\"",
         "    sleep 1",
         "done",
         "if [[ $SERVER_READY == \"false\" ]]; then",

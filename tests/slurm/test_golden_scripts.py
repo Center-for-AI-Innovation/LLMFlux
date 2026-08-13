@@ -21,7 +21,7 @@ import os
 import unittest
 from pathlib import Path
 
-from .helpers import CASES, build_text
+from .helpers import GOLDEN_CASES, build_text
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("LLMFLUX_UPDATE_GOLDEN") == "1"
@@ -31,9 +31,9 @@ UPDATE = os.environ.get("LLMFLUX_UPDATE_GOLDEN") == "1"
 class TestGoldenScripts(unittest.TestCase):
     """One test per (engine, mode); each pins a full generated script."""
 
-    def _check(self, engine, mode):
-        actual = build_text(engine, mode)
-        path = GOLDEN_DIR / f"{engine}-{mode}-n1.sh"
+    def _check(self, engine, mode, nodes="1"):
+        actual = build_text(engine, mode, nodes=nodes)
+        path = GOLDEN_DIR / f"{engine}-{mode}-n{nodes}.sh"
 
         if UPDATE:
             GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
@@ -75,6 +75,12 @@ class TestGoldenScripts(unittest.TestCase):
     def test_ollama_serve(self):
         self._check("ollama", "serve")
 
+    def test_vllm_batch_multinode(self):
+        self._check("vllm", "batch", nodes="2")
+
+    def test_vllm_serve_multinode(self):
+        self._check("vllm", "serve", nodes="2")
+
 
 class TestGoldenCoverage(unittest.TestCase):
     """Guards on the goldens themselves."""
@@ -83,9 +89,9 @@ class TestGoldenCoverage(unittest.TestCase):
         if UPDATE:
             self.skipTest("regenerating")
         missing = [
-            f"{e}-{m}-n1.sh"
-            for e, m in CASES
-            if not (GOLDEN_DIR / f"{e}-{m}-n1.sh").exists()
+            f"{e}-{m}-n{n}.sh"
+            for e, m, n in GOLDEN_CASES
+            if not (GOLDEN_DIR / f"{e}-{m}-n{n}.sh").exists()
         ]
         self.assertEqual(missing, [], f"golden files missing: {missing}")
 
@@ -93,7 +99,7 @@ class TestGoldenCoverage(unittest.TestCase):
         """A golden with no test is a file nobody regenerates."""
         if UPDATE or not GOLDEN_DIR.exists():
             self.skipTest("regenerating or no golden dir")
-        expected = {f"{e}-{m}-n1.sh" for e, m in CASES}
+        expected = {f"{e}-{m}-n{n}.sh" for e, m, n in GOLDEN_CASES}
         actual = {p.name for p in GOLDEN_DIR.glob("*.sh")}
         self.assertEqual(
             actual - expected, set(), "orphan golden files with no owning test"

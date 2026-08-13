@@ -20,6 +20,14 @@ CASES = [
     ("ollama", "serve"),
 ]
 
+#: Golden cases as (engine, mode, nodes). Multi-node exists only for vllm, and
+#: only the 2-node shape is pinned: 4 nodes differs from 2 solely in the node
+#: count, so a second file would churn without adding coverage.
+GOLDEN_CASES = [(e, m, "1") for e, m in CASES] + [
+    ("vllm", "batch", "2"),
+    ("vllm", "serve", "2"),
+]
+
 #: Fixed builder arguments. Arbitrary but stable — changing a value churns every
 #: golden file, so change it only deliberately.
 DEFAULTS = dict(
