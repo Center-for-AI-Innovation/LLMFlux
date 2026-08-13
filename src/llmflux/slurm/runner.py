@@ -14,6 +14,7 @@ import json
 
 from .engine import create_vllm_batch_script
 from .engine import create_ollama_batch_script
+from .topology import resolve as resolve_topology
 
 from ..core.config import SlurmConfig, EngineConfig
 from ..core.config_manager import ConfigManager
@@ -276,6 +277,15 @@ class SlurmRunner:
         Returns:
             Job ID of the submitted SLURM job
         """
+        # Validate the requested node/GPU shape before doing anything else, so
+        # an unservable request fails in milliseconds instead of after a queue
+        # wait. Raises TopologyError.
+        resolve_topology(
+            self.slurm_config.nodes,
+            self.slurm_config.gpus_per_node,
+            self.engine.engine,
+        )
+
         # Setup paths following precedence: code paths > environment variables > defaults
         # Use config manager to resolve paths
         
@@ -574,6 +584,13 @@ class SlurmRunner:
         Returns:
             SLURM job ID string, or None if submission failed.
         """
+        # Same topology gate as run(); serve has its own code path.
+        resolve_topology(
+            self.slurm_config.nodes,
+            self.slurm_config.gpus_per_node,
+            self.engine.engine,
+        )
+
         env = self._setup_environment()
 
         rebuild_requested = bool(kwargs.get("rebuild", False))
