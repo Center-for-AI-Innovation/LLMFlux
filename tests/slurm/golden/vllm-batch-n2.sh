@@ -109,6 +109,16 @@ llmflux_node_ip() {
     return 1
 }
 
+# Every fabric NIC, comma-separated, for NCCL_SOCKET_IFNAME. Derived
+# rather than hardcoded: node types differ (measured 4 NICs on GH200,
+# 2 on H200, 1 on A100), and a fixed list silently leaves fabric unused
+# on the wider nodes. Exact hsn<digits> again, so VLAN children are out.
+llmflux_fabric_ifaces() {
+    local want="${LLMFLUX_HSN_IFACE:-hsn}"
+    ip -4 -o addr show 2>/dev/null \
+        | awk -v w="$want" '$2 ~ "^" w "[0-9]+$" { printf "%s%s", sep, $2; sep="," }'
+}
+
 # First free TCP port at or above $1. Fails loudly rather than
 # returning a possibly-occupied port when ss is unavailable.
 llmflux_free_port() {
@@ -165,7 +175,7 @@ echo "LLMFLUX-TOPOLOGY: nnodes=$LLMFLUX_NNODES tp=2 master=$LLMFLUX_MASTER_ADDR:
 # than one Slingshot NIC on separate subnets, so which interface each
 # rank binds is not obvious from the master address alone.
 ip -4 -o addr show 2>/dev/null | awk '$2 ~ /^hsn/ {print "LLMFLUX-TOPOLOGY: iface " $2 " " $4}'
-echo "LLMFLUX-TOPOLOGY: nccl_socket_ifname=${LLMFLUX_NCCL_SOCKET_IFNAME:-hsn0,hsn1}"
+echo "LLMFLUX-TOPOLOGY: nccl_socket_ifname=${LLMFLUX_NCCL_SOCKET_IFNAME:-$(llmflux_fabric_ifaces)}"
 
 cat > "$LLMFLUX_RUN_DIR/rank-launch.sh" <<'LLMFLUX_RANK_EOF'
 #!/bin/bash
@@ -200,8 +210,10 @@ LLMFLUX_RANK_IP=$(llmflux_node_ip) || llmflux_die "rank ${LLMFLUX_RANK}: no rout
 APPTAINERENV_VLLM_HOST_IP="$LLMFLUX_RANK_IP"
 export APPTAINERENV_VLLM_HOST_IP
 
-# Exact interface list: a bare 'hsn' prefix also matches VLAN children.
-APPTAINERENV_NCCL_SOCKET_IFNAME="${LLMFLUX_NCCL_SOCKET_IFNAME:-hsn0,hsn1}"
+# Derived per node: these node types carry 1, 2 or 4 fabric NICs.
+LLMFLUX_IFACES="${LLMFLUX_NCCL_SOCKET_IFNAME:-$(llmflux_fabric_ifaces)}"
+[ -n "$LLMFLUX_IFACES" ] || llmflux_die "rank ${LLMFLUX_RANK}: no fabric interfaces found"
+APPTAINERENV_NCCL_SOCKET_IFNAME="$LLMFLUX_IFACES"
 export APPTAINERENV_NCCL_SOCKET_IFNAME
 # Symmetric-memory allreduce deadlocks cross-node during engine init.
 APPTAINERENV_VLLM_ALLREDUCE_USE_SYMM_MEM="${LLMFLUX_SYMM_MEM:-0}"
