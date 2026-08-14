@@ -215,7 +215,14 @@ def _benchmark_command(args: argparse.Namespace) -> int:
     print(f"  Input: {input_path}")
     print(f"  Output: {output_path}")
 
-    job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
+    try:
+        job_id = runner.run(input_path=str(input_path), output_path=output_path, **kwargs)
+    except ValueError as exc:
+        # Covers TopologyError, whose entire purpose is an actionable message.
+        # Delivered inside a stack trace it reads as a crash, not a refusal —
+        # and `llmflux serve` already handles it this way.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     print(f"Job ID: {job_id}")
 
     summary = {
@@ -362,7 +369,12 @@ def _run_command(args: argparse.Namespace) -> int:
     if getattr(args, "custom_config_path", None):
         kwargs["custom_config_path"] = args.custom_config_path
 
-    job_id = runner.run(input_path=input_path, output_path=output_path, **kwargs)
+    try:
+        job_id = runner.run(input_path=input_path, output_path=output_path, **kwargs)
+    except ValueError as exc:
+        # Same handling as `llmflux serve`; see _benchmark_command.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     print(f"Job ID: {job_id}")
     return 0
 
@@ -869,8 +881,14 @@ def build_parser() -> argparse.ArgumentParser:
     # SLURM configuration
     run_parser.add_argument("--account", type=str)
     run_parser.add_argument("--partition", type=str)
-    run_parser.add_argument("--nodes", type=int)
-    run_parser.add_argument("--gpus-per-node", type=int)
+    run_parser.add_argument(
+        "--nodes", type=int,
+        help="Nodes to allocate (default 1). More than one shards the model across nodes; vLLM only. See docs/MULTINODE.md",
+    )
+    run_parser.add_argument(
+        "--gpus-per-node", type=int,
+        help="GPUs per node (default 1). Becomes the tensor-parallel size.",
+    )
     run_parser.add_argument("--time", type=str)
     run_parser.add_argument("--mem", type=str)
     run_parser.add_argument("--cpus-per-task", type=int)
@@ -936,8 +954,14 @@ def build_parser() -> argparse.ArgumentParser:
     # SLURM configuration
     serve_parser.add_argument("--account", type=str)
     serve_parser.add_argument("--partition", type=str)
-    serve_parser.add_argument("--nodes", type=int)
-    serve_parser.add_argument("--gpus-per-node", type=int)
+    serve_parser.add_argument(
+        "--nodes", type=int,
+        help="Nodes to allocate (default 1). More than one shards the model across nodes; vLLM only. See docs/MULTINODE.md",
+    )
+    serve_parser.add_argument(
+        "--gpus-per-node", type=int,
+        help="GPUs per node (default 1). Becomes the tensor-parallel size.",
+    )
     serve_parser.add_argument("--time", required=True, type=str, help="How long to keep the service up, e.g. 02:00:00")
     serve_parser.add_argument("--mem", type=str)
     serve_parser.add_argument("--cpus-per-task", type=int)
@@ -968,8 +992,14 @@ def build_parser() -> argparse.ArgumentParser:
     # SLURM configuration
     benchmark_parser.add_argument("--account", type=str)
     benchmark_parser.add_argument("--partition", type=str)
-    benchmark_parser.add_argument("--nodes", type=int)
-    benchmark_parser.add_argument("--gpus-per-node", type=int)
+    benchmark_parser.add_argument(
+        "--nodes", type=int,
+        help="Nodes to allocate (default 1). More than one shards the model across nodes; vLLM only. See docs/MULTINODE.md",
+    )
+    benchmark_parser.add_argument(
+        "--gpus-per-node", type=int,
+        help="GPUs per node (default 1). Becomes the tensor-parallel size.",
+    )
     benchmark_parser.add_argument("--time", type=str)
     benchmark_parser.add_argument("--mem", type=str)
     benchmark_parser.add_argument("--cpus-per-task", type=int)
