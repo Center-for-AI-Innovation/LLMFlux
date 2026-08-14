@@ -111,7 +111,15 @@ class SlurmRunner:
         # - APPTAINERENV_ vars: Automatically passed to container with --cleanenv
 
         # Resolve HuggingFace cache directory with a default under workspace.
-        hf_home = os.getenv('HF_HOME') or str(workspace_path / ".cache" / "huggingface")
+        # Resolve symlinks. This path is both an Apptainer --bind source and the
+        # value of HF_HOME inside the container: Apptainer binds the path given,
+        # not what it points at, so a symlinked cache dangles inside and the
+        # engine dies with FileNotFoundError naming a directory that plainly
+        # exists on the host. Relocating a cache by symlink is the natural
+        # response to a home quota, so this is a likely configuration.
+        hf_home = str(
+            Path(os.getenv('HF_HOME') or workspace_path / ".cache" / "huggingface").resolve()
+        )
 
         # Cache locations for engine-side JIT artifacts (e.g. FlashInfer kernels).
         # These must also be host vars: the batch script uses them for mkdir and
