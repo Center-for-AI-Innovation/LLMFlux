@@ -25,7 +25,7 @@ The tables below show each parameter with its environment variable name, code se
 | Time | `SLURM_TIME` | `slurm_config.time = "01:00:00"` | `00:30:00` | Job time limit (HH:MM:SS) |
 | Memory | `SLURM_MEM` | `slurm_config.memory = "32G"` | `32G` | Memory allocation per node |
 | GPUs per node | `SLURM_GPUS_PER_NODE` | `slurm_config.gpus_per_node = 2` | `1` | Number of GPUs to allocate |
-| Nodes | `SLURM_NODES` | `slurm_config.nodes = 1` | `1` | Number of nodes to request |
+| Nodes | `SLURM_NODES` | `slurm_config.nodes = 1` | `1` | Nodes to request. More than one shards the model across nodes; **vLLM only** — Ollama is rejected at submit time. See [MULTINODE.md](MULTINODE.md) |
 | CPUs per task | `SLURM_CPUS_PER_TASK` | `slurm_config.cpus_per_task = 8` | `4` | CPUs per task |
 
 ### Processing Configuration

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- Batch jobs now exit with the batch processor's status. The generated script
+  ran cleanup (`pkill`, `rm -rf`, `kill`) after the inline processor, each
+  overwriting `$?`, so the job exited with whatever cleanup returned — always
+  `0`. A run whose every item failed produced a complete-looking output file and
+  a green SLURM job. Automation that treats a zero exit as "the batch succeeded"
+  will now see failures it previously missed
+  (see [#137](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/137)).
+- `llmflux serve` jobs likewise exit with the server's status rather than
+  unconditionally `0`. `scancel` and Ctrl-C (130/143) are still reported as
+  success, since that is how a serve job normally ends.
+- `--nodes N` with `N > 1` is now validated at submit time. With the vLLM engine
+  it is implemented (below); with the Ollama engine it is **rejected** with an
+  actionable error instead of being silently accepted while `N-1` nodes sat idle
+  and billed. A previously "working" Ollama multi-node command now fails
+  immediately.
+- `--gpus-per-node 0` is now rejected. It previously reached `sbatch`.
+- `connection.json`'s `node` field is now a dialable address — the fabric IPv4
+  at `nodes > 1`, the short hostname at `nodes == 1` — rather than `$(hostname)`,
+  which returns an FQDN that can resolve to IPv6 link-local only. Anything
+  parsing that field should expect either form.
+
 ### Added
 
 - `LLMClient` and `BatchProcessor` accept an `api_key`, falling back to the
@@ -22,6 +45,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `override=True`, so a bare `LLMFLUX_API_KEY=` line would erase a key exported
   in the shell
   (see [#129](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/129)).
+- **Multi-node vLLM inference.** `--nodes N` now deploys the model across all
+  `N` nodes instead of starting a server on the first and leaving the rest idle.
+  Tensor parallelism stays within a node — it needs an all-reduce per layer —
+  and pipeline parallelism spans nodes, exchanging only activations at stage
+  boundaries, so `--nodes 2 --gpus-per-node 4` runs
+  `tensor-parallel-size=4 pipeline-parallel-size=2`. Ranks meet through vLLM's
+  own rendezvous flags under a single SPMD `srun` step, one task per node; rank 0
+  serves the API and the rest run `--headless`. No Ray, and no container change.
+  See `docs/MULTINODE.md`
+  (see [#137](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/137)).
+- **Submit-time topology validation** (`llmflux.slurm.topology`). One place
+  decides whether a requested node/GPU shape can be served and how it maps onto
+  engine parallelism. Unservable shapes raise `TopologyError` before the job is
+  queued — in milliseconds rather than after a queue wait — and the message names
+  the flag to use instead and how many nodes would be billed while idle. That
+  includes a `--vllm-engine-args` parallelism that does not account for every
+  allocated GPU, which nothing downstream catches: vLLM asserts only
+  `world_size % nnodes == 0`.
+- New environment variables, all optional, documented in `.env.example` and
+  `docs/MULTINODE.md`: `LLMFLUX_SERVER_TIMEOUT` (readiness budget, 300 s
+  single-node / 1800 s multi-node, clamped to 90% of the allocation's remaining
+  walltime), `LLMFLUX_RANK_START_TIMEOUT`, `LLMFLUX_HSN_IFACE`,
+  `LLMFLUX_NCCL_SOCKET_IFNAME`, `LLMFLUX_RDZV_PORT`, `LLMFLUX_PORT_SCAN_MAX`,
+  `LLMFLUX_SYMM_MEM`, and `LLMFLUX_CONNECT_TIMEOUT` / `LLMFLUX_READ_TIMEOUT` for
+  the client request timeout.
+- Test infrastructure for the generated SLURM scripts, which no test previously
+  read end to end: golden characterization tests pinning every emitted script,
+  heredoc-aware `bash -n` (bash treats heredoc bodies as data, so the per-rank
+  launcher — the only code that runs on nodes 2..N — was invisible to a plain
+  `bash -n`) plus a guard against `export VAR=$(cmd)`, which discards the
+  substitution's exit status in every spelling including the quoted one, and a
+  harness that *executes* the generated scripts under stubbed commands so exit
+  status, elapsed time and termination can be asserted rather than inferred.
+
 - Configurable workspace via `LLMFLUX_WORKSPACE` or `workspace="/path"` on
   `Config` / `ConfigManager.reset_config()`, resolved as code argument →
   environment variable → current working directory. Every workspace-derived
@@ -54,6 +111,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolution, so per-image GPU cost saturates; use `--limit-mm-per-prompt` to
   bound work per request
   (see [#134](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/134)).
+- The single-node readiness bound is now the `LLMFLUX_SERVER_TIMEOUT` variable
+  rather than a literal `{1..300}`. The default is unchanged at 300 s.
+- `APPTAINER_BIND_PATHS` is now `export`ed rather than assigned. It was a plain
+  shell assignment, so an `srun`-launched child saw it empty and
+  `apptainer exec --bind ""` exits 0 with no diagnostic.
+- The vLLM and Ollama serve cleanup traps now kill the server by PID in addition
+  to their existing `pkill`. `pkill -f "<engine> serve"` is not job-scoped, so it
+  also reaches the same user's other jobs on a shared node; for vLLM at
+  `nodes == 1` it matched nothing at all, since that path launches
+  `python3 -m vllm.entrypoints.openai.api_server`.
+- A serve job publishes its endpoint in three places — the connection file, the
+  notification email, and the email's `OpenAI(base_url=...)` example. All three
+  now read one resolved value instead of two different ones.
+- `--nodes` and `--gpus-per-node` have help text.
+
 - All directory environment variables are now `LLMFLUX_`-prefixed
   (`LLMFLUX_WORKSPACE`, `LLMFLUX_DATA_INPUT_DIR`, `LLMFLUX_DATA_OUTPUT_DIR`),
   replacing the unprefixed `WORKSPACE` / `DATA_INPUT_DIR` / `DATA_OUTPUT_DIR`
@@ -76,6 +148,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default keep working) and `"**/*.jpg"` still recurses. An empty result now
   logs a warning instead of an info line
   (see [#131](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/131)).
+- Ollama containers now receive SLURM's real `CUDA_VISIBLE_DEVICES`.
+  `apptainer --cleanenv` strips it, so the container fell back to the list
+  synthesised from the *requested* GPU count, which is correct only when the
+  granted device indices happen to start at 0 and be contiguous. Ollama warns
+  about it directly: `user overrode visible devices`. vLLM already did this; the
+  two engine scripts had drifted.
+- Every `LLMClient` request now has a timeout. `requests.Session` had none, so a
+  read could block forever: if the engine died *after* the readiness check
+  passed, the batch processor waited out the rest of the job's walltime, the
+  allocation was billed in full, and nothing was reported anywhere.
+- `HF_HOME` is resolved before being used as an Apptainer bind source. Apptainer
+  binds the path it is given, not what that path points at, so a symlinked
+  HuggingFace cache dangled inside the container and the engine died with
+  `FileNotFoundError` naming a directory that plainly exists from outside.
+- The Triton cache is pinned to `$XDG_CACHE_HOME/triton`, which is already
+  created and bound, rather than defaulting to `~/.triton` — the same root cause
+  as the `HF_HOME` fix.
+- `llmflux connect` no longer prints a truncated SSH tunnel target. It derived
+  the target by stripping everything after the first `.`, which turns a fabric
+  IPv4 into its first octet.
 
 - vLLM jobs no longer fail to start with `OSError: [Errno 30] Read-only file
   system: '{workspace}/.cache/flashinfer'`. `XDG_CACHE_HOME` and
