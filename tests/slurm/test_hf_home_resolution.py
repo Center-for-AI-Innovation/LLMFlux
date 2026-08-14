@@ -52,3 +52,44 @@ class TestHfHomeResolution(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTritonCacheIsBound(unittest.TestCase):
+    """Triton's cache must live inside a directory Apptainer binds.
+
+    Triton defaults to ~/.triton. Apptainer binds $HOME but not what a symlink
+    under it points at, so a relocated ~/.triton dangles inside the container
+    and every worker dies with FileNotFoundError: '.../.triton/cache'. Observed
+    on DeltaAI job 2946305 (4 nodes, 16 workers) after ~/.triton was relocated
+    to /work to escape a home quota. FlashInfer needed the same treatment.
+    """
+
+    def test_triton_cache_dir_is_under_the_bound_xdg_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            from llmflux.core.config import Config, SlurmConfig, EngineConfig
+            from llmflux.slurm.runner import SlurmRunner
+
+            work = Path(tmp) / "work"
+            for sub in ("data", "models", "logs", "containers"):
+                (work / sub).mkdir(parents=True)
+            cfg = Config(
+                data_dir=str(work / "data"), models_dir=str(work / "models"),
+                logs_dir=str(work / "logs"), containers_dir=str(work / "containers"),
+                slurm=SlurmConfig(partition="gpu", nodes=1, gpus_per_node=1,
+                                  time="01:00:00", memory="16G", cpus_per_task=4,
+                                  account="acct"),
+            )
+            with patch("llmflux.slurm.runner.ConfigManager") as mgr:
+                mgr.return_value.get_config.return_value = cfg
+                runner = SlurmRunner(config=cfg.slurm,
+                                     engine_config=EngineConfig(engine="vllm"))
+                env = runner._setup_environment()
+
+            triton = env["APPTAINERENV_TRITON_CACHE_DIR"]
+            xdg = env["XDG_CACHE_HOME"]
+            self.assertTrue(
+                triton.startswith(xdg),
+                f"triton cache {triton} must sit inside the bound {xdg}",
+            )
+            self.assertNotIn(".triton", triton.replace(xdg, ""),
+                             "must not fall back to the home-relative default")

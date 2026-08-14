@@ -164,6 +164,13 @@ class SlurmRunner:
             'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
             'APPTAINERENV_HF_HOME': hf_home,
             'APPTAINERENV_XDG_CACHE_HOME': xdg_cache_home,
+            # Triton JIT-compiles kernels and defaults its cache to ~/.triton.
+            # Apptainer binds $HOME, but not what a symlink under it points at,
+            # so a relocated ~/.triton (a natural response to a home quota)
+            # dangles inside the container and every worker dies with
+            # FileNotFoundError: '.../.triton/cache'. Pin it inside a directory
+            # that is already bound — the same treatment FlashInfer needed.
+            'APPTAINERENV_TRITON_CACHE_DIR': str(Path(xdg_cache_home) / "triton"),
             'APPTAINERENV_FLASHINFER_WORKSPACE_BASE': flashinfer_workspace_base,
             # Use system CA bundle for HTTPS (e.g. HuggingFace model downloads).
             # Empty values break downloads with "No CA certificates were loaded".
