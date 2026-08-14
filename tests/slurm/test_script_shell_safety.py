@@ -286,20 +286,53 @@ class TestServeModeMultiNode(unittest.TestCase):
     def test_headless_workers_never_take_the_api_key(self):
         """Only rank 0 serves an API; a headless worker rejects --api-key."""
         body = self._rank_body("serve")
-        headless_branch = body.split("else", 1)[1]
+        # Split on the `else` LINE, not on the substring. Prose elsewhere in the
+        # script — an error message containing the word "elsewhere", say — would
+        # otherwise move the split and silently change what this asserts.
+        lines = body.splitlines()
+        idx = next(i for i, l in enumerate(lines) if l.strip() == "else")
+        headless_branch = "\n".join(lines[idx:])
         self.assertIn("--headless", headless_branch)
         self.assertNotIn("--api-key", headless_branch)
 
     def test_batch_mode_has_no_api_key(self):
         self.assertNotIn("--api-key", self._rank_body("batch"))
 
-    def test_connection_file_advertises_a_dialable_address(self):
+    def test_every_published_address_comes_from_one_expression(self):
         """`hostname` returns the FQDN here, which resolves to IPv6 link-local
-        only — a client dialling it gets nothing."""
-        script = build_text("vllm", "serve", nodes="2")
-        node_line = next(l for l in script.splitlines() if '"node"' in l)
-        self.assertNotIn("$(hostname)\"", node_line, "bare FQDN is not dialable")
-        self.assertIn("LLMFLUX_MASTER_ADDR", node_line)
+        only — a client dialling it gets nothing.
+
+        A serve job publishes its endpoint three times: the connection file, the
+        notification email's Endpoint line, and the email's OpenAI() example. All
+        three must read the same variable, or one job advertises two addresses
+        and the reader has no way to tell which one works.
+        """
+        for nodes, expected in (("1", '"$(hostname -s)"'), ("2", '"$LLMFLUX_MASTER_ADDR"')):
+            with self.subTest(nodes=nodes):
+                script = build_text("vllm", "serve", nodes=nodes)
+                lines = script.splitlines()
+                assign = next(l for l in lines if l.startswith("LLMFLUX_ENDPOINT_HOST="))
+                self.assertEqual(assign, f"LLMFLUX_ENDPOINT_HOST={expected}")
+
+                published = [
+                    l for l in lines
+                    if '"node"' in l or "Endpoint: http" in l or "base_url=" in l
+                ]
+                self.assertEqual(len(published), 3, f"expected 3 published addresses, got {published}")
+                for line in published:
+                    self.assertIn("$LLMFLUX_ENDPOINT_HOST", line)
+                    self.assertNotIn("$(hostname)", line, "bare FQDN is not dialable")
+
+    def test_endpoint_host_is_assigned_before_it_is_published(self):
+        """An expansion above its assignment is empty, not an error."""
+        for nodes in ("1", "2"):
+            with self.subTest(nodes=nodes):
+                lines = build_text("vllm", "serve", nodes=nodes).splitlines()
+                assign = next(i for i, l in enumerate(lines)
+                              if l.startswith("LLMFLUX_ENDPOINT_HOST="))
+                first_use = next(i for i, l in enumerate(lines)
+                                 if "$LLMFLUX_ENDPOINT_HOST" in l)
+                self.assertLess(assign, first_use)
 
     def test_trap_tears_down_the_whole_deployment(self):
         """pkill only reaches the batch host; workers live on other nodes."""

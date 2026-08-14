@@ -45,7 +45,7 @@ echo "Using port: $OLLAMA_PORT"
 # Install cleanup trap early so the connection file (contains the API key)
 # and server are removed even if the job is cancelled with scancel (SIGTERM).
 CONNECTION_FILE="$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json"
-trap 'rm -f "$CONNECTION_FILE"; pkill -f "ollama serve" || true' EXIT TERM INT
+trap 'rm -f "$CONNECTION_FILE"; [ -n "${OLLAMA_PID:-}" ] && kill "$OLLAMA_PID" 2>/dev/null; pkill -f "ollama serve" || true' EXIT TERM INT
 
 # Pass SLURM-allocated GPU(s) into the container (--cleanenv strips
 # CUDA_VISIBLE_DEVICES). Without this the container receives the list

@@ -90,7 +90,14 @@ def create_ollama_batch_script(
             "# Install cleanup trap early so the connection file (contains the API key)",
             "# and server are removed even if the job is cancelled with scancel (SIGTERM).",
             "CONNECTION_FILE=\"$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json\"",
-            "trap 'rm -f \"$CONNECTION_FILE\"; pkill -f \"ollama serve\" || true' EXIT TERM INT",
+            # Kill this job's server by PID, not only by pattern. `pkill -f
+            # "ollama serve"` does match here — this path really does exec
+            # `ollama serve` — but it matches the same user's OTHER jobs on the
+            # node too, and $OLLAMA_PID was never killed at all. Same shape as
+            # the vLLM trap, so the two engines cannot drift.
+            "trap 'rm -f \"$CONNECTION_FILE\"; "
+            "[ -n \"${OLLAMA_PID:-}\" ] && kill \"$OLLAMA_PID\" 2>/dev/null; "
+            "pkill -f \"ollama serve\" || true' EXIT TERM INT",
             "",
         ] if mode == "serve" else []),
         "# Pass SLURM-allocated GPU(s) into the container (--cleanenv strips",

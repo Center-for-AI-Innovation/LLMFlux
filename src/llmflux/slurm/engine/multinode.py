@@ -93,11 +93,15 @@ def _library() -> list:
         "llmflux_node_ip() {",
         '    local want="${LLMFLUX_HSN_IFACE:-hsn}" ip',
         "    # Exact 'hsn<digits>' — a bare 'hsn' prefix would also match the",
-        "    # VLAN children (hsn0.561) and pick a non-fabric address.",
+        "    # VLAN children (hsn0.561) and pick a non-fabric address. The name",
+        "    # itself is accepted too, because LLMFLUX_HSN_IFACE reads like an",
+        "    # interface name and users set it to one.",
         "    ip=$(ip -4 -o addr show 2>/dev/null \\",
-        '         | awk -v w="$want" \'$2 ~ "^" w "[0-9]+$" { split($4, a, "/"); print a[1]; exit }\')',
+        '         | awk -v w="$want" \'$2 == w || $2 ~ "^" w "[0-9]+$" '
+        '{ split($4, a, "/"); print a[1]; exit }\')',
         '    if llmflux_is_ipv4 "$ip"; then printf \'%s\\n\' "$ip"; return 0; fi',
-        '    echo "LLMFLUX-WARN: no ${want}<n> interface; falling back to short-name lookup" >&2',
+        '    echo "LLMFLUX-WARN: no interface named ${want} or ${want}<n>; '
+        'falling back to short-name lookup" >&2',
         '    ip=$(getent ahostsv4 "$(hostname -s)" 2>/dev/null | awk \'{print $1; exit}\')',
         '    case "$ip" in 127.*|169.254.*) ip="" ;; esac',
         '    if llmflux_is_ipv4 "$ip"; then printf \'%s\\n\' "$ip"; return 0; fi',
@@ -111,7 +115,7 @@ def _library() -> list:
         "llmflux_fabric_ifaces() {",
         '    local want="${LLMFLUX_HSN_IFACE:-hsn}"',
         "    ip -4 -o addr show 2>/dev/null \\",
-        '        | awk -v w="$want" \'$2 ~ "^" w "[0-9]+$" '
+        '        | awk -v w="$want" \'$2 == w || $2 ~ "^" w "[0-9]+$" '
         '{ printf "%s%s", sep, $2; sep="," }\'',
         "}",
         "",
@@ -187,7 +191,11 @@ def _rank_script(nnodes: str, mode: str = "batch") -> list:
         "",
         "# Derived per node: these node types carry 1, 2 or 4 fabric NICs.",
         'LLMFLUX_IFACES="${LLMFLUX_NCCL_SOCKET_IFNAME:-$(llmflux_fabric_ifaces)}"',
-        '[ -n "$LLMFLUX_IFACES" ] || llmflux_die "rank ${LLMFLUX_RANK}: no fabric interfaces found"',
+        '[ -n "$LLMFLUX_IFACES" ] || llmflux_die "rank ${LLMFLUX_RANK}: no interface '
+        'named ${LLMFLUX_HSN_IFACE:-hsn} or ${LLMFLUX_HSN_IFACE:-hsn}<n>. The default '
+        'suits HPE Slingshot; elsewhere set LLMFLUX_HSN_IFACE to your fabric interface '
+        'name or prefix (e.g. ib, eth), or LLMFLUX_NCCL_SOCKET_IFNAME to an explicit '
+        'comma-separated list"',
         'APPTAINERENV_NCCL_SOCKET_IFNAME="$LLMFLUX_IFACES"',
         "export APPTAINERENV_NCCL_SOCKET_IFNAME",
         "# Symmetric-memory allreduce deadlocks cross-node during engine init.",
@@ -259,7 +267,8 @@ def preamble(nodes: str, gpus_per_node: str, mode: str = "batch") -> list:
         "# `export VAR=$(cmd)` would discard the command's exit status, since",
         "# export itself always succeeds.",
         "LLMFLUX_MASTER_ADDR=$(llmflux_node_ip) || \\",
-        '    llmflux_die "no routable fabric IPv4 on the head node; set LLMFLUX_HSN_IFACE"',
+        '    llmflux_die "no routable fabric IPv4 on the head node; set '
+        'LLMFLUX_HSN_IFACE to your fabric interface name or prefix (default: hsn)"',
         "export LLMFLUX_MASTER_ADDR",
         'LLMFLUX_MASTER_PORT=$(llmflux_free_port "${LLMFLUX_RDZV_PORT:-29500}") || \\',
         '    llmflux_die "no free rendezvous port on the head node"',

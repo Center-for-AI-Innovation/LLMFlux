@@ -109,10 +109,11 @@ echo Time to ask questions!
 # CONNECTION_FILE was defined earlier alongside the cleanup trap.
 (umask 077 && mkdir -p "$(dirname $CONNECTION_FILE)")
 chmod 700 "$HOME/.llmflux" "$HOME/.llmflux/serve" "$(dirname $CONNECTION_FILE)"
+LLMFLUX_ENDPOINT_HOST="$(hostname -s)"
 (umask 077 && cat > "$CONNECTION_FILE" <<EOF
 {
   "job_id": "$SLURM_JOB_ID",
-  "node": "${LLMFLUX_MASTER_ADDR:-$(hostname -s)}",
+  "node": "$LLMFLUX_ENDPOINT_HOST",
   "port": $VLLM_PORT,
   "model": "$VLLM_MODEL_NAME",
   "api_key": "$LLMFLUX_API_KEY",
@@ -130,7 +131,7 @@ mail -s "LLMFlux serve job $SLURM_JOB_ID is ready" -- "$LLMFLUX_EMAIL" <<MAIL_EO
 Your LLMFlux serve job has finished loading and is ready to use.
 
   Job ID:   $SLURM_JOB_ID
-  Endpoint: http://$(hostname):$VLLM_PORT/v1
+  Endpoint: http://$LLMFLUX_ENDPOINT_HOST:$VLLM_PORT/v1
   API Key:  $LLMFLUX_API_KEY
   Model:    $VLLM_MODEL_NAME
   Engine:   vllm
@@ -138,7 +139,7 @@ Your LLMFlux serve job has finished loading and is ready to use.
 Example usage:
 
   from openai import OpenAI
-  client = OpenAI(base_url="http://$(hostname):$VLLM_PORT/v1", api_key="$LLMFLUX_API_KEY")
+  client = OpenAI(base_url="http://$LLMFLUX_ENDPOINT_HOST:$VLLM_PORT/v1", api_key="$LLMFLUX_API_KEY")
   response = client.chat.completions.create(
       model="$VLLM_MODEL_NAME",
       messages=[{"role": "user", "content": "Hello!"}]
@@ -150,6 +151,10 @@ MAIL_EOF
 
 # Keep alive until wall time or scancel
 wait $VLLM_PID
+LLMFLUX_SERVE_RC=$?
+# scancel and Ctrl-C are how a serve job normally ends; those are not
+# failures.
+case "$LLMFLUX_SERVE_RC" in 130|143) LLMFLUX_SERVE_RC=0 ;; esac
 
 # Cleanup
 # Only remove temporary directories that we created
@@ -164,3 +169,5 @@ kill $VLLM_PID 2>/dev/null || true
 sleep 2
 kill -9 $VLLM_PID 2>/dev/null || true
 
+# Exit with the server's status, for the same reason.
+exit ${LLMFLUX_SERVE_RC:-0}
