@@ -62,7 +62,7 @@ echo "Using port: $VLLM_PORT"
 # Install cleanup trap early so the connection file (contains the API key)
 # and server are removed even if the job is cancelled with scancel (SIGTERM).
 CONNECTION_FILE="$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json"
-trap 'rm -f "$CONNECTION_FILE"; pkill -f "vllm serve" || true' EXIT TERM INT
+trap 'rm -f "$CONNECTION_FILE"; [ -n "${VLLM_PID:-}" ] && kill "$VLLM_PID" 2>/dev/null; pkill -f "vllm serve" || true' EXIT TERM INT
 
 VERBOSE=1 apptainer exec --nv --cleanenv \
     --bind "$APPTAINER_BIND_PATHS" \
@@ -112,7 +112,7 @@ chmod 700 "$HOME/.llmflux" "$HOME/.llmflux/serve" "$(dirname $CONNECTION_FILE)"
 (umask 077 && cat > "$CONNECTION_FILE" <<EOF
 {
   "job_id": "$SLURM_JOB_ID",
-  "node": "$(hostname)",
+  "node": "${LLMFLUX_MASTER_ADDR:-$(hostname -s)}",
   "port": $VLLM_PORT,
   "model": "$VLLM_MODEL_NAME",
   "api_key": "$LLMFLUX_API_KEY",

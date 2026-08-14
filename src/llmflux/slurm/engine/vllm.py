@@ -99,13 +99,19 @@ def create_vllm_batch_script(
             "# Install cleanup trap early so the connection file (contains the API key)",
             "# and server are removed even if the job is cancelled with scancel (SIGTERM).",
             "CONNECTION_FILE=\"$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json\"",
-            "trap 'rm -f \"$CONNECTION_FILE\"; pkill -f \"vllm serve\" || true' EXIT TERM INT",
+            # pkill only reaches this node. At nodes>1 the workers live on
+            # other nodes, so killing the srun client is what actually tears the
+            # deployment down; $VLLM_PID is unset at this point and expands
+            # empty on the single-node path, which keeps the pkill behaviour.
+            "trap 'rm -f \"$CONNECTION_FILE\"; "
+            "[ -n \"${VLLM_PID:-}\" ] && kill \"$VLLM_PID\" 2>/dev/null; "
+            "pkill -f \"vllm serve\" || true' EXIT TERM INT",
             "",
         ] if mode == "serve" else []),
         # nodes > 1 replaces the single-node exec with an SPMD srun step; at
         # nodes == 1 the lines below are emitted unchanged, so single-node users
         # see a byte-identical script.
-        *(multinode.preamble(nodes, gpus_per_node) if int(nodes) > 1 else []),
+        *(multinode.preamble(nodes, gpus_per_node, mode) if int(nodes) > 1 else []),
         *(multinode.launch() if int(nodes) > 1 else [
             "VERBOSE=1 apptainer exec --nv --cleanenv \\",
             "    --bind \"$APPTAINER_BIND_PATHS\" \\",
@@ -159,7 +165,12 @@ def create_vllm_batch_script(
             "(umask 077 && cat > \"$CONNECTION_FILE\" <<EOF",
             "{",
             "  \"job_id\": \"$SLURM_JOB_ID\",",
-            "  \"node\": \"$(hostname)\",",
+            # hostname returns the FQDN on these compute nodes, and an FQDN
+            # here resolves to IPv6 link-local ONLY — a client dialling it gets
+            # nothing. Short name is resolvable; at nodes>1 the fabric address
+            # derived for the rendezvous is better still, and is what rank 0
+            # actually bound.
+            "  \"node\": \"${LLMFLUX_MASTER_ADDR:-$(hostname -s)}\",",
             "  \"port\": $VLLM_PORT,",
             "  \"model\": \"$VLLM_MODEL_NAME\",",
             "  \"api_key\": \"$LLMFLUX_API_KEY\",",

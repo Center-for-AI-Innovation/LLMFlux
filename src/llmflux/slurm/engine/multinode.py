@@ -150,7 +150,7 @@ def _library() -> list:
     ]
 
 
-def _rank_script(nnodes: str) -> list:
+def _rank_script(nnodes: str, mode: str = "batch") -> list:
     """The per-rank launcher, run once per node inside the srun step."""
     return [
         "#!/bin/bash",
@@ -203,6 +203,12 @@ def _rank_script(nnodes: str) -> list:
         '        "${CONTAINERS_DIR}/llm_processor.sif" \\',
         '        vllm serve "$VLLM_MODEL_NAME" \\',
         '            --host "$VLLM_HOST" --port "$VLLM_PORT" \\',
+        # serve mode authenticates the endpoint. Only rank 0 serves an API, so
+        # only rank 0 takes the key; a headless worker rejects --api-key.
+        # Without this a multi-node `llmflux serve` would expose an
+        # UNAUTHENTICATED endpoint while connection.json still hands the user a
+        # key, i.e. weaker than the single-node path it replaces.
+        *(['            --api-key "$LLMFLUX_API_KEY" \\'] if mode == "serve" else []),
         '            --nnodes "$LLMFLUX_NNODES" --node-rank 0 \\',
         '            --master-addr "$LLMFLUX_MASTER_ADDR" \\',
         '            --master-port "$LLMFLUX_MASTER_PORT" \\',
@@ -221,7 +227,7 @@ def _rank_script(nnodes: str) -> list:
     ]
 
 
-def preamble(nodes: str, gpus_per_node: str) -> list:
+def preamble(nodes: str, gpus_per_node: str, mode: str = "batch") -> list:
     """Rendezvous setup, emitted before the launch. Head node only."""
     lines = [
         "",
@@ -268,7 +274,7 @@ def preamble(nodes: str, gpus_per_node: str) -> list:
         'echo "LLMFLUX-TOPOLOGY: nccl_socket_ifname=${LLMFLUX_NCCL_SOCKET_IFNAME:-$(llmflux_fabric_ifaces)}"',
         "",
         f'cat > "$LLMFLUX_RUN_DIR/rank-launch.sh" <<\'{RANK_DELIM}\'',
-        *_rank_script(nodes),
+        *_rank_script(nodes, mode),
         RANK_DELIM,
         'chmod +x "$LLMFLUX_RUN_DIR/rank-launch.sh"',
     ]

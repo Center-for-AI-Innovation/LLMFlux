@@ -266,3 +266,44 @@ class TestMultiNodePortIsolation(unittest.TestCase):
     def test_rank_zero_still_pins_its_api_port_on_the_command_line(self):
         """Unsetting the env must not lose the API port the client dials."""
         self.assertIn('--port "$VLLM_PORT"', self._rank_body())
+
+
+class TestServeModeMultiNode(unittest.TestCase):
+    """serve mode has its own launcher tail and its own ways to go wrong."""
+
+    def _rank_body(self, mode):
+        return dict(_heredocs(build_text("vllm", mode, nodes="2")))["LLMFLUX_RANK_EOF"]
+
+    def test_rank_zero_authenticates_the_endpoint(self):
+        """Multi-node serve must not be weaker than single-node serve.
+
+        Without --api-key the endpoint is unauthenticated while connection.json
+        still hands the user a key — a security regression introduced by the
+        launcher, not present on the path it replaces.
+        """
+        self.assertIn('--api-key "$LLMFLUX_API_KEY"', self._rank_body("serve"))
+
+    def test_headless_workers_never_take_the_api_key(self):
+        """Only rank 0 serves an API; a headless worker rejects --api-key."""
+        body = self._rank_body("serve")
+        headless_branch = body.split("else", 1)[1]
+        self.assertIn("--headless", headless_branch)
+        self.assertNotIn("--api-key", headless_branch)
+
+    def test_batch_mode_has_no_api_key(self):
+        self.assertNotIn("--api-key", self._rank_body("batch"))
+
+    def test_connection_file_advertises_a_dialable_address(self):
+        """`hostname` returns the FQDN here, which resolves to IPv6 link-local
+        only — a client dialling it gets nothing."""
+        script = build_text("vllm", "serve", nodes="2")
+        node_line = next(l for l in script.splitlines() if '"node"' in l)
+        self.assertNotIn("$(hostname)\"", node_line, "bare FQDN is not dialable")
+        self.assertIn("LLMFLUX_MASTER_ADDR", node_line)
+
+    def test_trap_tears_down_the_whole_deployment(self):
+        """pkill only reaches the batch host; workers live on other nodes."""
+        script = build_text("vllm", "serve", nodes="2")
+        trap = next(l for l in script.splitlines() if l.startswith("trap "))
+        self.assertIn("$CONNECTION_FILE", trap, "the key-bearing file must still go")
+        self.assertIn("VLLM_PID", trap, "must kill the srun step, not just local procs")
