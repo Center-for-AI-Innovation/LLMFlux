@@ -275,6 +275,16 @@ while [ "$(ls "$LLMFLUX_RUN_DIR/rendezvous" 2>/dev/null | wc -l)" -lt "$LLMFLUX_
     sleep 1
 done
 echo "LLMFLUX-STAGE-A: all $LLMFLUX_NNODES ranks launched"
+
+# Clamp the readiness bound to the allocation. A large model sharded
+# across nodes legitimately takes far longer to load than the 300s
+# single-node default, so this must be raised — but a bound longer than
+# the walltime is never reached: Slurm kills the job first, so the
+# diagnostics and the non-zero exit never happen and a load failure
+# looks identical to a timeout.
+LLMFLUX_SERVER_TIMEOUT=$(llmflux_deadline_budget "${LLMFLUX_SERVER_TIMEOUT:-1800}")
+export LLMFLUX_SERVER_TIMEOUT
+echo "LLMFLUX-TOPOLOGY: readiness_budget=${LLMFLUX_SERVER_TIMEOUT}s"
 # ============ end multi-node rendezvous ============
 
 echo ""
