@@ -14,7 +14,7 @@ import json
 
 from .engine import create_vllm_batch_script
 from .engine import create_ollama_batch_script
-from .topology import resolve as resolve_topology
+from .topology import TopologyError, resolve as resolve_topology
 
 from ..core.config import SlurmConfig, EngineConfig
 from ..core.config_manager import ConfigManager
@@ -27,6 +27,82 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+#: Engine-arg keys whose spelling has to be folded before anything reasons about
+#: them. vLLM's FlexibleArgumentParser normalises "_" to "-", and
+#: _build_vllm_engine_args accepts a key that already carries "--", so three
+#: spellings reach one flag. Without folding, a user writing any but the bare
+#: hyphenated form escapes the "did the user supply this?" test below, the
+#: derived value is appended as well, and argparse — which takes the last
+#: occurrence — silently prefers the derived one.
+_PARALLEL_KEYS = ("tensor-parallel-size", "pipeline-parallel-size")
+
+
+def _canonical_keys(merged_args: Dict[str, Any]) -> Dict[str, Any]:
+    """Fold the parallelism keys onto their canonical spelling.
+
+    Scoped to those two keys deliberately: they are the ones the resolver reasons
+    about, and rewriting every key would change what reaches vLLM for arguments
+    this code has no opinion on.
+    """
+    canonical = {k.lstrip("-").replace("_", "-"): k for k in _PARALLEL_KEYS}
+    out: Dict[str, Any] = {}
+    for key, value in merged_args.items():
+        folded = key.lstrip("-").replace("_", "-") if isinstance(key, str) else key
+        if folded in canonical:
+            # A user who somehow supplied two spellings gets the first one.
+            out.setdefault(canonical[folded], value)
+        else:
+            out[key] = value
+    return out
+
+
+def _reject_parallelism_that_wastes_the_allocation(merged_args, topology) -> None:
+    """Refuse a parallelism that does not account for every allocated GPU.
+
+    A value the user typed is never silently overridden, which means the user can
+    contradict their own allocation. At nodes == 1 that is their business: they
+    get fewer GPUs than they asked for and nothing else breaks. At nodes > 1 it is
+    the silent-waste bug this whole path exists to remove, and nothing downstream
+    catches it — vLLM asserts only `world_size % nnodes == 0`, so tp=4 pp=1 on a
+    2-node 8-GPU allocation passes and then runs on half the job.
+    """
+    raw = {k: merged_args.get(k) for k in _PARALLEL_KEYS}
+    tp = raw["tensor-parallel-size"]
+    pp = raw["pipeline-parallel-size"]
+    tp = topology.tensor_parallel_size if tp is None else tp
+    pp = topology.pipeline_parallel_size if pp is None else pp
+    try:
+        tp, pp = int(tp), int(pp)
+    except (TypeError, ValueError) as exc:
+        raise TopologyError(
+            f"tensor-parallel-size and pipeline-parallel-size must be integers, "
+            f"got {raw['tensor-parallel-size']!r} and {raw['pipeline-parallel-size']!r}"
+        ) from exc
+
+    if tp * pp == topology.world_size:
+        return
+
+    idle = topology.world_size - tp * pp
+    consequence = (
+        f"The remaining {idle} GPU(s) would be allocated and billed for the "
+        f"job's full walltime while sitting idle.\n"
+        if idle > 0 else
+        f"That is {-idle} more GPU(s) than the allocation provides; the engine "
+        f"would fail to start after the queue wait and the model load.\n"
+    )
+    raise TopologyError(
+        f"--vllm-engine-args sets tensor-parallel-size={tp} and "
+        f"pipeline-parallel-size={pp}, which uses {tp * pp} GPU(s), but the "
+        f"allocation is --nodes {topology.nodes} x --gpus-per-node "
+        f"{topology.gpus_per_node} = {topology.world_size} GPU(s).\n"
+        + consequence
+        + "Either drop the override and let the allocation decide, or make "
+        "tensor-parallel-size x pipeline-parallel-size equal "
+        "--nodes x --gpus-per-node."
+    )
+
 
 class SlurmRunner:
     """Runner for executing processors on SLURM."""
@@ -296,13 +372,16 @@ class SlurmRunner:
         cli_args = self._load_vllm_engine_args(
             kwargs.get("vllm_engine_args"), "--vllm-engine-args"
         )
-        merged_args = {**env_args, **cli_args}
+        merged_args = _canonical_keys({**env_args, **cli_args})
 
         topology = self._topology()
         if topology.tensor_parallel_size > 1 and "tensor-parallel-size" not in merged_args:
             merged_args["tensor-parallel-size"] = topology.tensor_parallel_size
         if topology.pipeline_parallel_size > 1 and "pipeline-parallel-size" not in merged_args:
             merged_args["pipeline-parallel-size"] = topology.pipeline_parallel_size
+
+        if topology.is_multi_node:
+            _reject_parallelism_that_wastes_the_allocation(merged_args, topology)
 
         return self._build_vllm_engine_args(merged_args)
 

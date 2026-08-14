@@ -162,5 +162,95 @@ class TestRunnerGatesAtSubmitTime(unittest.TestCase):
         except Exception:
             pass  # any later failure is fine; we only care about the gate
 
+
+class TestParallelismMustFillTheAllocation(unittest.TestCase):
+    """User-supplied engine args beat derived ones — including into a shape the
+    allocation cannot serve.
+
+    A value the user typed is never silently overridden, which means the user can
+    contradict their own allocation. At nodes == 1 that is their business. At
+    nodes > 1 it is the silent-waste bug the launcher exists to remove, and
+    nothing downstream catches it: vLLM asserts only `world_size % nnodes == 0`,
+    so tp=4 pp=1 on a 2-node 8-GPU allocation passes and runs on half the job.
+    """
+
+    def _args(self, nodes, gpus_per_node, engine_args=None):
+        from unittest.mock import MagicMock
+        from llmflux.slurm.runner import SlurmRunner
+
+        runner = SlurmRunner.__new__(SlurmRunner)
+        runner.slurm_config = MagicMock(nodes=nodes, gpus_per_node=gpus_per_node)
+        runner.engine = MagicMock(engine="vllm")
+        return runner._resolve_vllm_engine_args({"vllm_engine_args": engine_args})
+
+    def test_derived_parallelism_fills_the_allocation(self):
+        """The line that makes the second node participate.
+
+        Pipeline parallelism is the axis that spans nodes; without this flag the
+        extra nodes are allocated and idle, which is the whole bug. Nothing else
+        in the suite asserts it reaches the engine args.
+        """
+        args = self._args(2, 4)
+        self.assertIn("--tensor-parallel-size 4", args)
+        self.assertIn("--pipeline-parallel-size 2", args)
+
+    def test_four_nodes(self):
+        args = self._args(4, 4)
+        self.assertIn("--pipeline-parallel-size 4", args)
+
+    def test_single_node_gets_no_pipeline_stage(self):
+        args = self._args(1, 4)
+        self.assertIn("--tensor-parallel-size 4", args)
+        self.assertNotIn("pipeline-parallel-size", args)
+
+    def test_conflicting_value_is_rejected(self):
+        """Both directions, and every spelling that reaches the same vLLM flag.
+
+        vLLM's FlexibleArgumentParser normalises "_" to "-" and argparse takes
+        the last occurrence, so an unfolded spelling would emit two copies of one
+        flag and the derived value would silently beat the user's.
+        """
+        cases = [
+            ('{"pipeline-parallel-size": 1}', "uses 4 GPU"),
+            ('{"tensor-parallel-size": 2}', "uses 4 GPU"),
+            ('{"tensor-parallel-size": 8}', "uses 16 GPU"),
+            ('{"pipeline_parallel_size": 1}', "uses 4 GPU"),
+            ('{"--pipeline-parallel-size": 1}', "uses 4 GPU"),
+            ('{"--tensor_parallel_size": 8}', "uses 16 GPU"),
+        ]
+        for engine_args, expected in cases:
+            with self.subTest(engine_args=engine_args):
+                with self.assertRaises(TopologyError) as ctx:
+                    self._args(2, 4, engine_args)
+                msg = str(ctx.exception)
+                self.assertIn(expected, msg)
+                self.assertIn("8 GPU(s)", msg, "must name the allocation")
+                self.assertIn("--nodes 2", msg, "must name the shape the user asked for")
+
+    def test_a_matching_override_is_allowed(self):
+        """Rejecting every override would be a blanket refusal, not a gate.
+
+        tp=8 pp=1 across 2 nodes is unusual — TP spanning nodes — but it does
+        account for all 8 GPUs, so it is the user's call.
+        """
+        args = self._args(2, 4, '{"tensor-parallel-size": 8, "pipeline-parallel-size": 1}')
+        self.assertIn("--tensor-parallel-size 8", args)
+        self.assertIn("--pipeline-parallel-size 1", args)
+
+    def test_single_node_override_is_untouched(self):
+        """At nodes == 1 asking for fewer GPUs than allocated is legitimate."""
+        args = self._args(1, 4, '{"tensor-parallel-size": 2}')
+        self.assertEqual(args, "--tensor-parallel-size 2")
+
+    def test_unrelated_engine_args_survive_canonicalisation(self):
+        args = self._args(1, 1, '{"max-model-len": 8192, "trust-remote-code": true}')
+        self.assertIn("--max-model-len 8192", args)
+        self.assertIn("--trust-remote-code", args)
+
+    def test_a_non_integer_parallelism_is_reported_not_crashed(self):
+        with self.assertRaises(TopologyError):
+            self._args(2, 4, '{"tensor-parallel-size": "four"}')
+
+
 if __name__ == "__main__":
     unittest.main()
