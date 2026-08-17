@@ -15,7 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   LLMFlux's own client could not talk to an endpoint LLMFlux itself had
   started — every request came back HTTP 401, leaving the OpenAI SDK as the
   only usable client. A 401/403 with no key configured now logs where to get
-  one instead of a bare request error
+  one instead of a bare request error. Blank and whitespace-only values are
+  treated as unset, and surrounding whitespace is stripped, so a key quoted with
+  a trailing space in `.env` no longer produces a `Bearer abc ` header that vLLM
+  rejects. `.env.example` ships the entry commented out: `.env` is loaded with
+  `override=True`, so a bare `LLMFLUX_API_KEY=` line would erase a key exported
+  in the shell
   (see [#129](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/129)).
 - Configurable workspace via `LLMFLUX_WORKSPACE` or `workspace="/path"` on
   `Config` / `ConfigManager.reset_config()`, resolved as code argument →

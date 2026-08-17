@@ -74,9 +74,13 @@ class LLMClient:
         self.session = requests.Session()
 
         # Set on the session so every request (chat, list_models, pull_model)
-        # carries it. Empty strings are treated as unset so an exported-but-blank
-        # LLMFLUX_API_KEY does not send "Bearer ".
-        self.api_key = api_key or os.getenv('LLMFLUX_API_KEY') or None
+        # carries it. Blank and whitespace-only values are treated as unset so an
+        # exported-but-blank LLMFLUX_API_KEY does not send "Bearer ". Surrounding
+        # whitespace is stripped: a quoted .env value keeps its trailing space, and
+        # vLLM compares the header byte-for-byte, so " abc" would 401. A trailing
+        # newline would raise ValueError from requests before the request is sent.
+        candidates = (api_key, os.getenv('LLMFLUX_API_KEY'))
+        self.api_key = next((c.strip() for c in candidates if c and c.strip()), None)
         if self.api_key:
             self.session.headers['Authorization'] = f"Bearer {self.api_key}"
             logger.debug("Using bearer token authentication")

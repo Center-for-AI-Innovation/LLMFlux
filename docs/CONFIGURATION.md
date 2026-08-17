@@ -54,6 +54,22 @@ The tables below show each parameter with its environment variable name, code se
 | Containers directory | `LLMFLUX_CONTAINERS_DIR` | `containers_dir="/path"` in Config | `{workspace}/containers` | Directory for Apptainer images |
 | HuggingFace cache | `HF_HOME` | Set via env | `{workspace}/.cache/huggingface` | Directory for HuggingFace model cache (used by vLLM) |
 
+### Endpoint Authentication
+
+| Parameter | Environment Variable | Code Setting | Default | Description |
+|-----------|----------------------|-------------|---------|-------------|
+| API key | `LLMFLUX_API_KEY` | `api_key="llmflux-..."` in `LLMClient` or `BatchProcessor` | (none) | Bearer token sent with every request. Required to reach an endpoint started by `llmflux serve`, which runs vLLM with `--api-key`. Get the key with `llmflux connect <job_id>`. |
+
+The code setting wins over the environment variable. With neither set, no
+`Authorization` header is sent, which is what an unauthenticated Ollama or vLLM
+endpoint expects.
+
+> **Do not add a blank `LLMFLUX_API_KEY=` line to your `.env`.** LLMFlux loads
+> `.env` with `override=True`, and python-dotenv reads a bare `KEY=` as an empty
+> string — so the blank line overwrites a key you exported in your shell, and
+> requests go out unauthenticated. Comment the line out instead. The same applies
+> to every variable in this document.
+
 ## Configuration Methods
 
 You can configure LLMFlux in multiple ways, depending on your preference and needs.
