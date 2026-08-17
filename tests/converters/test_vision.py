@@ -243,6 +243,68 @@ class TestVisionToJsonl(unittest.TestCase):
             lines = [l for l in f if l.strip()]
         self.assertEqual(len(lines), 0)
 
+    def test_report_names_oversized_images(self):
+        """A skipped image must be visible to the caller, not only in the log."""
+        img_dir = self.test_dir / "images"
+        img_dir.mkdir()
+        for name in ("small.png", "big.png"):
+            _write_tiny_png(str(img_dir / name))
+        (img_dir / "big.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 5000)
+        out = str(self.test_dir / "out.jsonl")
+
+        path, report = vision_to_jsonl(
+            str(img_dir), output_path=out, max_image_size=1000, return_report=True
+        )
+
+        self.assertEqual(path, out)
+        self.assertEqual(report["found"], 2)
+        self.assertEqual(report["converted"], 1)
+        self.assertEqual(len(report["skipped_too_large"]), 1)
+        skipped = report["skipped_too_large"][0]
+        self.assertTrue(skipped["path"].endswith("big.png"))
+        self.assertEqual(skipped["limit"], 1000)
+        self.assertGreater(skipped["size"], 1000)
+
+    def test_report_counts_a_clean_run(self):
+        img_dir = self.test_dir / "images"
+        img_dir.mkdir()
+        for name in ("a.png", "b.png"):
+            _write_tiny_png(str(img_dir / name))
+        out = str(self.test_dir / "out.jsonl")
+
+        _, report = vision_to_jsonl(str(img_dir), output_path=out, return_report=True)
+
+        self.assertEqual(report, {
+            "found": 2, "converted": 2, "skipped_too_large": [], "failed": [],
+        })
+
+    def test_returns_bare_path_by_default(self):
+        """Existing callers must keep getting a string back."""
+        img = self._make_image()
+        out = str(self.test_dir / "out.jsonl")
+        result = vision_to_jsonl(str(img), output_path=out)
+        self.assertIsInstance(result, str)
+
+    def test_dropped_images_are_summarized_in_a_warning(self):
+        img = self._make_image()
+        out = str(self.test_dir / "out.jsonl")
+        with self.assertLogs("llmflux.converters.vision", level="WARNING") as logs:
+            vision_to_jsonl(str(img), output_path=out, max_image_size=1)
+        self.assertIn("Converted 0 of 1 images", "\n".join(logs.output))
+
+    def test_default_max_image_size_accepts_typical_phone_photo(self):
+        """A 12MB photo is a normal 48MP phone JPEG and must not be dropped."""
+        img_dir = self.test_dir / "images"
+        img_dir.mkdir()
+        big = img_dir / "phone.jpg"
+        big.write_bytes(b"\xff\xd8\xff" + b"0" * (12 * 1024 * 1024))
+        out = str(self.test_dir / "out.jsonl")
+
+        _, report = vision_to_jsonl(str(img_dir), output_path=out, return_report=True)
+
+        self.assertEqual(report["converted"], 1)
+        self.assertEqual(report["skipped_too_large"], [])
+
     def test_raises_for_missing_input(self):
         with self.assertRaises(FileNotFoundError):
             vision_to_jsonl(str(self.test_dir / "nope.png"), output_path="/tmp/x.jsonl")
