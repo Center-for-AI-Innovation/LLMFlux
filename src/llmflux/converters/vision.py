@@ -13,6 +13,54 @@ from .utils import create_jsonl_entry, generate_custom_id
 
 logger = logging.getLogger(__name__)
 
+# Extensions vLLM/Ollama vision models accept, mapped to the MIME type used in
+# the data: URL. Also drives directory discovery when no file_pattern is given.
+IMAGE_MIME_TYPES = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+}
+
+
+def _expand_braces(pattern: str) -> List[str]:
+    """Expand one {a,b,c} group into separate patterns.
+
+    glob has no brace expansion, so "*.{jpg,png}" silently matches nothing.
+    Callers that pass such a pattern (it used to be this function's default)
+    get the extensions they meant.
+    """
+    start = pattern.find('{')
+    end = pattern.find('}', start + 1)
+    if start == -1 or end == -1:
+        return [pattern]
+    prefix, options, suffix = pattern[:start], pattern[start + 1:end], pattern[end + 1:]
+    return [f"{prefix}{option}{suffix}" for option in options.split(',')]
+
+
+def _find_images(directory: str, file_pattern: Optional[str]) -> List[str]:
+    """List image files in a directory.
+
+    With no file_pattern, every supported extension is matched case-insensitively
+    so phone/camera names like IMG_1234.JPG are included. An explicit pattern is
+    passed to glob (brace groups expanded), keeping "**/*.jpg" style recursion.
+    """
+    if file_pattern is None:
+        return sorted(
+            os.path.join(directory, name)
+            for name in os.listdir(directory)
+            if os.path.splitext(name)[1].lower() in IMAGE_MIME_TYPES
+            and os.path.isfile(os.path.join(directory, name))
+        )
+
+    matches = set()
+    for expanded in _expand_braces(file_pattern):
+        matches.update(glob.glob(os.path.join(directory, expanded), recursive=True))
+    return sorted(matches)
+
+
 def encode_image(image_path: str) -> str:
     """Base64 encode an image file.
     
@@ -43,15 +91,7 @@ def get_image_mime_type(image_path: str) -> str:
         MIME type string
     """
     ext = os.path.splitext(image_path)[1].lower()
-    mime_types = {
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.gif': 'image/gif',
-        '.webp': 'image/webp',
-        '.bmp': 'image/bmp'
-    }
-    return mime_types.get(ext, 'application/octet-stream')
+    return IMAGE_MIME_TYPES.get(ext, 'application/octet-stream')
 
 def vision_to_jsonl(
     input_path: str,
@@ -61,7 +101,7 @@ def vision_to_jsonl(
     system_prompt: Optional[str] = None,
     model: Optional[str] = None,
     max_image_size: int = 10 * 1024 * 1024,
-    file_pattern: str = "*.{jpg,jpeg,png,gif,webp,bmp}"
+    file_pattern: Optional[str] = None
 ) -> str:
     """Convert images to JSONL format.
     
@@ -73,7 +113,9 @@ def vision_to_jsonl(
         system_prompt: Optional system prompt
         model: Vision-capable model to use
         max_image_size: Maximum image file size in bytes
-        file_pattern: Glob pattern for image files
+        file_pattern: Optional glob pattern for image files. Defaults to every
+            supported extension, matched case-insensitively and non-recursively.
+            Pass e.g. "**/*.jpg" to recurse into subdirectories.
         
     Returns:
         Path to generated JSONL file
@@ -101,9 +143,16 @@ def vision_to_jsonl(
         image_paths = []
         if os.path.isdir(input_path):
             # Handle directory of images
-            pattern = os.path.join(input_path, file_pattern)
-            image_paths = glob.glob(pattern, recursive=True)
-            logger.info(f"Found {len(image_paths)} images in {input_path}")
+            image_paths = _find_images(input_path, file_pattern)
+            if image_paths:
+                logger.info(f"Found {len(image_paths)} images in {input_path}")
+            else:
+                # Loud, because the result is a valid-but-empty JSONL file.
+                logger.warning(
+                    f"No images found in {input_path}"
+                    + (f" matching pattern '{file_pattern}'" if file_pattern else "")
+                    + f". Supported extensions: {', '.join(sorted(IMAGE_MIME_TYPES))}"
+                )
         else:
             # Handle single image
             image_paths = [input_path]

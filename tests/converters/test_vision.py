@@ -151,6 +151,90 @@ class TestVisionToJsonl(unittest.TestCase):
             lines = [l for l in f if l.strip()]
         self.assertEqual(len(lines), 3)
 
+    def test_directory_default_pattern_finds_all_supported_extensions(self):
+        """The default must actually match images — it used to be a brace glob,
+        which Python's glob does not expand, so directories yielded nothing."""
+        img_dir = self.test_dir / "images"
+        img_dir.mkdir()
+        for name in ("a.png", "b.jpg", "c.jpeg", "d.gif", "e.webp", "f.bmp"):
+            _write_tiny_png(str(img_dir / name))
+        (img_dir / "notes.txt").write_text("not an image")
+        out = str(self.test_dir / "out.jsonl")
+
+        vision_to_jsonl(str(img_dir), output_path=out)
+
+        with open(out) as f:
+            lines = [l for l in f if l.strip()]
+        self.assertEqual(len(lines), 6)
+
+    def test_directory_default_pattern_is_case_insensitive(self):
+        """Phones and cameras produce IMG_1234.JPG."""
+        img_dir = self.test_dir / "images"
+        img_dir.mkdir()
+        for name in ("IMG_1.JPG", "IMG_2.PNG"):
+            _write_tiny_png(str(img_dir / name))
+        out = str(self.test_dir / "out.jsonl")
+
+        vision_to_jsonl(str(img_dir), output_path=out)
+
+        with open(out) as f:
+            lines = [l for l in f if l.strip()]
+        self.assertEqual(len(lines), 2)
+
+    def test_directory_default_pattern_is_not_recursive(self):
+        img_dir = self.test_dir / "images"
+        (img_dir / "nested").mkdir(parents=True)
+        _write_tiny_png(str(img_dir / "top.png"))
+        _write_tiny_png(str(img_dir / "nested" / "deep.png"))
+        out = str(self.test_dir / "out.jsonl")
+
+        vision_to_jsonl(str(img_dir), output_path=out)
+
+        with open(out) as f:
+            lines = [l for l in f if l.strip()]
+        self.assertEqual(len(lines), 1)
+
+    def test_recursive_pattern_descends_into_subdirectories(self):
+        img_dir = self.test_dir / "images"
+        (img_dir / "nested").mkdir(parents=True)
+        _write_tiny_png(str(img_dir / "top.png"))
+        _write_tiny_png(str(img_dir / "nested" / "deep.png"))
+        out = str(self.test_dir / "out.jsonl")
+
+        vision_to_jsonl(str(img_dir), output_path=out, file_pattern="**/*.png")
+
+        with open(out) as f:
+            lines = [l for l in f if l.strip()]
+        self.assertEqual(len(lines), 2)
+
+    def test_legacy_brace_pattern_is_expanded(self):
+        """The old broken default should still work if a caller passes it."""
+        img_dir = self.test_dir / "images"
+        img_dir.mkdir()
+        for name in ("a.png", "b.jpg"):
+            _write_tiny_png(str(img_dir / name))
+        out = str(self.test_dir / "out.jsonl")
+
+        vision_to_jsonl(
+            str(img_dir), output_path=out, file_pattern="*.{jpg,jpeg,png,gif,webp,bmp}"
+        )
+
+        with open(out) as f:
+            lines = [l for l in f if l.strip()]
+        self.assertEqual(len(lines), 2)
+
+    def test_empty_directory_warns(self):
+        """An empty result is silent otherwise: a valid but empty JSONL file."""
+        img_dir = self.test_dir / "images"
+        img_dir.mkdir()
+        (img_dir / "notes.txt").write_text("not an image")
+        out = str(self.test_dir / "out.jsonl")
+
+        with self.assertLogs("llmflux.converters.vision", level="WARNING") as logs:
+            vision_to_jsonl(str(img_dir), output_path=out)
+
+        self.assertIn("No images found", "\n".join(logs.output))
+
     def test_oversized_image_skipped(self):
         img = self._make_image()
         out = str(self.test_dir / "out.jsonl")

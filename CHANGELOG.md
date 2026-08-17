@@ -42,6 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `vision_to_jsonl()` now finds images in a directory. Its default
+  `file_pattern` was `"*.{jpg,jpeg,png,gif,webp,bmp}"`, but Python's `glob` has
+  no brace expansion, so the pattern matched nothing and a directory of images
+  produced an empty JSONL file with only an `INFO - Found 0 images` line.
+  Directory discovery now defaults to every supported extension, matched
+  case-insensitively so `IMG_1234.JPG` is included; an explicit `file_pattern`
+  is still honored (brace groups are expanded, so callers that passed the old
+  default keep working) and `"**/*.jpg"` still recurses. An empty result now
+  logs a warning instead of an info line
+  (see [#131](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/131)).
+
 - vLLM jobs no longer fail to start with `OSError: [Errno 30] Read-only file
   system: '{workspace}/.cache/flashinfer'`. `XDG_CACHE_HOME` and
   `FLASHINFER_WORKSPACE_BASE` were only exported with the `APPTAINERENV_`
