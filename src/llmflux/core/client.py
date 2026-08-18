@@ -23,13 +23,22 @@ logger = logging.getLogger(__name__)
 class LLMClient:
     """OpenAI-compatible client for LLM services."""
     
-    def __init__(self, engine: Optional[str] = None, host: Optional[str] = None, port: Optional[int] = None):
+    def __init__(
+        self,
+        engine: Optional[str] = None,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        api_key: Optional[str] = None,
+    ):
         """Initialize LLM client.
-        
+
         Args:
             host: Optional host address
             port: Optional port number
             engine: The LLM engine ('ollama' or 'vllm')
+            api_key: Optional bearer token. Falls back to LLMFLUX_API_KEY.
+                Required to reach an endpoint started by `llmflux serve`, which
+                runs vLLM with --api-key and rejects unauthenticated requests.
         """
         self.engine = engine
 
@@ -63,6 +72,18 @@ class LLMClient:
         
         logger.info(f"Connecting to LLM engine at: {self.base_url}")
         self.session = requests.Session()
+
+        # Set on the session so every request (chat, list_models, pull_model)
+        # carries it. Blank and whitespace-only values are treated as unset so an
+        # exported-but-blank LLMFLUX_API_KEY does not send "Bearer ". Surrounding
+        # whitespace is stripped: a quoted .env value keeps its trailing space, and
+        # vLLM compares the header byte-for-byte, so " abc" would 401. A trailing
+        # newline would raise ValueError from requests before the request is sent.
+        candidates = (api_key, os.getenv('LLMFLUX_API_KEY'))
+        self.api_key = next((c.strip() for c in candidates if c and c.strip()), None)
+        if self.api_key:
+            self.session.headers['Authorization'] = f"Bearer {self.api_key}"
+            logger.debug("Using bearer token authentication")
     
     def list_models(self) -> List[str]:
         """List available models using Ollama's native tags API.
@@ -264,7 +285,16 @@ class LLMClient:
             return (content, usage) if return_usage else content
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error generating response: {e}")
+            status = getattr(getattr(e, 'response', None), 'status_code', None)
+            if status in (401, 403) and not self.api_key:
+                logger.error(
+                    f"Authentication failed (HTTP {status}) and no API key is set. "
+                    f"Endpoints started with `llmflux serve` require one: pass "
+                    f"api_key=... or set LLMFLUX_API_KEY. Get the key with "
+                    f"`llmflux connect <job_id>`."
+                )
+            else:
+                logger.error(f"Error generating response: {e}")
             raise
         except ValueError as e:
             logger.error(f"Error decoding response: {e}")

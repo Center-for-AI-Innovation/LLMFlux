@@ -349,6 +349,38 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
+### Use the endpoint from LLMFlux itself
+
+The OpenAI SDK snippet above works from any tool. To use LLMFlux's own client
+instead, pass the API key that `llmflux connect` printed — a serve endpoint
+rejects unauthenticated requests with HTTP 401:
+
+```python
+from llmflux.core.client import LLMClient
+
+# Note: host omits the /v1 suffix — the client appends the path itself.
+client = LLMClient(
+    engine="vllm",
+    host="http://gpu-node-04:8031",
+    api_key="llmflux-57de4141f7d9b52a24481f05438c166c",
+)
+print(client.chat(
+    model="meta-llama/Llama-3.2-3B-Instruct",
+    engine="vllm",
+    messages=[{"role": "user", "content": "Hello!"}],
+))
+```
+
+The key is also read from `LLMFLUX_API_KEY`, so it can be left out of the code:
+
+```bash
+export VLLM_HOST=http://gpu-node-04:8031
+export LLMFLUX_API_KEY=llmflux-57de4141f7d9b52a24481f05438c166c
+```
+
+`BatchProcessor` takes the same `api_key` argument and falls back to the same
+variable.
+
 ### Check status and shut down
 
 ```bash

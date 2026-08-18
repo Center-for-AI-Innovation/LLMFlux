@@ -36,10 +36,11 @@ class BatchProcessor:
         temp_dir: Optional[str] = None,
         max_retries: int = 3,
         retry_delay: float = 1.0,
-        output_handler: Optional[OutputHandler] = None
+        output_handler: Optional[OutputHandler] = None,
+        api_key: Optional[str] = None
     ):
         """Initialize batch processor.
-        
+
         Args:
             model_config: Model configuration
             batch_size: Number of items to process in a batch
@@ -48,8 +49,11 @@ class BatchProcessor:
             max_retries: Maximum number of retry attempts for failed items
             retry_delay: Delay between retry attempts in seconds
             output_handler: Optional output handler
+            api_key: Optional bearer token for the engine endpoint. Falls back to
+                LLMFLUX_API_KEY; needed when pointing at an `llmflux serve` job.
         """
         self.model_config = model_config
+        self.api_key = api_key
         self.batch_size = batch_size
         self.save_frequency = save_frequency
         self.max_retries = max_retries
@@ -181,7 +185,7 @@ class BatchProcessor:
         """Initialize LLM client and warm up model."""
         # Initialize client, passing the engine from the model config
         logger.info("Initializing LLM client")
-        self.client = LLMClient(engine=self.model_config.engine)
+        self.client = LLMClient(engine=self.model_config.engine, api_key=self.api_key)
                 
         # Get the appropriate model name for this engine
         model = self.model_config.get_model_name_for_engine()
