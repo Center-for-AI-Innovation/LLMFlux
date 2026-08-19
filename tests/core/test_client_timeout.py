@@ -49,21 +49,45 @@ class TestClientTimeouts(unittest.TestCase):
             self.assertEqual(get.call_args.kwargs["timeout"], c.timeout)
 
     def test_no_session_call_site_omits_timeout(self):
-        """Source-level guard: a new call site added without a timeout fails here."""
+        """Source-level guard: a new call site added without a timeout fails here.
+
+        Matches request calls only. `self.session.headers[...] = ...` and other
+        attribute access are not requests and carry no timeout.
+        """
         import inspect
+        import re
+
         import llmflux.core.client as mod
+
+        verbs = "get|post|put|patch|delete|head|options|request|send"
+        call = re.compile(rf"self\.session\.(?:{verbs})\s*\(")
 
         src = inspect.getsource(mod)
         offenders = [
             line.strip()
             for line in src.splitlines()
-            if "self.session." in line
+            if call.search(line)
             and "timeout=" not in line
             and not line.strip().startswith("#")
         ]
         self.assertEqual(
             offenders, [], f"session call sites without a timeout: {offenders}"
         )
+
+    def test_the_call_site_guard_can_actually_fail(self):
+        """The guard's regex must match a real untimed call, or it guards nothing."""
+        import re
+
+        verbs = "get|post|put|patch|delete|head|options|request|send"
+        call = re.compile(rf"self\.session\.(?:{verbs})\s*\(")
+
+        self.assertTrue(call.search("        response = self.session.post(url)"))
+        self.assertTrue(call.search("            self.session.get(url, json=p)"))
+        # not requests: attribute access, including the bearer-token header
+        self.assertFalse(
+            call.search("self.session.headers['Authorization'] = f\"Bearer {k}\"")
+        )
+        self.assertFalse(call.search("self.session.verify = False"))
 
 
 if __name__ == "__main__":
