@@ -1,4 +1,5 @@
 import shlex
+import sys
 from pathlib import Path
 
 def create_vllm_batch_script(
@@ -189,10 +190,8 @@ def create_vllm_batch_script(
             "wait $VLLM_PID",
         ] if mode == "serve" else [
             "# Run processor",
-            "python3 -c \"",
-            "import sys",
+            f"{shlex.quote(sys.executable)} -c \"",
             "import os",
-            "sys.path.append('$PROJECT_ROOT')",
             "from llmflux.core.config import Config",
             "from llmflux.processors import BatchProcessor",
             "",
@@ -235,6 +234,7 @@ def create_vllm_batch_script(
             "",
             f"batch_processor.run('{input_file}', '{output_file}', 'vllm', **run_kwargs)",
             "\"",
+            "BATCH_RC=$?",
         ]),
         "",
         "# Cleanup",
@@ -252,6 +252,6 @@ def create_vllm_batch_script(
         "kill $VLLM_PID 2>/dev/null || true",
         "sleep 2",
         "kill -9 $VLLM_PID 2>/dev/null || true",
-        ""
+        "exit ${BATCH_RC:-0}"
     ])
     return job_script
