@@ -91,6 +91,8 @@ The `templates` module contains a YAML configuration file for supported models:
 ## Other Directories
 
 - `examples/`: Example scripts demonstrating usage of the library
+  (`examples/pathology/` is the exception: standalone CONCH/MUSK tooling that
+  doesn't use the `llmflux` package — see its own README)
 - `tests/`: Unit and integration tests
 - `docs/`: Documentation files
 - `data/`: Default directory for input and output data
