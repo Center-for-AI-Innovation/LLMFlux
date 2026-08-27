@@ -155,6 +155,16 @@ or `POST /classify {"images": [...], "prompts": {label: prompt, ...}}`, both
 under `Authorization: Bearer <key>`. See `serve.py`'s docstring for the exact
 schema.
 
+**Give students `example_student_usage.py`.** It's a self-contained script
+they can run immediately (against a synthetic placeholder image, so it works
+before they have real data wired up) to confirm they can reach the server,
+then edit in place: swap the placeholder for their own image file and the
+sample labels in `prompts.json` for whatever their team is classifying. The
+only dependency is `requests` (plus `pillow`, only for the placeholder image
+it generates) — none of CONCH/MUSK/torch, since all of that runs server-side.
+Hand out `ENDPOINT`/`API_KEY` from `connection.json` and that's the entire
+setup on their end.
+
 **How concurrency is handled:** `serve.py` loads the model once and runs all
 GPU forward passes through a single background thread that micro-batches
 whatever concurrent requests arrived in the last `PATHOLOGY_MAX_WAIT_MS`

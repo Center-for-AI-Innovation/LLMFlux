@@ -55,7 +55,10 @@ def load_conch(device: str = "cuda", hf_token: Optional[str] = None) -> Adapter:
 
     @torch.no_grad()
     def encode_images(batch: torch.Tensor) -> np.ndarray:
-        emb = model.encode_image(batch.to(device))
+        # proj_contrast+normalize puts image embeddings in the same
+        # contrastively-trained space as encode_text's output, which is what
+        # our cosine-similarity zero-shot classification assumes.
+        emb = model.encode_image(batch.to(device), proj_contrast=True, normalize=True)
         return emb.float().cpu().numpy()
 
     @torch.no_grad()
@@ -72,11 +75,13 @@ def load_musk(device: str = "cuda", hf_token: Optional[str] = None) -> Adapter:
     `pip install git+https://github.com/lilab-stanford/MUSK.git`.
     """
     try:
+        import musk
         import timm
         from musk import utils as musk_utils
         from musk import modeling  # noqa: F401  (registers musk_large_patch16_384 with timm)
         from transformers import XLMRobertaTokenizer
         from torchvision import transforms
+        from timm.data.constants import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
     except ImportError as e:
         raise ImportError(
             f"MUSK is not installed. Run: pip install git+{MUSK_REPO}.git"
@@ -86,11 +91,22 @@ def load_musk(device: str = "cuda", hf_token: Optional[str] = None) -> Adapter:
     if hf_token:
         os.environ.setdefault("HF_TOKEN", hf_token)
 
+    # fp16 on GPU matches the model card's example and halves memory; CPU
+    # (e.g. local smoke testing) stays fp32 since fp16 ops are slow/unsupported there.
+    dtype = torch.float16 if device.startswith("cuda") else torch.float32
+
+    tokenizer_path = os.path.join(os.path.dirname(musk.__file__), "models", "tokenizer.spm")
+    if not os.path.exists(tokenizer_path):
+        raise RuntimeError(
+            f"Could not find MUSK's tokenizer.spm at {tokenizer_path}. Check "
+            f"{MUSK_REPO} for where it's currently packaged."
+        )
+
     try:
         model = timm.create_model("musk_large_patch16_384")
         musk_utils.load_model_and_may_interpolate("hf_hub:xiangjx/musk", model, "model|module", "")
-        model = model.to(device).eval()
-        tokenizer = musk_utils.xlm_tokenizer
+        model = model.to(device=device, dtype=dtype).eval()
+        tokenizer = XLMRobertaTokenizer(tokenizer_path)
     except Exception as e:
         raise RuntimeError(
             f"Failed to load MUSK ({e}). Check {MUSK_REPO} for the current "
@@ -99,21 +115,27 @@ def load_musk(device: str = "cuda", hf_token: Optional[str] = None) -> Adapter:
         ) from e
 
     preprocess = transforms.Compose([
-        transforms.Resize(384, interpolation=transforms.InterpolationMode.BICUBIC),
-        transforms.CenterCrop(384),
+        transforms.Resize(384, interpolation=transforms.InterpolationMode.BICUBIC, antialias=True),
+        transforms.CenterCrop((384, 384)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        transforms.Normalize(mean=IMAGENET_INCEPTION_MEAN, std=IMAGENET_INCEPTION_STD),
     ])
 
     @torch.no_grad()
     def encode_images(batch: torch.Tensor) -> np.ndarray:
-        emb, _ = model(image=batch.to(device), with_head=False, out_norm=True)
+        emb, _ = model(
+            image=batch.to(device=device, dtype=dtype),
+            with_head=False, out_norm=False, ms_aug=True, return_global=True,
+        )
         return emb.float().cpu().numpy()
 
     @torch.no_grad()
     def encode_texts(texts: List[str]) -> np.ndarray:
-        ids, padding_mask = tokenizer(texts, device=device)
-        _, emb = model(text_description=ids, padding_mask=padding_mask, with_head=False, out_norm=True)
+        ids, padding_mask = musk_utils.xlm_tokenizer(texts, tokenizer, max_len=100)
+        _, emb = model(
+            text_description=ids.to(device), padding_mask=padding_mask.to(device),
+            with_head=False, out_norm=True, ms_aug=False, return_global=True,
+        )
         return emb.float().cpu().numpy()
 
     return Adapter(name="musk", preprocess=preprocess, encode_images=encode_images, encode_texts=encode_texts)

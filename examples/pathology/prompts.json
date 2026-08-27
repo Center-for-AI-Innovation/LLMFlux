@@ -1,0 +1,5 @@
+{
+  "tumor": "a histopathology image of tumor tissue",
+  "stroma": "a histopathology image of stroma",
+  "necrosis": "a histopathology image of necrotic tissue"
+}
