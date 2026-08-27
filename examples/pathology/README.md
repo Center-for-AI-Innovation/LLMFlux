@@ -16,6 +16,33 @@ code involved. It's kept in this repo only for discoverability alongside the
 other hackathon prep (see #129, #131, #134), not because it depends on the
 `llmflux` package.
 
+## Never run this on the login node
+
+Delta's login node enforces per-process CPU/memory limits and kills anything
+that looks like sustained compute. Concretely:
+
+- **Never run `serve.py` or `run_embeddings.py` on the login node** — these
+  load the model and do the actual inference. It won't error like a crash;
+  the process just gets silently `Terminated` out from under you. Always run
+  them from an interactive allocation or as a batch job (below).
+- **`client.py` and `loadtest.py` are lightweight HTTP clients** — once a
+  server is actually running on a compute node (via `srun` or
+  `submit_serve.sbatch`), calling it from the login node with these is fine,
+  the same as running `curl`.
+- **`pip install -r requirements.txt`** is also fine on the login node — it
+  needs internet access, which compute nodes on Delta don't have.
+
+To get an interactive allocation for `serve.py` / `run_embeddings.py`:
+
+```bash
+srun --account=<your_account> --partition=gpuA100x4 --gpus-per-node=1 \
+    --mem=16G --cpus-per-task=4 --time=00:30:00 --pty bash
+```
+
+That blocks until you're granted a node and drops you into a shell running on
+it (`squeue` will show the job as RUNNING) — run the server from there, or
+submit it as a batch job with `submit.sbatch` / `submit_serve.sbatch` instead.
+
 ## Setup
 
 1. **Request model access.** Both checkpoints are gated on Hugging Face:
@@ -31,7 +58,8 @@ other hackathon prep (see #129, #131, #134), not because it depends on the
 
 2. **Install dependencies.** These models ship as small research packages
    installed straight from their GitHub repos, not PyPI releases — install
-   inside a venv/conda env on a Delta compute node (or GPU login node):
+   inside a venv/conda env. This step (only) is fine on the login node, since
+   it needs internet access:
 
    ```bash
    pip install -r requirements.txt
@@ -47,7 +75,8 @@ other hackathon prep (see #129, #131, #134), not because it depends on the
    - MUSK: https://github.com/lilab-stanford/MUSK
 
 3. **Verify** by running the script on a handful of test tiles before
-   pointing it at a full dataset (step 4 below).
+   pointing it at a full dataset — from an interactive allocation or a batch
+   job (see above), never the login node.
 
 ## Two ways to run this
 
@@ -62,6 +91,8 @@ other hackathon prep (see #129, #131, #134), not because it depends on the
   handles concurrent requests from all of them.
 
 ### Batch mode
+
+From an interactive allocation (see above) or inside `submit.sbatch`:
 
 ```bash
 python run_embeddings.py \
@@ -144,7 +175,7 @@ headroom for `MAX_BATCH_SIZE` images at once — run it again against the real
 at your expected team count, before the event:
 
 ```bash
-# on the compute node / login node with the server reachable
+# fine from the login node — this only sends HTTP requests to the remote server
 python loadtest.py --endpoint http://<node>:<port> --api-key <key> \
     --teams 20 --images-per-team 3
 ```
