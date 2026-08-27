@@ -1,5 +1,9 @@
 """Tests for SLURM batch script generation (vllm and ollama engines)."""
 
+import shlex
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -151,8 +155,72 @@ class TestCreateOllamaBatchScript(unittest.TestCase):
         self.assertIn("ollama serve", full)
 
 
-if __name__ == "__main__":
-    unittest.main()
+
+class TestBatchStageInterpreter(unittest.TestCase):
+    """The batch stage must name a specific interpreter (LLMFlux#142).
+
+    The `llmflux` console script has an absolute shebang and is immune to PATH
+    shadowing. The batch stage used to resolve a bare `python3`, so any other
+    interpreter ahead on PATH left the CLI working while the batch stage picked
+    up a Python without llmflux — failing only after the server was already up.
+    """
+
+    def _scripts(self):
+        from llmflux.slurm.engine.vllm import create_vllm_batch_script
+        from llmflux.slurm.engine.ollama import create_ollama_batch_script
+
+        common = dict(
+            account="a", partition="p", nodes="1", gpus_per_node="1",
+            time="01:00:00", memory="8G", cpus_per_task="2",
+            logs_dir=Path("/logs"), input_file=Path("/in.jsonl"),
+            output_file=Path("/out.json"), job_name="j",
+            slurm_config=_make_slurm_config(None),
+        )
+        for name, fn in (("vllm", create_vllm_batch_script),
+                         ("ollama", create_ollama_batch_script)):
+            for mode in ("batch", "serve"):
+                yield name, mode, fn(mode=mode, email="a@b.c", **common)
+
+    def test_batch_stage_names_the_submitting_interpreter(self):
+        for name, mode, script in self._scripts():
+            if mode == "serve":
+                continue
+            with self.subTest(engine=name):
+                self.assertIn(f"{shlex.quote(sys.executable)} -c \"", script)
+                self.assertNotIn("python3 -c \"", script)
+
+    def test_batch_stage_has_no_project_root_syspath_hack(self):
+        """PROJECT_ROOT is the user's cwd; under the src/ layout it can never
+        contain the llmflux package."""
+        for name, mode, script in self._scripts():
+            with self.subTest(engine=name, mode=mode):
+                self.assertFalse(any(
+                    "sys.path.append('$PROJECT_ROOT')" in l for l in script))
+
+    def test_batch_exit_status_is_propagated(self):
+        """Cleanup always succeeds and the script's last statement was
+        `kill -9 ... || true`, so a failed batch stage exited 0 and Slurm
+        recorded the job COMPLETED with no output."""
+        for name, mode, script in self._scripts():
+            if mode == "serve":
+                continue
+            with self.subTest(engine=name):
+                self.assertIn("BATCH_RC=$?", script)
+                self.assertEqual(script[-1], "exit ${BATCH_RC:-0}")
+
+    def test_all_generated_scripts_are_valid_bash(self):
+        """Generated shell with nested quotes and a heredoc is where a quoting
+        regression hides while every string assertion stays green."""
+        for name, mode, script in self._scripts():
+            with self.subTest(engine=name, mode=mode):
+                with tempfile.NamedTemporaryFile("w", suffix=".sh") as fh:
+                    fh.write("\n".join(script))
+                    fh.flush()
+                    r = subprocess.run(["bash", "-n", fh.name],
+                                       capture_output=True, text=True)
+                    self.assertEqual(r.returncode, 0, r.stderr)
+
+
 
 class TestGpuVisibilityParity(unittest.TestCase):
     """Both engines must pass SLURM's real device list into the container.

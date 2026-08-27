@@ -18,13 +18,20 @@ A golden diff that you cannot explain line by line is a bug, not a refresh.
 """
 
 import os
+import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from .helpers import GOLDEN_CASES, build_text
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
 UPDATE = os.environ.get("LLMFLUX_UPDATE_GOLDEN") == "1"
+
+#: The batch stage is pinned to the interpreter that generated the script
+#: (`sys.executable`, LLMFlux#142). That is machine-specific, so the goldens are
+#: generated under this stand-in and stay identical everywhere.
+GOLDEN_INTERPRETER = "/opt/llmflux/bin/python3"
 
 
 
@@ -32,7 +39,8 @@ class TestGoldenScripts(unittest.TestCase):
     """One test per (engine, mode); each pins a full generated script."""
 
     def _check(self, engine, mode, nodes="1"):
-        actual = build_text(engine, mode, nodes=nodes)
+        with mock.patch.object(sys, "executable", GOLDEN_INTERPRETER):
+            actual = build_text(engine, mode, nodes=nodes)
         path = GOLDEN_DIR / f"{engine}-{mode}-n{nodes}.sh"
 
         if UPDATE:

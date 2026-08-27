@@ -74,10 +74,8 @@ else
 fi
 
 # Run processor
-python3 -c "
-import sys
+/opt/llmflux/bin/python3 -c "
 import os
-sys.path.append('$PROJECT_ROOT')
 from llmflux.core.config import Config
 from llmflux.processors import BatchProcessor
 
@@ -119,7 +117,7 @@ for key in ['max_tokens', 'temperature', 'top_p', 'top_k']:
 batch_processor.run('/data/in.jsonl', '/data/out.json', 'ollama', **run_kwargs)
 "
 # Capture the processor's status before cleanup overwrites $?.
-LLMFLUX_PROC_RC=$?
+BATCH_RC=$?
 
 # Cleanup
 pkill -f "ollama serve" || true
@@ -133,4 +131,4 @@ fi
 # Exit with the processor's status. Without this the script exits with
 # whatever cleanup returned, so a run whose every item failed still
 # reports success and the job looks complete.
-exit ${LLMFLUX_PROC_RC:-0}
+exit ${BATCH_RC:-0}

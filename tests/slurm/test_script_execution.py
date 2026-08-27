@@ -29,10 +29,12 @@ import shutil
 import signal
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from .helpers import build_text
 
@@ -114,7 +116,13 @@ exit 0
 
 
 class Sandbox:
-    """Temp dir holding stub binaries, script, and every directory the script uses."""
+    """Temp dir holding stub binaries, script, and every directory the script uses.
+
+    The batch stage is emitted as an absolute path to the interpreter that
+    generated the script (`sys.executable`, LLMFlux#142), so a stub on PATH
+    cannot intercept it. While the sandbox is open, `sys.executable` is the
+    sandbox's own `python3` stub: build the script *inside* the `with` block.
+    """
 
     def __enter__(self):
         self.root = Path(tempfile.mkdtemp(prefix="llmflux-exec-"))
@@ -124,6 +132,8 @@ class Sandbox:
             p = binp / name
             p.write_text(body)
             p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        self._interpreter = mock.patch.object(sys, "executable", str(binp / "python3"))
+        self._interpreter.start()
 
         state = self.root / "state"
         state.mkdir()
@@ -172,6 +182,7 @@ class Sandbox:
         return self
 
     def __exit__(self, *exc):
+        self._interpreter.stop()
         shutil.rmtree(self.root, ignore_errors=True)
 
     def run(self, script_text, timeout=60, **env_over):

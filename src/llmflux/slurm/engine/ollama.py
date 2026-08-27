@@ -1,4 +1,5 @@
 import shlex
+import sys
 from pathlib import Path
 
 # This function generates an ollama batch script for running llmflux
@@ -202,10 +203,8 @@ def create_ollama_batch_script(
             "wait $OLLAMA_PID",
         ] if mode == "serve" else [
             "# Run processor",
-            f"python3 -c \"",
-            "import sys",
+            f"{shlex.quote(sys.executable)} -c \"",
             "import os",
-            "sys.path.append('$PROJECT_ROOT')",
             "from llmflux.core.config import Config",
             "from llmflux.processors import BatchProcessor",
             "",
@@ -247,7 +246,7 @@ def create_ollama_batch_script(
             f"batch_processor.run('{input_file}', '{output_file}', 'ollama', **run_kwargs)",
             "\"",
             "# Capture the processor's status before cleanup overwrites $?.",
-            "LLMFLUX_PROC_RC=$?",
+            "BATCH_RC=$?",
         ]),
         "",
         "# Cleanup",
@@ -265,7 +264,7 @@ def create_ollama_batch_script(
             "# Exit with the processor's status. Without this the script exits with\n"
             "# whatever cleanup returned, so a run whose every item failed still\n"
             "# reports success and the job looks complete.",
-            "exit ${LLMFLUX_PROC_RC:-0}",
+            "exit ${BATCH_RC:-0}",
         ] if mode != "serve" else []),
     ])
     return job_script

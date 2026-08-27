@@ -1,4 +1,5 @@
 import shlex
+import sys
 from pathlib import Path
 
 from . import multinode
@@ -230,10 +231,8 @@ def create_vllm_batch_script(
             "case \"$LLMFLUX_SERVE_RC\" in 130|143) LLMFLUX_SERVE_RC=0 ;; esac",
         ] if mode == "serve" else [
             "# Run processor",
-            "python3 -c \"",
-            "import sys",
+            f"{shlex.quote(sys.executable)} -c \"",
             "import os",
-            "sys.path.append('$PROJECT_ROOT')",
             "from llmflux.core.config import Config",
             "from llmflux.processors import BatchProcessor",
             "",
@@ -277,7 +276,7 @@ def create_vllm_batch_script(
             f"batch_processor.run('{input_file}', '{output_file}', 'vllm', **run_kwargs)",
             "\"",
             "# Capture the processor's status before cleanup overwrites $?.",
-            "LLMFLUX_PROC_RC=$?",
+            "BATCH_RC=$?",
         ]),
         "",
         "# Cleanup",
@@ -300,7 +299,7 @@ def create_vllm_batch_script(
             "# Exit with the processor's status. Without this the script exits with\n"
             "# whatever cleanup returned, so a run whose every item failed still\n"
             "# reports success and the job looks complete.",
-            "exit ${LLMFLUX_PROC_RC:-0}",
+            "exit ${BATCH_RC:-0}",
         ] if mode != "serve" else [
             "# Exit with the server's status, for the same reason.",
             "exit ${LLMFLUX_SERVE_RC:-0}",

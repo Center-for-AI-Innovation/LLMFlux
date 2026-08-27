@@ -137,6 +137,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
 
 ### Fixed
+- The generated batch stage now runs under the interpreter that generated it
+  (`sys.executable`) instead of resolving a bare `python3` from whatever `PATH`
+  the compute node inherits. The `llmflux` CLI has an absolute shebang and is
+  therefore immune to `PATH` shadowing, so any other interpreter ahead on `PATH`
+  — an activated venv, a second conda env, a notebook kernel — left the CLI
+  working while the batch stage silently picked up a Python without `llmflux`.
+  The job then failed with `ModuleNotFoundError: No module named 'llmflux'` only
+  *after* the model had loaded and the server had passed its health check, so it
+  read as a mid-run crash rather than an environment problem. Affects both the
+  vLLM and Ollama batch paths
+  (see [#142](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/142)).
+- Dropped `sys.path.append('$PROJECT_ROOT')` from the generated batch stage.
+  `PROJECT_ROOT` is the user's working directory, and under the `src/` layout it
+  can never contain the `llmflux` package, so the line was dead code that
+  disguised the missing interpreter pin above.
 
 - `vision_to_jsonl()` now finds images in a directory. Its default
   `file_pattern` was `"*.{jpg,jpeg,png,gif,webp,bmp}"`, but Python's `glob` has
