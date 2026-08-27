@@ -65,7 +65,9 @@ The `processors` module contains implementations of batch processors:
 The `slurm` module handles integration with SLURM for HPC systems:
 
 - `runner.py`: SLURM job submission and management
+- `topology.py`: validates a requested node/GPU shape and maps it onto engine parallelism
 - `engine/`: SLURM batch scripts customized to the engine choice
+- `engine/multinode.py`: the multi-node rendezvous emitted at `--nodes > 1` (see `docs/MULTINODE.md`)
 
 ### Converters Module
 

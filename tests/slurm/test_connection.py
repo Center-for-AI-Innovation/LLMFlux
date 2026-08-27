@@ -359,6 +359,30 @@ class TestConnect(unittest.TestCase):
         self.assertIn("ssh -N -L", output)
         self.assertIn("localhost:", output)
 
+    def _tunnel_target(self, node):
+        info = {**SAMPLE_INFO, "node": node}
+        with patch("llmflux.slurm.connection._ping_endpoint", return_value=False), \
+             patch("llmflux.slurm.connection.read_connection_info", return_value=info), \
+             patch("sys.stdout") as mock_stdout:
+            connect("99999")
+        output = "".join(call.args[0] for call in mock_stdout.write.call_args_list)
+        line = next(l for l in output.splitlines() if "ssh -N -L" in l)
+        return line.split()[-2]
+
+    def test_tunnel_target_strips_a_domain_suffix(self):
+        self.assertEqual(self._tunnel_target("gpu-node-04.some.domain"), "gpu-node-04")
+        self.assertEqual(self._tunnel_target("gpu-node-04"), "gpu-node-04")
+
+    def test_tunnel_target_keeps_an_ip_address_whole(self):
+        """A multi-node serve job advertises the fabric IPv4 rank 0 bound.
+
+        Splitting that on "." yields the first octet, and glibc parses a bare
+        integer as a packed address rather than rejecting it — so `ssh ... 172`
+        fails in a way that looks like a network problem.
+        """
+        self.assertEqual(self._tunnel_target("172.28.80.96"), "172.28.80.96")
+        # IPv6 never reaches this path: _validate_node rejects ":" outright.
+
     @patch(
         "llmflux.slurm.connection.wait_for_connection_file",
         side_effect=TimeoutError("did not load"),

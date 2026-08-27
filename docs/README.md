@@ -27,6 +27,7 @@ LLMFlux processes JSONL files in a standardized OpenAI-compatible batch API form
 
 - [Configuration Guide](CONFIGURATION.md) - How to configure LLMFlux
 - [Models Guide](MODELS.md) - Supported models and requirements
+- [Multi-Node Inference](MULTINODE.md) - Serving a model that does not fit on one node
 - [Repository Structure](REPOSITORY_STRUCTURE.md) - Codebase organization
 - [Testing Guide](TESTING.md) - How to run tests
 
@@ -411,7 +412,7 @@ llmflux benchmark \
 - **Prompt sources**: omit `--input` to automatically download and cache LiveBench categories (``benchmark_data/``). Provide `--input path/to/prompts.jsonl` to reuse an existing JSONL file instead. Use `--num-prompts`, `--temperature`, and `--max-tokens` to control synthetic dataset generation.
 - **Outputs**: results default to `results/benchmarks/<name>_results.json` and a metrics summary (`<name>_metrics.txt`) containing elapsed SLURM runtime and number of prompts processed.
 - **Batch tuning**: adjust `--batch-size` for throughput. Pass model arguments such as `--temperature` and `--max-tokens` to forward them to the runner.
-- **SLURM overrides**: forward scheduler settings with `--account`, `--partition`, `--nodes`, `--gpus-per-node`, `--time`, `--mem`, and `--cpus-per-task`.
+- **SLURM overrides**: forward scheduler settings with `--account`, `--partition`, `--nodes`, `--gpus-per-node`, `--time`, `--mem`, and `--cpus-per-task`. `--nodes` greater than 1 shards the model across nodes (vLLM only) — see [Multi-Node Inference](MULTINODE.md).
 - **Job controls**: add `--rebuild` to force an Apptainer image rebuild or `--debug` to keep the generated job script for inspection.
 
 For the complete option reference:

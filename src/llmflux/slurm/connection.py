@@ -285,7 +285,15 @@ def connect(job_id: str, local_port: int = 8000, wait_timeout: int = 600) -> int
     print(f")")
     print()
     if not reachable:
-        short_node = node.split(".")[0]
+        # Strip a domain suffix, but only from a hostname. A multi-node serve job
+        # advertises the fabric IPv4 that rank 0 actually bound, and splitting
+        # that on "." gives the first octet — `ssh ... 172`, which glibc parses
+        # as a packed address rather than rejecting.
+        try:
+            ipaddress.ip_address(node)
+            short_node = node
+        except ValueError:
+            short_node = node.split(".")[0]
         print(f"Note: The compute node is not directly reachable on port {port} from this login node.")
         print(f"To use this endpoint, first run this in a separate terminal to open a port tunnel:")
         print()

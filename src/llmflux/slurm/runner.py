@@ -14,6 +14,7 @@ import json
 
 from .engine import create_vllm_batch_script
 from .engine import create_ollama_batch_script
+from .topology import TopologyError, resolve as resolve_topology
 
 from ..core.config import SlurmConfig, EngineConfig
 from ..core.config_manager import ConfigManager
@@ -26,6 +27,82 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+#: Engine-arg keys whose spelling has to be folded before anything reasons about
+#: them. vLLM's FlexibleArgumentParser normalises "_" to "-", and
+#: _build_vllm_engine_args accepts a key that already carries "--", so three
+#: spellings reach one flag. Without folding, a user writing any but the bare
+#: hyphenated form escapes the "did the user supply this?" test below, the
+#: derived value is appended as well, and argparse — which takes the last
+#: occurrence — silently prefers the derived one.
+_PARALLEL_KEYS = ("tensor-parallel-size", "pipeline-parallel-size")
+
+
+def _canonical_keys(merged_args: Dict[str, Any]) -> Dict[str, Any]:
+    """Fold the parallelism keys onto their canonical spelling.
+
+    Scoped to those two keys deliberately: they are the ones the resolver reasons
+    about, and rewriting every key would change what reaches vLLM for arguments
+    this code has no opinion on.
+    """
+    canonical = {k.lstrip("-").replace("_", "-"): k for k in _PARALLEL_KEYS}
+    out: Dict[str, Any] = {}
+    for key, value in merged_args.items():
+        folded = key.lstrip("-").replace("_", "-") if isinstance(key, str) else key
+        if folded in canonical:
+            # A user who somehow supplied two spellings gets the first one.
+            out.setdefault(canonical[folded], value)
+        else:
+            out[key] = value
+    return out
+
+
+def _reject_parallelism_that_wastes_the_allocation(merged_args, topology) -> None:
+    """Refuse a parallelism that does not account for every allocated GPU.
+
+    A value the user typed is never silently overridden, which means the user can
+    contradict their own allocation. At nodes == 1 that is their business: they
+    get fewer GPUs than they asked for and nothing else breaks. At nodes > 1 it is
+    the silent-waste bug this whole path exists to remove, and nothing downstream
+    catches it — vLLM asserts only `world_size % nnodes == 0`, so tp=4 pp=1 on a
+    2-node 8-GPU allocation passes and then runs on half the job.
+    """
+    raw = {k: merged_args.get(k) for k in _PARALLEL_KEYS}
+    tp = raw["tensor-parallel-size"]
+    pp = raw["pipeline-parallel-size"]
+    tp = topology.tensor_parallel_size if tp is None else tp
+    pp = topology.pipeline_parallel_size if pp is None else pp
+    try:
+        tp, pp = int(tp), int(pp)
+    except (TypeError, ValueError) as exc:
+        raise TopologyError(
+            f"tensor-parallel-size and pipeline-parallel-size must be integers, "
+            f"got {raw['tensor-parallel-size']!r} and {raw['pipeline-parallel-size']!r}"
+        ) from exc
+
+    if tp * pp == topology.world_size:
+        return
+
+    idle = topology.world_size - tp * pp
+    consequence = (
+        f"The remaining {idle} GPU(s) would be allocated and billed for the "
+        f"job's full walltime while sitting idle.\n"
+        if idle > 0 else
+        f"That is {-idle} more GPU(s) than the allocation provides; the engine "
+        f"would fail to start after the queue wait and the model load.\n"
+    )
+    raise TopologyError(
+        f"--vllm-engine-args sets tensor-parallel-size={tp} and "
+        f"pipeline-parallel-size={pp}, which uses {tp * pp} GPU(s), but the "
+        f"allocation is --nodes {topology.nodes} x --gpus-per-node "
+        f"{topology.gpus_per_node} = {topology.world_size} GPU(s).\n"
+        + consequence
+        + "Either drop the override and let the allocation decide, or make "
+        "tensor-parallel-size x pipeline-parallel-size equal "
+        "--nodes x --gpus-per-node."
+    )
+
 
 class SlurmRunner:
     """Runner for executing processors on SLURM."""
@@ -110,7 +187,15 @@ class SlurmRunner:
         # - APPTAINERENV_ vars: Automatically passed to container with --cleanenv
 
         # Resolve HuggingFace cache directory with a default under workspace.
-        hf_home = os.getenv('HF_HOME') or str(workspace_path / ".cache" / "huggingface")
+        # Resolve symlinks. This path is both an Apptainer --bind source and the
+        # value of HF_HOME inside the container: Apptainer binds the path given,
+        # not what it points at, so a symlinked cache dangles inside and the
+        # engine dies with FileNotFoundError naming a directory that plainly
+        # exists on the host. Relocating a cache by symlink is the natural
+        # response to a home quota, so this is a likely configuration.
+        hf_home = str(
+            Path(os.getenv('HF_HOME') or workspace_path / ".cache" / "huggingface").resolve()
+        )
 
         # Cache locations for engine-side JIT artifacts (e.g. FlashInfer kernels).
         # These must also be host vars: the batch script uses them for mkdir and
@@ -155,6 +240,13 @@ class SlurmRunner:
             'APPTAINERENV_VLLM_SCHED_SPREAD': vllm_sched_spread,
             'APPTAINERENV_HF_HOME': hf_home,
             'APPTAINERENV_XDG_CACHE_HOME': xdg_cache_home,
+            # Triton JIT-compiles kernels and defaults its cache to ~/.triton.
+            # Apptainer binds $HOME, but not what a symlink under it points at,
+            # so a relocated ~/.triton (a natural response to a home quota)
+            # dangles inside the container and every worker dies with
+            # FileNotFoundError: '.../.triton/cache'. Pin it inside a directory
+            # that is already bound — the same treatment FlashInfer needed.
+            'APPTAINERENV_TRITON_CACHE_DIR': str(Path(xdg_cache_home) / "triton"),
             'APPTAINERENV_FLASHINFER_WORKSPACE_BASE': flashinfer_workspace_base,
             # Use system CA bundle for HTTPS (e.g. HuggingFace model downloads).
             # Empty values break downloads with "No CA certificates were loaded".
@@ -248,6 +340,51 @@ class SlurmRunner:
 
         return " ".join(parts)
 
+    def _topology(self):
+        """Validate this runner's allocation shape and return the topology.
+
+        One definition, called by run(), serve() and the engine-args resolver.
+        Spelling it out at each call site is how the entry points drift apart —
+        the defect this branch already fixes twice over.
+
+        Raises:
+            TopologyError: if the requested shape cannot be served.
+        """
+        return resolve_topology(
+            self.slurm_config.nodes,
+            self.slurm_config.gpus_per_node,
+            self.engine.engine,
+        )
+
+    def _resolve_vllm_engine_args(self, kwargs: Dict[str, Any]) -> str:
+        """Merge vLLM engine args and apply parallelism implied by the topology.
+
+        Precedence: user CLI args beat environment args, and both beat anything
+        derived from the allocation — a value the user typed is never silently
+        overridden.
+
+        Shared by run() and serve(). It was previously duplicated verbatim
+        between them, which is how the two paths drift.
+        """
+        env_args = self._load_vllm_engine_args(
+            os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS"
+        )
+        cli_args = self._load_vllm_engine_args(
+            kwargs.get("vllm_engine_args"), "--vllm-engine-args"
+        )
+        merged_args = _canonical_keys({**env_args, **cli_args})
+
+        topology = self._topology()
+        if topology.tensor_parallel_size > 1 and "tensor-parallel-size" not in merged_args:
+            merged_args["tensor-parallel-size"] = topology.tensor_parallel_size
+        if topology.pipeline_parallel_size > 1 and "pipeline-parallel-size" not in merged_args:
+            merged_args["pipeline-parallel-size"] = topology.pipeline_parallel_size
+
+        if topology.is_multi_node:
+            _reject_parallelism_that_wastes_the_allocation(merged_args, topology)
+
+        return self._build_vllm_engine_args(merged_args)
+
     def _build_job_name(self, model_identifier: str) -> str:
         """Generate a Slurm-safe, identifiable job name."""
         safe_model = "".join(
@@ -276,6 +413,11 @@ class SlurmRunner:
         Returns:
             Job ID of the submitted SLURM job
         """
+        # Validate the requested node/GPU shape before doing anything else, so
+        # an unservable request fails in milliseconds instead of after a queue
+        # wait. Raises TopologyError.
+        self._topology()
+
         # Setup paths following precedence: code paths > environment variables > defaults
         # Use config manager to resolve paths
         
@@ -389,14 +531,7 @@ class SlurmRunner:
             env['VLLM_MODEL_NAME'] = str(selected_model_name)
             env['VLLM_HOST'] = '0.0.0.0'
             # Load vLLM engine args from environment and CLI, merging them with priority to CLI
-            env_args = self._load_vllm_engine_args(os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS")
-            cli_args = self._load_vllm_engine_args(kwargs.get("vllm_engine_args"), "--vllm-engine-args")
-            merged_args = {**env_args, **cli_args}
-            # Automatically set tensor parallelism when multiple GPUs are requested,
-            # unless the user has already specified it.
-            if self.slurm_config.gpus_per_node > 1 and "tensor-parallel-size" not in merged_args:
-                merged_args["tensor-parallel-size"] = self.slurm_config.gpus_per_node
-            env['VLLM_ENGINE_ARGS'] = self._build_vllm_engine_args(merged_args)
+            env['VLLM_ENGINE_ARGS'] = self._resolve_vllm_engine_args(kwargs)
         # Container variables (used in Python inside container)
         # Always set MODEL_IDENTIFIER for reference
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
@@ -574,6 +709,9 @@ class SlurmRunner:
         Returns:
             SLURM job ID string, or None if submission failed.
         """
+        # Same topology gate as run(); serve has its own code path.
+        self._topology()
+
         env = self._setup_environment()
 
         rebuild_requested = bool(kwargs.get("rebuild", False))
@@ -608,14 +746,7 @@ class SlurmRunner:
         elif self.engine.engine == 'vllm':
             env['VLLM_MODEL_NAME'] = str(selected_model_name)
             env['VLLM_HOST'] = '0.0.0.0'
-            env_args = self._load_vllm_engine_args(os.getenv("VLLM_ENGINE_ARGS"), "VLLM_ENGINE_ARGS")
-            cli_args = self._load_vllm_engine_args(kwargs.get("vllm_engine_args"), "--vllm-engine-args")
-            merged_args = {**env_args, **cli_args}
-            # Automatically set tensor parallelism when multiple GPUs are requested,
-            # unless the user has already specified it.
-            if self.slurm_config.gpus_per_node > 1 and "tensor-parallel-size" not in merged_args:
-                merged_args["tensor-parallel-size"] = self.slurm_config.gpus_per_node
-            env['VLLM_ENGINE_ARGS'] = self._build_vllm_engine_args(merged_args)
+            env['VLLM_ENGINE_ARGS'] = self._resolve_vllm_engine_args(kwargs)
 
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
         env['APPTAINERENV_ENGINE'] = str(self.engine.engine)

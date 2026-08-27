@@ -1791,3 +1791,98 @@ class TestShowModelsCommand:
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 
+
+
+class TestTopologyErrorPresentation:
+    """The topology gate exists to deliver an actionable message.
+
+    Delivered inside a stack trace it reads as an internal crash rather than a
+    rejected request, which is the opposite of the point. `llmflux serve` already
+    caught it; `run` and `benchmark` did not, so the same gate gave the same user
+    two different experiences.
+    """
+
+    def _args(self, temp_dir, sample_jsonl):
+        args = MagicMock()
+        args.input = str(sample_jsonl)
+        args.output = str(temp_dir / "output.json")
+        args.model = "Llama-3.2-3B-Instruct"
+        args.batch_size = 4
+        args.save_frequency = 50
+        args.max_retries = 3
+        args.retry_delay = 1.0
+        args.max_tokens = None
+        args.temperature = None
+        args.top_p = None
+        args.top_k = None
+        args.account = None
+        args.partition = None
+        args.nodes = 2
+        args.gpus_per_node = None
+        args.time = None
+        args.mem = None
+        args.cpus_per_task = None
+        args.sbatch_arg = None
+        args.rebuild = False
+        args.debug = False
+        args.local = False
+        return args
+
+    @patch('llmflux.cli._ensure_container', return_value=True)
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
+    def test_run_reports_the_message_and_exits_one(
+        self, mock_config_class, mock_runner_class, mock_ensure_container,
+        temp_dir, sample_jsonl, capsys,
+    ):
+        from llmflux.slurm.topology import TopologyError
+
+        mock_config_class.return_value = MagicMock()
+        mock_runner = MagicMock()
+        mock_runner.run.side_effect = TopologyError(
+            "--nodes 2 was requested, but multi-node inference is not implemented"
+        )
+        mock_runner_class.return_value = mock_runner
+
+        result = _run_command(self._args(temp_dir, sample_jsonl))
+
+        assert result == 1
+        err = capsys.readouterr().err
+        assert "--nodes 2 was requested" in err
+        assert "Traceback" not in err
+
+    @patch('llmflux.cli.create_test_prompts_file')
+    @patch('llmflux.cli._ensure_container', return_value=True)
+    @patch('llmflux.cli.SlurmRunner')
+    @patch('llmflux.cli.Config')
+    def test_benchmark_reports_the_message_and_exits_one(
+        self, mock_config_class, mock_runner_class, mock_ensure_container,
+        mock_prompts, temp_dir, sample_jsonl, capsys,
+    ):
+        from llmflux.slurm.topology import TopologyError
+
+        mock_model_cfg = MagicMock()
+        mock_model_cfg.get_model_name_for_engine.return_value = "meta-llama/Llama-3.2-3B-Instruct"
+        mock_config = MagicMock()
+        mock_config.load_model_config.return_value = mock_model_cfg
+        mock_config_class.return_value = mock_config
+        mock_prompts.return_value = str(sample_jsonl)
+
+        mock_runner = MagicMock()
+        mock_runner.run.side_effect = TopologyError("--nodes 2 was requested, but ...")
+        mock_runner_class.return_value = mock_runner
+
+        args = self._args(temp_dir, sample_jsonl)
+        args.name = None
+        args.num_prompts = 2
+        args.engine = "vllm"
+        args.input = None
+        args.output = str(temp_dir / "bench.json")
+        args.custom_config_path = None
+
+        result = _benchmark_command(args)
+
+        assert result == 1
+        err = capsys.readouterr().err
+        assert "--nodes 2 was requested" in err
+        assert "Traceback" not in err

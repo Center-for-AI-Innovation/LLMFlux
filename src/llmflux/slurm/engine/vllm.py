@@ -2,6 +2,8 @@ import shlex
 import sys
 from pathlib import Path
 
+from . import multinode
+
 def create_vllm_batch_script(
         account: str,
         partition: str,
@@ -68,10 +70,10 @@ def create_vllm_batch_script(
         "echo \"Using HuggingFace model: $VLLM_MODEL_NAME\"",
         "echo \"Port: $VLLM_PORT\"",
         "",
-        "APPTAINER_BIND_PATHS=\"$DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$VLLM_HOME:$VLLM_HOME,$HF_HOME:$HF_HOME,$XDG_CACHE_HOME:$XDG_CACHE_HOME,$FLASHINFER_WORKSPACE_BASE:$FLASHINFER_WORKSPACE_BASE\"",
+        "export APPTAINER_BIND_PATHS=\"$DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$VLLM_HOME:$VLLM_HOME,$HF_HOME:$HF_HOME,$XDG_CACHE_HOME:$XDG_CACHE_HOME,$FLASHINFER_WORKSPACE_BASE:$FLASHINFER_WORKSPACE_BASE\"",
         "if [ -d \"$VLLM_MODEL_NAME\" ]; then",
         "    echo \"Bind-mounting local model path: $VLLM_MODEL_NAME\"",
-        "    APPTAINER_BIND_PATHS=\"$APPTAINER_BIND_PATHS,$VLLM_MODEL_NAME:$VLLM_MODEL_NAME\"",
+        "    export APPTAINER_BIND_PATHS=\"$APPTAINER_BIND_PATHS,$VLLM_MODEL_NAME:$VLLM_MODEL_NAME\"",
         "fi",
         "",
         "# Set HF_TOKEN for vLLM if available (for gated models)",
@@ -98,26 +100,45 @@ def create_vllm_batch_script(
             "# Install cleanup trap early so the connection file (contains the API key)",
             "# and server are removed even if the job is cancelled with scancel (SIGTERM).",
             "CONNECTION_FILE=\"$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json\"",
-            "trap 'rm -f \"$CONNECTION_FILE\"; pkill -f \"vllm serve\" || true' EXIT TERM INT",
+            # pkill only reaches this node. At nodes>1 the workers live on other
+            # nodes, so killing the srun client is what actually tears the
+            # deployment down.
+            #
+            # The trap body is single-quoted, so ${VLLM_PID:-} expands when the
+            # trap FIRES, not when it is installed — by then the launch has set
+            # it. The -n guard is for the paths that exit before the launch (a
+            # failed container build, a port that could not be found), where the
+            # variable is genuinely unset.
+            "trap 'rm -f \"$CONNECTION_FILE\"; "
+            "[ -n \"${VLLM_PID:-}\" ] && kill \"$VLLM_PID\" 2>/dev/null; "
+            "pkill -f \"vllm serve\" || true' EXIT TERM INT",
             "",
         ] if mode == "serve" else []),
-        "VERBOSE=1 apptainer exec --nv --cleanenv \\",
-        "    --bind \"$APPTAINER_BIND_PATHS\" \\",
-        "    ${CONTAINERS_DIR}/llm_processor.sif \\",
-        "    python3 -m vllm.entrypoints.openai.api_server \\",
-        "        --model \"$VLLM_MODEL_NAME\" \\",
-        "        --host \"$VLLM_HOST\" \\",
-        "        --port \"$VLLM_PORT\" \\",
-        *(["        --api-key \"$LLMFLUX_API_KEY\" \\",
-        ] if mode == "serve" else []),
-        "        $VLLM_ENGINE_ARGS &",
-        "VLLM_PID=$!",
-        "echo \"        PID: $VLLM_PID\"",
+        # nodes > 1 replaces the single-node exec with an SPMD srun step; at
+        # nodes == 1 the lines below are emitted unchanged, so single-node users
+        # see a byte-identical script.
+        *(multinode.preamble(nodes, gpus_per_node, mode) if int(nodes) > 1 else []),
+        *(multinode.launch() if int(nodes) > 1 else [
+            "VERBOSE=1 apptainer exec --nv --cleanenv \\",
+            "    --bind \"$APPTAINER_BIND_PATHS\" \\",
+            "    ${CONTAINERS_DIR}/llm_processor.sif \\",
+            "    python3 -m vllm.entrypoints.openai.api_server \\",
+            "        --model \"$VLLM_MODEL_NAME\" \\",
+            "        --host \"$VLLM_HOST\" \\",
+            "        --port \"$VLLM_PORT\" \\",
+        ] + ([
+            "        --api-key \"$LLMFLUX_API_KEY\" \\",
+        ] if mode == "serve" else []) + [
+            "        $VLLM_ENGINE_ARGS &",
+            "VLLM_PID=$!",
+            "echo \"        PID: $VLLM_PID\"",
+        ]),
         "echo \"\"",
         "# Wait for server",
         "echo \"[3/4] Waiting for server to be ready...\":",
         "SERVER_READY=false",
-        "for i in {1..300}; do",
+        "LLMFLUX_SERVER_TIMEOUT=${LLMFLUX_SERVER_TIMEOUT:-300}",
+        "for i in $(seq 1 $LLMFLUX_SERVER_TIMEOUT); do",
         "    if curl -s \"http://localhost:$VLLM_PORT/health\" >/dev/null 2>&1; then",
         "        echo \"        ✓ Server ready!\"",
         "        SERVER_READY=true",
@@ -127,7 +148,7 @@ def create_vllm_batch_script(
         "        echo \"VLLM server died\"",
         "        exit 1",
         "    fi",
-        "    [ $((i %15)) -eq 0 ] && echo \"        Still loading... ($i/300s)\"",
+        "    [ $((i %15)) -eq 0 ] && echo \"        Still loading... ($i/${LLMFLUX_SERVER_TIMEOUT}s)\"",
         "    sleep 1",
         "done",
         "if [[ $SERVER_READY == \"false\" ]]; then",
@@ -147,10 +168,21 @@ def create_vllm_batch_script(
             "# CONNECTION_FILE was defined earlier alongside the cleanup trap.",
             "(umask 077 && mkdir -p \"$(dirname $CONNECTION_FILE)\")",
             "chmod 700 \"$HOME/.llmflux\" \"$HOME/.llmflux/serve\" \"$(dirname $CONNECTION_FILE)\"",
+            # Resolved once and reused everywhere this job publishes an address,
+            # so the connection file and the notification email cannot disagree.
+            #
+            # hostname returns the FQDN on these compute nodes, and an FQDN here
+            # resolves to IPv6 link-local ONLY — a client dialling it gets
+            # nothing. The short name is resolvable. At nodes>1 the fabric
+            # address derived for the rendezvous is better still: it is what
+            # rank 0 actually bound.
+            "LLMFLUX_ENDPOINT_HOST=" + (
+                "\"$LLMFLUX_MASTER_ADDR\"" if int(nodes) > 1 else "\"$(hostname -s)\""
+            ),
             "(umask 077 && cat > \"$CONNECTION_FILE\" <<EOF",
             "{",
             "  \"job_id\": \"$SLURM_JOB_ID\",",
-            "  \"node\": \"$(hostname)\",",
+            "  \"node\": \"$LLMFLUX_ENDPOINT_HOST\",",
             "  \"port\": $VLLM_PORT,",
             "  \"model\": \"$VLLM_MODEL_NAME\",",
             "  \"api_key\": \"$LLMFLUX_API_KEY\",",
@@ -168,7 +200,7 @@ def create_vllm_batch_script(
             "Your LLMFlux serve job has finished loading and is ready to use.",
             "",
             "  Job ID:   $SLURM_JOB_ID",
-            "  Endpoint: http://$(hostname):$VLLM_PORT/v1",
+            "  Endpoint: http://$LLMFLUX_ENDPOINT_HOST:$VLLM_PORT/v1",
             "  API Key:  $LLMFLUX_API_KEY",
             "  Model:    $VLLM_MODEL_NAME",
             "  Engine:   vllm",
@@ -176,7 +208,7 @@ def create_vllm_batch_script(
             "Example usage:",
             "",
             "  from openai import OpenAI",
-            "  client = OpenAI(base_url=\"http://$(hostname):$VLLM_PORT/v1\", api_key=\"$LLMFLUX_API_KEY\")",
+            "  client = OpenAI(base_url=\"http://$LLMFLUX_ENDPOINT_HOST:$VLLM_PORT/v1\", api_key=\"$LLMFLUX_API_KEY\")",
             "  response = client.chat.completions.create(",
             "      model=\"$VLLM_MODEL_NAME\",",
             "      messages=[{\"role\": \"user\", \"content\": \"Hello!\"}]",
@@ -188,6 +220,15 @@ def create_vllm_batch_script(
             "",
             "# Keep alive until wall time or scancel",
             "wait $VLLM_PID",
+            # Without this the script's last command is `kill -9 ... || true`, so
+            # a serve job whose deployment collapsed still exits 0 and sacct says
+            # COMPLETED — --mail-type=FAIL never fires and the user is told
+            # nothing. At nodes>1 srun --kill-on-bad-exit=1 makes this status the
+            # only in-band signal that a remote rank died.
+            "LLMFLUX_SERVE_RC=$?",
+            "# scancel and Ctrl-C are how a serve job normally ends; those are not",
+            "# failures.",
+            "case \"$LLMFLUX_SERVE_RC\" in 130|143) LLMFLUX_SERVE_RC=0 ;; esac",
         ] if mode == "serve" else [
             "# Run processor",
             f"{shlex.quote(sys.executable)} -c \"",
@@ -234,6 +275,7 @@ def create_vllm_batch_script(
             "",
             f"batch_processor.run('{input_file}', '{output_file}', 'vllm', **run_kwargs)",
             "\"",
+            "# Capture the processor's status before cleanup overwrites $?.",
             "BATCH_RC=$?",
         ]),
         "",
@@ -252,6 +294,15 @@ def create_vllm_batch_script(
         "kill $VLLM_PID 2>/dev/null || true",
         "sleep 2",
         "kill -9 $VLLM_PID 2>/dev/null || true",
-        "exit ${BATCH_RC:-0}"
+        "",
+        *([
+            "# Exit with the processor's status. Without this the script exits with\n"
+            "# whatever cleanup returned, so a run whose every item failed still\n"
+            "# reports success and the job looks complete.",
+            "exit ${BATCH_RC:-0}",
+        ] if mode != "serve" else [
+            "# Exit with the server's status, for the same reason.",
+            "exit ${LLMFLUX_SERVE_RC:-0}",
+        ]),
     ])
     return job_script

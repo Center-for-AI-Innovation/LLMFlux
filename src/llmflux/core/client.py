@@ -84,6 +84,20 @@ class LLMClient:
         if self.api_key:
             self.session.headers['Authorization'] = f"Bearer {self.api_key}"
             logger.debug("Using bearer token authentication")
+
+        # Every request needs a timeout. Without one, requests blocks on a
+        # socket read indefinitely: if the engine dies after the job's health
+        # check passed, the batch processor waits for the rest of the job's
+        # walltime and the job is billed for doing nothing. A timeout turns that
+        # into a per-item failure that BatchProcessor's existing retry and error
+        # accounting can see and report.
+        #
+        # (connect, read). The read budget is generous because generating a long
+        # completion legitimately takes minutes; it only has to be finite.
+        self.timeout = (
+            float(os.getenv("LLMFLUX_CONNECT_TIMEOUT", "10")),
+            float(os.getenv("LLMFLUX_READ_TIMEOUT", "600")),
+        )
     
     def list_models(self) -> List[str]:
         """List available models using Ollama's native tags API.
@@ -94,7 +108,7 @@ class LLMClient:
         url = f"{self.base_url}/api/tags"
         try:
             logger.debug(f"Listing models from: {url}")
-            response = self.session.get(url)
+            response = self.session.get(url, timeout=self.timeout)
             response.raise_for_status()
             
             data = response.json()
@@ -164,7 +178,7 @@ class LLMClient:
         
         try:
             logger.info(f"Pulling model {model_name} from {url}")
-            response = self.session.post(url, json=payload)
+            response = self.session.post(url, json=payload, timeout=self.timeout)
             response.raise_for_status()
             logger.info(f"Successfully pulled model {model_name}")
             return True
@@ -263,7 +277,7 @@ class LLMClient:
             payload["stop"] = kwargs["stop"]
         
         try:
-            response = self.session.post(url, json=payload)
+            response = self.session.post(url, json=payload, timeout=self.timeout)
             response.raise_for_status()
             
             # Parse OpenAI response format

@@ -91,9 +91,21 @@ def create_ollama_batch_script(
             "# Install cleanup trap early so the connection file (contains the API key)",
             "# and server are removed even if the job is cancelled with scancel (SIGTERM).",
             "CONNECTION_FILE=\"$HOME/.llmflux/serve/$SLURM_JOB_ID/connection.json\"",
-            "trap 'rm -f \"$CONNECTION_FILE\"; pkill -f \"ollama serve\" || true' EXIT TERM INT",
+            # Kill this job's server by PID, not only by pattern. `pkill -f
+            # "ollama serve"` does match here — this path really does exec
+            # `ollama serve` — but it matches the same user's OTHER jobs on the
+            # node too, and $OLLAMA_PID was never killed at all. Same shape as
+            # the vLLM trap, so the two engines cannot drift.
+            "trap 'rm -f \"$CONNECTION_FILE\"; "
+            "[ -n \"${OLLAMA_PID:-}\" ] && kill \"$OLLAMA_PID\" 2>/dev/null; "
+            "pkill -f \"ollama serve\" || true' EXIT TERM INT",
             "",
         ] if mode == "serve" else []),
+        "# Pass SLURM-allocated GPU(s) into the container (--cleanenv strips",
+        "# CUDA_VISIBLE_DEVICES). Without this the container receives the list",
+        "# synthesised from the *requested* GPU count rather than the devices",
+        "# actually granted, and Ollama warns: \"user overrode visible devices\".",
+        "export APPTAINERENV_CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0}",
         "OLLAMA_DEBUG=1 apptainer exec --nv --cleanenv \\",
         "    --bind $DATA_INPUT_DIR:/app/data/input,$DATA_OUTPUT_DIR:/app/data/output,$MODELS_DIR:/app/models,$LOGS_DIR:/app/logs,$OLLAMA_HOME:$OLLAMA_HOME \\",
         "    $CONTAINERS_DIR/llm_processor.sif \\",
@@ -233,6 +245,7 @@ def create_ollama_batch_script(
             "",
             f"batch_processor.run('{input_file}', '{output_file}', 'ollama', **run_kwargs)",
             "\"",
+            "# Capture the processor's status before cleanup overwrites $?.",
             "BATCH_RC=$?",
         ]),
         "",
@@ -247,6 +260,11 @@ def create_ollama_batch_script(
         "if [ -d \"$APPTAINER_CACHEDIR\" ] && [ -w \"$APPTAINER_CACHEDIR\" ]; then",
         "    rm -rf \"$APPTAINER_CACHEDIR\"",
         "fi",
-        "exit ${BATCH_RC:-0}"
+        *([
+            "# Exit with the processor's status. Without this the script exits with\n"
+            "# whatever cleanup returned, so a run whose every item failed still\n"
+            "# reports success and the job looks complete.",
+            "exit ${BATCH_RC:-0}",
+        ] if mode != "serve" else []),
     ])
     return job_script
