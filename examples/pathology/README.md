@@ -199,15 +199,17 @@ or `POST /classify {"images": [...], "prompts": {label: prompt, ...}}`, both
 under `Authorization: Bearer <key>`. See `serve.py`'s docstring for the exact
 schema.
 
-**Give students `example_student_usage.py`.** It's a self-contained script
-they can run immediately (against a synthetic placeholder image, so it works
-before they have real data wired up) to confirm they can reach the server,
-then edit in place: swap the placeholder for their own image file and the
-sample labels in `prompts.json` for whatever their team is classifying. The
-only dependency is `requests` (plus `pillow`, only for the placeholder image
-it generates) — none of CONCH/MUSK/torch, since all of that runs server-side.
-Hand out `ENDPOINT`/`API_KEY` from `connection.json` and that's the entire
-setup on their end.
+**Give students `STUDENT_GUIDE.md` and `example_student_usage.py`.** The
+guide is the walkthrough (what `/embed` vs `/classify` return, swapping in
+their own images/prompts, troubleshooting a bad endpoint or stale key); the
+script is its runnable counterpart — self-contained, runs immediately against
+synthetic placeholder tiles so it works before they have real data wired up,
+then edit in place: swap the placeholders for their own image files and the
+sample labels for whatever their team is classifying. The only dependency is
+`requests` (plus `pillow`, only for the placeholder tiles it generates) — none
+of CONCH/MUSK/torch, since all of that runs server-side. Hand out
+`ENDPOINT`/`API_KEY` from `connection.json` and that's the entire setup on
+their end.
 
 **How concurrency is handled:** `serve.py` loads the model once and runs all
 GPU forward passes through a single background thread that micro-batches

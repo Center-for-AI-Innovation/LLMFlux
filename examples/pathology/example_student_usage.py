@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Student quickstart for the pathology embedding server.
 
+See STUDENT_GUIDE.md for the full walkthrough (what /embed vs /classify
+return, troubleshooting, using your own images/prompts) - this script is the
+runnable version of that walkthrough.
+
 Fill in ENDPOINT and API_KEY below (the organizers will give you both), then:
 
     pip install requests pillow   # pillow is only needed for the placeholder
-                                   # image this demo generates - see note below
+                                   # tiles this demo generates - see note below
     python example_student_usage.py
 
 This is everything you need on your own machine: no CONCH/MUSK, no torch, no
@@ -32,57 +36,84 @@ def load_your_own_image(path: str) -> str:
         return image_bytes_to_b64(f.read())
 
 
-def make_placeholder_tile_b64() -> str:
-    """A synthetic stand-in image so this script runs before you have real
-    data wired up. It is NOT a real pathology image - swap it for
-    load_your_own_image("path/to/your_tile.png") once you're ready."""
+def make_placeholder_tiles_b64():
+    """Three differently-colored synthetic stand-ins, so /classify has more
+    than one image to tell apart. These are NOT real pathology images - swap
+    this for [load_your_own_image(p) for p in ["tile1.png", "tile2.png"]]
+    once you have real data."""
     from PIL import Image
 
-    tile = Image.new("RGB", (224, 224), (180, 120, 160))
-    buf = io.BytesIO()
-    tile.save(buf, format="PNG")
-    return image_bytes_to_b64(buf.getvalue())
+    colors = [(180, 120, 160), (230, 210, 220), (90, 40, 60)]
+    tiles = []
+    for color in colors:
+        tile = Image.new("RGB", (224, 224), color)
+        buf = io.BytesIO()
+        tile.save(buf, format="PNG")
+        tiles.append(image_bytes_to_b64(buf.getvalue()))
+    return tiles
+
+
+def check_health():
+    """Fail fast with a clear message instead of a confusing stack trace if
+    the endpoint is wrong, the server isn't up yet, or the API key is stale."""
+    try:
+        response = requests.get(f"{ENDPOINT}/health", timeout=10)
+    except requests.exceptions.ConnectionError as e:
+        raise SystemExit(
+            f"Could not reach {ENDPOINT} - check ENDPOINT matches what the "
+            f"organizers gave you, and that the server is still running ({e})"
+        ) from e
+    if not response.ok:
+        raise SystemExit(f"Server at {ENDPOINT} responded with HTTP {response.status_code}: {response.text}")
+    info = response.json()
+    print(f"Connected. Server is running model={info['model']} on device={info['device']}.\n")
+
+
+def _post(path, payload):
+    response = requests.post(
+        f"{ENDPOINT}{path}",
+        json=payload,
+        headers={"Authorization": f"Bearer {API_KEY}"},
+        timeout=60,
+    )
+    if response.status_code == 401:
+        raise SystemExit("Got HTTP 401 - check API_KEY matches what the organizers gave you.")
+    response.raise_for_status()
+    return response.json()
 
 
 def embed(images_b64):
-    response = requests.post(
-        f"{ENDPOINT}/embed",
-        json={"images": images_b64},
-        headers={"Authorization": f"Bearer {API_KEY}"},
-        timeout=60,
-    )
-    response.raise_for_status()
-    return response.json()["embeddings"]
+    return _post("/embed", {"images": images_b64})["embeddings"]
 
 
 def classify(images_b64, prompts):
-    response = requests.post(
-        f"{ENDPOINT}/classify",
-        json={"images": images_b64, "prompts": prompts},
-        headers={"Authorization": f"Bearer {API_KEY}"},
-        timeout=60,
-    )
-    response.raise_for_status()
-    return response.json()["results"]
+    return _post("/classify", {"images": images_b64, "prompts": prompts})["results"]
 
 
 def main():
-    tile = make_placeholder_tile_b64()
+    check_health()
 
-    embeddings = embed([tile])
-    print(f"/embed: got a {len(embeddings[0])}-dimensional embedding for the tile.")
+    tiles = make_placeholder_tiles_b64()
+
+    embeddings = embed(tiles)
+    print(f"/embed: got {len(embeddings)} embeddings, each {len(embeddings[0])}-dimensional.")
+    print("Use these for clustering/kNN/training your own classifier - see STUDENT_GUIDE.md.\n")
 
     prompts = {
         "tumor": "a histopathology image of tumor tissue",
         "stroma": "a histopathology image of stroma",
         "necrosis": "a histopathology image of necrotic tissue",
     }
-    results = classify([tile], prompts)
-    print(f"/classify: predicted '{results[0]['predicted_label']}' (score={results[0]['score']:.3f})")
-    print("(this prediction is meaningless here - it's a solid-color placeholder, not real tissue)")
+    results = classify(tiles, prompts)
+    for i, r in enumerate(results):
+        print(f"/classify tile {i}: predicted '{r['predicted_label']}' (score={r['score']:.3f})")
+    print("(these predictions are meaningless here - solid-color placeholders, not real tissue)\n")
 
-    print("\nNext: replace make_placeholder_tile_b64() with load_your_own_image('your_tile.png'),")
-    print("and edit `prompts` above to the labels your team actually cares about.")
+    print("Next steps:")
+    print("  1. Replace make_placeholder_tiles_b64() with your own image paths")
+    print("     (see load_your_own_image)")
+    print("  2. Edit `prompts` above to the labels your team actually cares about")
+    print("  3. See STUDENT_GUIDE.md for what to do with /embed output beyond zero-shot classify")
 
 
 if __name__ == "__main__":
