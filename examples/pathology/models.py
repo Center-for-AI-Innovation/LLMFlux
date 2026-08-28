@@ -141,6 +141,119 @@ def load_musk(device: str = "cuda", hf_token: Optional[str] = None) -> Adapter:
     return Adapter(name="musk", preprocess=preprocess, encode_images=encode_images, encode_texts=encode_texts)
 
 
+def load_open_clip_hub(spec: str, device: str = "cuda", hf_token: Optional[str] = None) -> Adapter:
+    """Generic adapter for any OpenCLIP-compatible model — no per-model code
+    needed as long as it's published in one of OpenCLIP's own formats.
+
+    Two spec forms:
+      - "<hf-repo>" — a model published in OpenCLIP's own HF-hub format (an
+        `open_clip_config.json` + weights file on the repo), loaded directly
+        via `hf-hub:<repo>`. Covers e.g. wisdomik/QuiltNet-B-32.
+      - "<arch>@<hf-repo>/<filename>" — a bare OpenCLIP checkpoint file on an
+        otherwise plain HF repo (no OpenCLIP hub config), naming the
+        architecture it was trained with and the file to download, e.g.
+        "ViT-B-16@jamessyx/PathGen-CLIP/pathgenclip.pt". Only works if you
+        already know the architecture; check the model's own README/card.
+    """
+    hf_token = hf_token or os.environ.get("HF_TOKEN")
+
+    if "@" in spec:
+        arch_name, _, repo_and_file = spec.partition("@")
+        repo_id, _, filename = repo_and_file.rpartition("/")
+        if not repo_id or not filename:
+            raise ValueError(
+                f"Invalid openclip spec {spec!r}; expected '<arch>@<hf-repo>/<filename>'"
+            )
+        model_name = arch_name
+    else:
+        repo_id = filename = None
+        model_name = f"hf-hub:{spec}"
+
+    try:
+        import open_clip
+    except ImportError as e:
+        raise ImportError("OpenCLIP is not installed. Run: pip install open_clip_torch") from e
+
+    if repo_id is not None:
+        from huggingface_hub import hf_hub_download
+
+        pretrained = hf_hub_download(repo_id=repo_id, filename=filename, token=hf_token)
+    else:
+        pretrained = None
+
+    try:
+        model, _, preprocess = open_clip.create_model_and_transforms(model_name, pretrained=pretrained)
+        model = model.to(device).eval()
+        tokenizer = open_clip.get_tokenizer(model_name)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load OpenCLIP model {spec!r} ({e}). Check the model's own "
+            "Hugging Face page for its current OpenCLIP loading recipe."
+        ) from e
+
+    @torch.no_grad()
+    def encode_images(batch: torch.Tensor) -> np.ndarray:
+        emb = model.encode_image(batch.to(device))
+        emb = emb / emb.norm(dim=-1, keepdim=True)
+        return emb.float().cpu().numpy()
+
+    @torch.no_grad()
+    def encode_texts(texts: List[str]) -> np.ndarray:
+        tokens = tokenizer(texts).to(device)
+        emb = model.encode_text(tokens)
+        emb = emb / emb.norm(dim=-1, keepdim=True)
+        return emb.float().cpu().numpy()
+
+    return Adapter(
+        name=f"openclip:{spec}", preprocess=preprocess, encode_images=encode_images, encode_texts=encode_texts
+    )
+
+
+def load_hf_clip(repo_id: str, device: str = "cuda", hf_token: Optional[str] = None) -> Adapter:
+    """Generic adapter for any Hugging Face `transformers` CLIPModel repo,
+    e.g. "openai/clip-vit-base-patch32" or another HF-native CLIP checkpoint.
+    No per-model code needed as long as it loads with CLIPModel/CLIPProcessor.
+    """
+    try:
+        from transformers import CLIPModel, CLIPProcessor
+    except ImportError as e:
+        raise ImportError("transformers is not installed. Run: pip install transformers") from e
+
+    hf_token = hf_token or os.environ.get("HF_TOKEN")
+    try:
+        model = CLIPModel.from_pretrained(repo_id, token=hf_token).to(device).eval()
+        processor = CLIPProcessor.from_pretrained(repo_id, token=hf_token)
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load transformers CLIP model {repo_id!r} ({e}). Check "
+            f"https://huggingface.co/{repo_id} for its current loading API."
+        ) from e
+
+    def preprocess(image):
+        # CLIPProcessor batches internally; run it per-image here so the
+        # result matches every other adapter's preprocess contract (one
+        # tensor per image, stacked into a batch by the caller).
+        return processor(images=image, return_tensors="pt")["pixel_values"][0]
+
+    @torch.no_grad()
+    def encode_images(batch: torch.Tensor) -> np.ndarray:
+        emb = model.get_image_features(pixel_values=batch.to(device))
+        emb = emb / emb.norm(dim=-1, keepdim=True)
+        return emb.float().cpu().numpy()
+
+    @torch.no_grad()
+    def encode_texts(texts: List[str]) -> np.ndarray:
+        inputs = processor(text=texts, return_tensors="pt", padding=True)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        emb = model.get_text_features(**inputs)
+        emb = emb / emb.norm(dim=-1, keepdim=True)
+        return emb.float().cpu().numpy()
+
+    return Adapter(
+        name=f"hfclip:{repo_id}", preprocess=preprocess, encode_images=encode_images, encode_texts=encode_texts
+    )
+
+
 def load_test(device: str = "cpu", hf_token: Optional[str] = None) -> Adapter:
     """No-dependency stand-in for CONCH/MUSK.
 
@@ -175,3 +288,31 @@ def load_test(device: str = "cpu", hf_token: Optional[str] = None) -> Adapter:
 
 
 ADAPTERS = {"conch": load_conch, "musk": load_musk, "test": load_test}
+
+
+def resolve_adapter(spec: str, device: str = "cuda", hf_token: Optional[str] = None) -> Adapter:
+    """Resolve a --model / PATHOLOGY_MODEL spec string to a loaded Adapter.
+
+    This is the extension point for a model nobody has written an adapter
+    for: if it's CLIP-shaped and published in one of the two standard formats
+    below, a team gets it with a spec string and no new code at all. Only a
+    model with genuinely non-standard loading code (a CONCH/MUSK situation)
+    needs a bespoke adapter added to ADAPTERS above.
+
+      - "conch" / "musk" / "test" — the bespoke adapters above.
+      - "openclip:<...>" — any OpenCLIP-compatible model (see load_open_clip_hub
+        for the two spec forms this accepts).
+      - "hfclip:<hf-repo>" — any `transformers` CLIPModel repo, e.g.
+        "hfclip:openai/clip-vit-base-patch32" (see load_hf_clip).
+    """
+    if spec in ADAPTERS:
+        return ADAPTERS[spec](device=device, hf_token=hf_token)
+    if spec.startswith("openclip:"):
+        return load_open_clip_hub(spec[len("openclip:"):], device=device, hf_token=hf_token)
+    if spec.startswith("hfclip:"):
+        return load_hf_clip(spec[len("hfclip:"):], device=device, hf_token=hf_token)
+    raise ValueError(
+        f"Unknown model spec {spec!r}. Expected one of {sorted(ADAPTERS)}, "
+        "'openclip:<hf-repo>' or 'openclip:<arch>@<hf-repo>/<filename>', "
+        "or 'hfclip:<hf-repo>'."
+    )

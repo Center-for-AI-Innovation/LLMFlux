@@ -1,12 +1,17 @@
-# Generic dependencies for the CONCH/MUSK standalone tooling in this directory.
-# CONCH and MUSK themselves are installed straight from their GitHub repos, not
-# PyPI — see README.md for the current install command for each:
+# Generic dependencies for the CONCH/MUSK standalone tooling in this directory,
+# plus the generic OpenCLIP/transformers CLIP adapters (models.py's
+# resolve_adapter) that let a team run any standard CLIP-style model without a
+# bespoke adapter. CONCH and MUSK themselves are installed straight from their
+# GitHub repos, not PyPI — see README.md for the current install command for
+# each:
 #   pip install git+https://github.com/mahmoodlab/CONCH.git
 #   pip install git+https://github.com/lilab-stanford/MUSK.git
 torch>=2.2
 torchvision>=0.17
 timm>=1.0
 huggingface_hub>=0.23
+transformers>=4.40
+open_clip_torch>=2.24
 Pillow>=10.0
 pandas>=2.0
 tqdm>=4.66

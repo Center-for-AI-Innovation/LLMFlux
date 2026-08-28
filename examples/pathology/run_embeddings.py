@@ -19,7 +19,7 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 
-from models import ADAPTERS
+from models import ADAPTERS, resolve_adapter
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -68,7 +68,16 @@ def classify(image_embs: np.ndarray, text_embs: np.ndarray, labels: List[str]):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=sorted(ADAPTERS), required=True)
+    parser.add_argument(
+        "--model",
+        required=True,
+        help=(
+            f"One of {sorted(ADAPTERS)}, 'openclip:<hf-repo>' / "
+            "'openclip:<arch>@<hf-repo>/<filename>' for any OpenCLIP model, "
+            "or 'hfclip:<hf-repo>' for any transformers CLIPModel repo "
+            "(e.g. 'hfclip:openai/clip-vit-base-patch32')"
+        ),
+    )
     parser.add_argument("--input-dir", required=True, help="Directory of image tiles (searched recursively)")
     parser.add_argument("--output", required=True, help="CSV path for results; rerun to resume")
     parser.add_argument("--text-prompts", help="JSON file of {label: prompt} for zero-shot classification")
@@ -88,7 +97,7 @@ def main():
         return
 
     logger.info(f"Loading {args.model} on {args.device}")
-    adapter = ADAPTERS[args.model](device=args.device, hf_token=args.hf_token)
+    adapter = resolve_adapter(args.model, device=args.device, hf_token=args.hf_token)
 
     labels: Optional[List[str]] = None
     text_embs: Optional[np.ndarray] = None

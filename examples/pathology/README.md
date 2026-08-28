@@ -78,6 +78,50 @@ submit it as a batch job with `submit.sbatch` / `submit_serve.sbatch` instead.
    pointing it at a full dataset — from an interactive allocation or a batch
    job (see above), never the login node.
 
+## Running a model other than CONCH/MUSK
+
+CONCH and MUSK needed bespoke adapters in `models.py` because they ship as
+small research repos with non-standard loading code. Most other
+pathology/CLIP models don't have that problem — they're published in one of
+two standard formats, and `models.py`'s `resolve_adapter()` can load either
+with **no new code**, just a `--model` / `PATHOLOGY_MODEL` spec string:
+
+- **`openclip:<hf-repo>`** — a model published in OpenCLIP's own Hugging Face
+  Hub format (an `open_clip_config.json` + weights on the repo), e.g.:
+
+  ```bash
+  python run_embeddings.py --model openclip:wisdomik/QuiltNet-B-32 ...
+  ```
+
+- **`openclip:<arch>@<hf-repo>/<filename>`** — a bare OpenCLIP checkpoint
+  file on an otherwise plain HF repo (no OpenCLIP hub config), naming the
+  architecture it was trained with and the file to download, e.g.:
+
+  ```bash
+  python run_embeddings.py --model openclip:ViT-B-16@jamessyx/PathGen-CLIP/pathgenclip.pt ...
+  ```
+
+- **`hfclip:<hf-repo>`** — any `transformers` `CLIPModel` repo, e.g.:
+
+  ```bash
+  python run_embeddings.py --model hfclip:openai/clip-vit-base-patch32 ...
+  ```
+
+Same specs work for `serve.py` via `PATHOLOGY_MODEL` (and `submit_serve.sbatch
+<spec>` / `submit.sbatch <input_dir> <output_csv> <spec>`). This covers any
+team that wants to try a pathology or general-purpose CLIP model we haven't
+looked at ahead of time, as long as it's CLIP-shaped and published in one of
+these two formats — which most are. A model that isn't (another CONCH/MUSK
+situation: custom research code, not a standard checkpoint) needs a bespoke
+adapter added to `ADAPTERS` in `models.py`, following the `load_conch`/
+`load_musk` pattern; that's a small, contained addition, not a redesign. A
+team whose model doesn't fit either path is in the same position as any team
+bringing entirely their own tooling — they should get their own allocation
+and run it directly, same as normal HPC usage.
+
+Gated models (like CONCH/MUSK) still need `HF_TOKEN` set to a token that has
+accepted the model's license, same as above.
+
 ## Two ways to run this
 
 - **`run_embeddings.py`** — a one-shot batch job: point it at a directory of

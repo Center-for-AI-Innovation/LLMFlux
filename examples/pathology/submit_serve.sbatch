@@ -15,7 +15,11 @@
 # this script more than once (different --job-name) and split teams across
 # the resulting endpoints.
 #
-# Usage: sbatch --account=<your_account> submit_serve.sbatch [conch|musk]
+# Usage: sbatch --account=<your_account> submit_serve.sbatch [model]
+#
+# [model] is "conch", "musk", "test", or a spec for a model with no bespoke
+# adapter: "openclip:<hf-repo>", "openclip:<arch>@<hf-repo>/<filename>", or
+# "hfclip:<hf-repo>". See models.py's resolve_adapter() / README.md.
 #
 # Standalone job — does not use SlurmRunner or any LLMFlux engine. Adjust the
 # environment activation below to however you installed requirements.txt plus

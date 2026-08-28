@@ -37,7 +37,7 @@ from fastapi import FastAPI, HTTPException, Request
 from PIL import Image
 from pydantic import BaseModel
 
-from models import ADAPTERS
+from models import resolve_adapter
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
@@ -170,7 +170,7 @@ adapter = None
 def _startup():
     global worker, adapter
     logger.info(f"Loading {MODEL_NAME} on {DEVICE}")
-    adapter = ADAPTERS[MODEL_NAME](device=DEVICE)
+    adapter = resolve_adapter(MODEL_NAME, device=DEVICE)
     worker = BatchWorker(adapter, max_batch_size=MAX_BATCH_SIZE, max_wait_s=MAX_WAIT_MS / 1000)
     logger.info(
         f"Ready: model={MODEL_NAME} device={DEVICE} "

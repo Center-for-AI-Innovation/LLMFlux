@@ -9,7 +9,14 @@
 #SBATCH --error=logs/%j.err
 #
 # Usage:
-#   sbatch --account=<your_account> submit.sbatch <input_dir> <output_csv> <conch|musk> [text_prompts.json]
+#   sbatch --account=<your_account> submit.sbatch <input_dir> <output_csv> <model> [text_prompts.json]
+#
+# <model> is "conch", "musk", "test", or a spec for a model with no bespoke
+# adapter: "openclip:<hf-repo>" (e.g. openclip:wisdomik/QuiltNet-B-32),
+# "openclip:<arch>@<hf-repo>/<filename>" (e.g.
+# openclip:ViT-B-16@jamessyx/PathGen-CLIP/pathgenclip.pt), or
+# "hfclip:<hf-repo>" (e.g. hfclip:openai/clip-vit-base-patch32). See
+# models.py's resolve_adapter() / README.md.
 #
 # Standalone job — does not use SlurmRunner or any LLMFlux engine. Adjust the
 # environment activation below to however you installed requirements.txt plus
