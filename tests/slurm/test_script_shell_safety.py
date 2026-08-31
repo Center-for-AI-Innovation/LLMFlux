@@ -298,6 +298,35 @@ class TestServeModeMultiNode(unittest.TestCase):
     def test_batch_mode_has_no_api_key(self):
         self.assertNotIn("--api-key", self._rank_body("batch"))
 
+    def test_trap_tears_down_the_whole_deployment(self):
+        """pkill only reaches the batch host; workers live on other nodes."""
+        script = build_text("vllm", "serve", nodes="2")
+        trap = next(l for l in script.splitlines() if l.startswith("trap "))
+        self.assertIn("$CONNECTION_FILE", trap, "the key-bearing file must still go")
+        self.assertIn("VLLM_PID", trap, "must kill the srun step, not just local procs")
+
+
+class TestPublishedEndpointParity(unittest.TestCase):
+    """Every address a serve job publishes must come from one resolved value.
+
+    Swept over both engines, and deliberately NOT part of
+    `TestServeModeMultiNode`: nothing here is multi-node-specific, and living in
+    a class whose other tests all read the vLLM per-rank launcher heredoc is
+    what kept these checks vLLM-only. The Ollama builder is an independent copy
+    of the same logic, and it shipped 2.0.0 with all three sites calling
+    `$(hostname)` separately, while the release notes described the resolved
+    behaviour unconditionally. That drift is what this class exists to catch.
+    """
+
+    #: (engine, nodes, expected right-hand side of the assignment). Ollama is
+    #: single-node only — topology.resolve rejects it above one node at submit
+    #: time — so it has no fabric-address branch to pin.
+    SHAPES = [
+        ("vllm", "1", '"$(hostname -s)"'),
+        ("vllm", "2", '"$LLMFLUX_MASTER_ADDR"'),
+        ("ollama", "1", '"$(hostname -s)"'),
+    ]
+
     def test_every_published_address_comes_from_one_expression(self):
         """`hostname` returns the FQDN here, which resolves to IPv6 link-local
         only — a client dialling it gets nothing.
@@ -307,11 +336,19 @@ class TestServeModeMultiNode(unittest.TestCase):
         three must read the same variable, or one job advertises two addresses
         and the reader has no way to tell which one works.
         """
-        for nodes, expected in (("1", '"$(hostname -s)"'), ("2", '"$LLMFLUX_MASTER_ADDR"')):
-            with self.subTest(nodes=nodes):
-                script = build_text("vllm", "serve", nodes=nodes)
+        for engine, nodes, expected in self.SHAPES:
+            with self.subTest(engine=engine, nodes=nodes):
+                script = build_text(engine, "serve", nodes=nodes)
                 lines = script.splitlines()
-                assign = next(l for l in lines if l.startswith("LLMFLUX_ENDPOINT_HOST="))
+                assign = next(
+                    (l for l in lines if l.startswith("LLMFLUX_ENDPOINT_HOST=")),
+                    None,
+                )
+                self.assertIsNotNone(
+                    assign,
+                    f"{engine}-serve-n{nodes} derives no single endpoint host, so "
+                    f"each publication site resolves the address independently",
+                )
                 self.assertEqual(assign, f"LLMFLUX_ENDPOINT_HOST={expected}")
 
                 published = [
@@ -325,18 +362,13 @@ class TestServeModeMultiNode(unittest.TestCase):
 
     def test_endpoint_host_is_assigned_before_it_is_published(self):
         """An expansion above its assignment is empty, not an error."""
-        for nodes in ("1", "2"):
-            with self.subTest(nodes=nodes):
-                lines = build_text("vllm", "serve", nodes=nodes).splitlines()
-                assign = next(i for i, l in enumerate(lines)
-                              if l.startswith("LLMFLUX_ENDPOINT_HOST="))
-                first_use = next(i for i, l in enumerate(lines)
-                                 if "$LLMFLUX_ENDPOINT_HOST" in l)
+        for engine, nodes, _expected in self.SHAPES:
+            with self.subTest(engine=engine, nodes=nodes):
+                lines = build_text(engine, "serve", nodes=nodes).splitlines()
+                assign = next((i for i, l in enumerate(lines)
+                               if l.startswith("LLMFLUX_ENDPOINT_HOST=")), None)
+                first_use = next((i for i, l in enumerate(lines)
+                                  if "$LLMFLUX_ENDPOINT_HOST" in l), None)
+                self.assertIsNotNone(assign, "no endpoint host is derived at all")
+                self.assertIsNotNone(first_use, "the derived host is never published")
                 self.assertLess(assign, first_use)
-
-    def test_trap_tears_down_the_whole_deployment(self):
-        """pkill only reaches the batch host; workers live on other nodes."""
-        script = build_text("vllm", "serve", nodes="2")
-        trap = next(l for l in script.splitlines() if l.startswith("trap "))
-        self.assertIn("$CONNECTION_FILE", trap, "the key-bearing file must still go")
-        self.assertIn("VLLM_PID", trap, "must kill the srun step, not just local procs")

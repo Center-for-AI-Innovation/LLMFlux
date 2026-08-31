@@ -2,6 +2,7 @@
 """Benchmark utilities for generating test datasets and computing metrics."""
 
 import json
+import os
 import random
 import re
 import shutil
@@ -15,13 +16,65 @@ from typing import List, Dict, Any, Optional
 import requests
 
 
-BENCHMARK_DATA_DIR = Path(__file__).resolve().parent / "benchmark_data"
+def default_benchmark_data_dir() -> Path:
+    """Resolve where benchmark data belongs, without creating anything.
+
+    Resolution is deliberate rather than relative to this file. `llmflux
+    benchmark` downloads the LiveBench dataset into this directory, and the
+    installed package directory is the wrong place for it twice over: on a site
+    install it is read-only, so the subcommand cannot run at all; where it is
+    writable, the dataset is written into the install tree, shared by every user
+    of that install and lost on upgrade.
+
+    Precedence mirrors Config's, so the same environment points both at the same
+    tree:
+
+    1. ``LLMFLUX_BENCHMARK_DATA_DIR`` — the dedicated override.
+    2. ``$LLMFLUX_DATA_DIR/benchmark`` — benchmark data is data.
+    3. ``$LLMFLUX_WORKSPACE/data/benchmark``, workspace defaulting to the
+       current directory, matching Config's own default for data_dir.
+
+    Resolved on each call rather than at import, so that setting the
+    environment after import — which is what the CLI does — still takes effect,
+    and so that importing this module touches no filesystem.
+    """
+    explicit = os.getenv("LLMFLUX_BENCHMARK_DATA_DIR")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+
+    data_dir = os.getenv("LLMFLUX_DATA_DIR")
+    if data_dir:
+        return Path(data_dir).expanduser().resolve() / "benchmark"
+
+    workspace = os.getenv("LLMFLUX_WORKSPACE") or Path.cwd()
+    return Path(workspace).expanduser().resolve() / "data" / "benchmark"
 
 
-def ensure_benchmark_data_dir() -> Path:
-    """Create the benchmark data directory if it does not exist."""
-    BENCHMARK_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    return BENCHMARK_DATA_DIR
+def ensure_benchmark_data_dir(path: Optional[Path] = None) -> Path:
+    """Create the benchmark data directory if it does not exist.
+
+    Args:
+        path: Directory to use. Defaults to default_benchmark_data_dir().
+
+    Returns:
+        The directory, which exists on return.
+
+    Raises:
+        OSError: If the directory cannot be created or is not writable. The
+            message names the path, because the caller cannot otherwise tell
+            which of three environment variables produced it.
+    """
+    target = Path(path).expanduser().resolve() if path is not None else default_benchmark_data_dir()
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        if not os.access(target, os.W_OK):
+            raise PermissionError(f"Directory is not writable: {target}")
+    except OSError as exc:
+        raise OSError(
+            f"Cannot use benchmark data directory '{target}': {exc}. "
+            f"Set LLMFLUX_BENCHMARK_DATA_DIR to a writable path."
+        ) from exc
+    return target
 
 
 def generate_synthetic_prompts(

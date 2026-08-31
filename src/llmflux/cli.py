@@ -31,7 +31,7 @@ from .slurm.commands import (
     extract_state,
 )
 from .processors import BatchProcessor
-from .core.config import Config, EngineConfig
+from .core.config import Config, ConfigDirectoryError, EngineConfig
 from .core.registry import JobRegistry
 from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
 
@@ -79,13 +79,36 @@ def _parse_elapsed_to_seconds(elapsed: str) -> float:
         return 0.0
 
 
-def _ensure_container(config: "Config") -> bool:
-    """Build the Apptainer image on the current node if it does not exist.
+def _ensure_container(config: "Config", rebuild: bool = False) -> bool:
+    """Make sure the job will find an image, building it here if it must.
 
-    Returns True if the image is ready, False on failure.
+    Args:
+        config: the resolved configuration.
+        rebuild: the caller passed --rebuild, so the generated job script will
+            run `apptainer build --force` into CONTAINERS_DIR itself. Nothing is
+            built here, but the directory still has to be writable or the job is
+            submitted only to fail after it has been allocated GPUs.
+
+    Returns True if the job can proceed, False on failure.
     """
     import os
-    sif_path = Path(config.containers_dir) / "llm_processor.sif"
+    containers_dir = Path(config.containers_dir)
+    sif_path = containers_dir / "llm_processor.sif"
+
+    if rebuild:
+        if not os.access(containers_dir, os.W_OK):
+            print(
+                f"Error: --rebuild writes the image into {containers_dir}, "
+                "which is not writable.\n"
+                "       The job would be submitted and then fail after it had "
+                "been allocated GPUs.\n"
+                "       Point LLMFLUX_CONTAINERS_DIR at a writable directory, or "
+                "drop --rebuild to use the image already staged there.",
+                file=sys.stderr,
+            )
+            return False
+        return True
+
     if sif_path.exists():
         return True
 
@@ -94,7 +117,19 @@ def _ensure_container(config: "Config") -> bool:
         print(f"Error: container.def not found at {container_def}", file=sys.stderr)
         return False
 
-    containers_dir = Path(config.containers_dir)
+    if not os.access(containers_dir, os.W_OK):
+        # The image is allowed to live in a directory LLMFlux cannot write to —
+        # a site staging it for all users is the point. But then it has to
+        # actually be there; building it here is not an option.
+        print(
+            f"Error: container image not found at {sif_path}, and "
+            f"{containers_dir} is not writable, so it cannot be built there.\n"
+            "       Point LLMFLUX_CONTAINERS_DIR at a writable directory, or ask "
+            "whoever owns that one to stage llm_processor.sif in it.",
+            file=sys.stderr,
+        )
+        return False
+
     apptainer_tmp = Path(config.workspace) / "tmp"
     apptainer_cache = apptainer_tmp / "cache"
     apptainer_tmp.mkdir(parents=True, exist_ok=True)
@@ -164,7 +199,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
         output_path = f"results/benchmarks/{name}_results.json"
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
-    if not getattr(args, "rebuild", False) and not _ensure_container(config):
+    if not _ensure_container(config, rebuild=getattr(args, "rebuild", False)):
         return 1
     slurm_overrides = {
         key: value for key, value in {
@@ -300,7 +335,7 @@ def _run_command(args: argparse.Namespace) -> int:
 
     # Initialize config - engine will be automatically detected from SLURM_ENGINE env var
     config = Config()
-    if not getattr(args, "rebuild", False) and not _ensure_container(config):
+    if not _ensure_container(config, rebuild=getattr(args, "rebuild", False)):
         return 1
 
     # Override engine if provided via CLI
@@ -1081,7 +1116,14 @@ def main(argv: list[str] | None = None) -> int:
     if not hasattr(args, "func"):
         parser.print_help()
         return 2
-    return args.func(args)
+    try:
+        return args.func(args)
+    except ConfigDirectoryError as exc:
+        # A directory the user (or their site's module file) pointed LLMFlux at
+        # is unusable. That is a configuration mistake with an obvious remedy,
+        # so report it and exit rather than showing a traceback.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

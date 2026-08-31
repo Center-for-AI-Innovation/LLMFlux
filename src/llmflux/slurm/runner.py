@@ -153,6 +153,34 @@ class SlurmRunner:
         ]:
             directory.mkdir(parents=True, exist_ok=True)
     
+    def _staging_dir(self) -> Path:
+        """Where to copy an input file the job would not otherwise be able to see.
+
+        data_input_dir is the natural home and stays the default, so an ordinary
+        install is unaffected. But that directory may legitimately be read-only
+        — a site-staged, admin-owned prompt directory is exactly the case the
+        input/output split was added for — and copying into it then fails, which
+        is what made "read-only input directory" only half-supported.
+
+        The fallback is the workspace, which is guaranteed writable (Config
+        validates it as such) and which the visibility test immediately above
+        already treats as reachable by the job on the same terms as
+        data_input_dir. Staging there keeps the read-only case working without
+        making the job's view of the file any weaker than it was.
+
+        Returns:
+            A writable directory to copy the input file into.
+        """
+        if os.access(self.data_input_dir, os.W_OK):
+            return self.data_input_dir
+
+        staging = self.workspace / "staged-input"
+        logger.info(
+            f"Input directory {self.data_input_dir} is not writable; "
+            f"staging the input file in {staging} instead."
+        )
+        return staging
+
     def _setup_environment(self, workspace: Optional[str] = None) -> Dict[str, str]:
         """Setup environment variables for SLURM job.
         
@@ -446,20 +474,25 @@ class SlurmRunner:
         config.ensure_directory(input_file.parent if input_file.is_file() else input_file)
         config.ensure_directory(output_file.parent)
         
+        # A directory is never a valid input, wherever it sits. This check used
+        # to live inside the not-already-visible branch, so a directory under
+        # the workspace or data_input_dir was submitted and only failed inside
+        # the container, after the allocation had been granted.
+        if input_file.is_dir():
+            raise ValueError(
+                f"Input must be a JSONL file, got a directory: {input_file}"
+            )
+
         # Copy input into the data input dir only if the job can't already see it
         already_visible = (
             input_file.is_relative_to(self.workspace)
             or input_file.is_relative_to(self.data_input_dir)
         )
         if not already_visible and input_file.exists():
-            if input_file.is_dir():
-                raise ValueError(
-                    f"Input must be a JSONL file, got a directory: {input_file}"
-                )
-            workspace_input = self.data_input_dir / input_file.name
-            workspace_input.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(input_file, workspace_input)
-            input_file = workspace_input
+            staged_input = self._staging_dir() / input_file.name
+            staged_input.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(input_file, staged_input)
+            input_file = staged_input
         
         # Setup environment
         env = self._setup_environment()

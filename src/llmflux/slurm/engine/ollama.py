@@ -160,10 +160,22 @@ def create_ollama_batch_script(
             "# CONNECTION_FILE was defined earlier alongside the cleanup trap.",
             "(umask 077 && mkdir -p \"$(dirname $CONNECTION_FILE)\")",
             "chmod 700 \"$HOME/.llmflux\" \"$HOME/.llmflux/serve\" \"$(dirname $CONNECTION_FILE)\"",
+            # Resolved once and reused everywhere this job publishes an address,
+            # so the connection file and the notification email cannot disagree.
+            # Previously all three sites called $(hostname) independently.
+            #
+            # hostname returns the FQDN on these compute nodes, and an FQDN here
+            # resolves to IPv6 link-local ONLY — a client dialling it gets
+            # nothing. The short name is resolvable.
+            #
+            # Unlike vLLM there is no nodes>1 branch: topology.resolve rejects
+            # Ollama above one node at submit time, so the short name is the
+            # only address this path can ever publish.
+            "LLMFLUX_ENDPOINT_HOST=\"$(hostname -s)\"",
             "(umask 077 && cat > \"$CONNECTION_FILE\" <<EOF",
             "{",
             "  \"job_id\": \"$SLURM_JOB_ID\",",
-            "  \"node\": \"$(hostname)\",",
+            "  \"node\": \"$LLMFLUX_ENDPOINT_HOST\",",
             "  \"port\": $OLLAMA_PORT,",
             "  \"model\": \"$OLLAMA_MODEL_NAME\",",
             "  \"api_key\": \"$LLMFLUX_API_KEY\",",
@@ -181,7 +193,7 @@ def create_ollama_batch_script(
             "Your LLMFlux serve job has finished loading and is ready to use.",
             "",
             "  Job ID:   $SLURM_JOB_ID",
-            "  Endpoint: http://$(hostname):$OLLAMA_PORT/v1",
+            "  Endpoint: http://$LLMFLUX_ENDPOINT_HOST:$OLLAMA_PORT/v1",
             "  API Key:  $LLMFLUX_API_KEY",
             "  Model:    $OLLAMA_MODEL_NAME",
             "  Engine:   ollama",
@@ -189,7 +201,7 @@ def create_ollama_batch_script(
             "Example usage:",
             "",
             "  from openai import OpenAI",
-            "  client = OpenAI(base_url=\"http://$(hostname):$OLLAMA_PORT/v1\", api_key=\"$LLMFLUX_API_KEY\")",
+            "  client = OpenAI(base_url=\"http://$LLMFLUX_ENDPOINT_HOST:$OLLAMA_PORT/v1\", api_key=\"$LLMFLUX_API_KEY\")",
             "  response = client.chat.completions.create(",
             "      model=\"$OLLAMA_MODEL_NAME\",",
             "      messages=[{\"role\": \"user\", \"content\": \"Hello!\"}]",
@@ -201,6 +213,15 @@ def create_ollama_batch_script(
             "",
             "# Keep alive until wall time or scancel",
             "wait $OLLAMA_PID",
+            # Without this the script's last command is the cleanup `if` block,
+            # so a serve job whose server collapsed still exits 0 and sacct says
+            # COMPLETED — `#SBATCH --mail-type=FAIL` never fires and the user is
+            # told nothing. Captured immediately: anything between `wait` and
+            # here overwrites $?.
+            "LLMFLUX_SERVE_RC=$?",
+            "# scancel and Ctrl-C are how a serve job normally ends; those are not",
+            "# failures.",
+            "case \"$LLMFLUX_SERVE_RC\" in 130|143) LLMFLUX_SERVE_RC=0 ;; esac",
         ] if mode == "serve" else [
             "# Run processor",
             f"{shlex.quote(sys.executable)} -c \"",
@@ -265,6 +286,11 @@ def create_ollama_batch_script(
             "# whatever cleanup returned, so a run whose every item failed still\n"
             "# reports success and the job looks complete.",
             "exit ${BATCH_RC:-0}",
-        ] if mode != "serve" else []),
+        ] if mode != "serve" else [
+            "# Exit with the server's status. Without this the script exits with\n"
+            "# whatever cleanup returned, so a serve job whose server died still\n"
+            "# reports success and the job looks complete.",
+            "exit ${LLMFLUX_SERVE_RC:-0}",
+        ]),
     ])
     return job_script

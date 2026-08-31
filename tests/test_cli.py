@@ -276,6 +276,12 @@ class TestRunCommand:
         mock_config = MagicMock()
         mock_slurm_config = MagicMock()
         mock_config.get_slurm_config.return_value = mock_slurm_config
+        # This test sets args.rebuild = True, and a rebuild writes the image
+        # into containers_dir, so the directory has to be a real writable one.
+        # A bare MagicMock attribute is a path that does not exist and is
+        # correctly refused.
+        mock_config.containers_dir = str(temp_dir)
+        mock_config.workspace = Path(temp_dir)   # real Config.workspace is a Path
         mock_config_class.return_value = mock_config
         
         mock_runner = MagicMock()
@@ -511,6 +517,12 @@ class TestBenchmarkCommand:
         mock_config = MagicMock()
         mock_slurm_config = MagicMock()
         mock_config.get_slurm_config.return_value = mock_slurm_config
+        # args.rebuild is True below, and a rebuild writes the image into
+        # containers_dir, so it has to be a real writable directory rather than
+        # a MagicMock attribute (which is a non-existent path, correctly
+        # refused).
+        mock_config.containers_dir = str(temp_dir)
+        mock_config.workspace = Path(temp_dir)   # real Config.workspace is a Path
         mock_config_class.return_value = mock_config
         
         mock_runner = MagicMock()
@@ -1886,3 +1898,212 @@ class TestTopologyErrorPresentation:
         err = capsys.readouterr().err
         assert "--nodes 2 was requested" in err
         assert "Traceback" not in err
+
+
+class TestUnusableDirectoryPresentation:
+    """A directory the site's module file points at is a configuration
+    mistake, not a crash.
+
+    LLMFLUX_CONTAINERS_DIR is set by the deployed Lmod module to a versioned,
+    service-account-owned directory. Before the access requirements were split
+    by what LLMFlux actually does with each directory, that made every
+    `llmflux run` on the deployed module end in an unhandled OSError traceback
+    from inside the Config constructor.
+    """
+
+    def _unwritable(self, tmp_path, name):
+        path = tmp_path / name
+        path.mkdir(parents=True, exist_ok=True)
+        path.chmod(0o555)
+        if os.access(path, os.W_OK):
+            pytest.skip("cannot make a directory unwritable here (root, or ACLs)")
+        return path
+
+    def test_main_reports_it_and_exits_one(self, tmp_path, sample_jsonl, capsys):
+        ro = self._unwritable(tmp_path, "logs")
+        try:
+            with patch.dict(os.environ, {
+                "LLMFLUX_WORKSPACE": str(tmp_path),
+                "LLMFLUX_LOGS_DIR": str(ro),
+            }):
+                result = main([
+                    "run", "--input", str(sample_jsonl),
+                    "--output", str(tmp_path / "out.json"),
+                    "--model", "Llama-3.2-3B-Instruct",
+                ])
+        finally:
+            ro.chmod(0o755)
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert str(ro) in captured.err
+        assert "LLMFLUX_LOGS_DIR" in captured.err, (
+            "the message must name the variable to change"
+        )
+        assert "Traceback" not in captured.err
+
+    def test_a_read_only_containers_dir_no_longer_stops_the_command(
+        self, tmp_path, sample_jsonl,
+    ):
+        """The #138 regression itself, through the CLI.
+
+        Getting past Config construction is the whole fix; the command is
+        expected to go on and fail later for want of a real SLURM, which is why
+        this asserts on the exception type rather than the return code.
+        """
+        from llmflux.core.config import ConfigDirectoryError
+
+        ro = self._unwritable(tmp_path, "containers")
+        try:
+            with patch.dict(os.environ, {
+                "LLMFLUX_WORKSPACE": str(tmp_path),
+                "LLMFLUX_CONTAINERS_DIR": str(ro),
+            }), patch("llmflux.cli._ensure_container", return_value=True), \
+                    patch("llmflux.cli.SlurmRunner") as runner:
+                runner.return_value.run.return_value = "12345"
+                result = main([
+                    "run", "--input", str(sample_jsonl),
+                    "--output", str(tmp_path / "out.json"),
+                    "--model", "Llama-3.2-3B-Instruct",
+                ])
+        except ConfigDirectoryError as exc:
+            pytest.fail(
+                f"a read-only containers_dir still stops `llmflux run`: {exc}"
+            )
+        finally:
+            ro.chmod(0o755)
+
+        assert result == 0
+
+
+class TestEnsureContainerOnAReadOnlyDirectory:
+    """Relaxing the write requirement moves the failure, so it must land well.
+
+    With the image present, a read-only containers_dir is the supported site
+    deployment. With it absent, LLMFlux cannot build it there — and must say so
+    rather than invoking apptainer and letting it fail on write.
+    """
+
+    def _config(self, tmp_path, containers_dir):
+        config = MagicMock()
+        config.containers_dir = str(containers_dir)
+        config.workspace = str(tmp_path)
+        return config
+
+    def test_present_image_is_used(self, tmp_path):
+        from llmflux.cli import _ensure_container
+
+        containers = tmp_path / "containers"
+        containers.mkdir()
+        (containers / "llm_processor.sif").touch()
+        containers.chmod(0o555)
+        try:
+            if os.access(containers, os.W_OK):
+                pytest.skip("cannot make a directory unwritable here")
+            with patch("llmflux.cli.subprocess.run") as run:
+                assert _ensure_container(self._config(tmp_path, containers)) is True
+            run.assert_not_called()
+        finally:
+            containers.chmod(0o755)
+
+    def test_missing_image_is_reported_without_attempting_a_build(
+        self, tmp_path, capsys,
+    ):
+        from llmflux.cli import _ensure_container
+
+        containers = tmp_path / "containers"
+        containers.mkdir()
+        containers.chmod(0o555)
+        try:
+            if os.access(containers, os.W_OK):
+                pytest.skip("cannot make a directory unwritable here")
+            with patch("llmflux.cli.subprocess.run") as run:
+                assert _ensure_container(self._config(tmp_path, containers)) is False
+            assert not run.called, (
+                "apptainer must not be run against a directory it cannot write"
+            )
+        finally:
+            containers.chmod(0o755)
+
+        err = capsys.readouterr().err
+        assert "not writable" in err
+        assert "LLMFLUX_CONTAINERS_DIR" in err
+
+
+class TestRebuildIntoAReadOnlyContainerDir:
+    """--rebuild must not submit a job that is guaranteed to fail.
+
+    The writability guard lived in `_ensure_container`, but both `_run_command`
+    and `_benchmark_command` skipped that call entirely when --rebuild was set,
+    while the generated script honours LLMFLUX_FORCE_REBUILD=1 by running
+    `apptainer build --force $CONTAINERS_DIR/llm_processor.sif`. So on the very
+    deployment the read-only support exists for — an admin-owned shared
+    container directory — `--rebuild` sailed past the guard, allocated GPUs, and
+    only then failed on the write.
+    """
+
+    def _config(self, tmp_path, containers_dir):
+        config = MagicMock()
+        config.containers_dir = str(containers_dir)
+        config.workspace = str(tmp_path)
+        return config
+
+    def _read_only_containers(self, tmp_path, with_image):
+        d = tmp_path / "containers"
+        d.mkdir()
+        if with_image:
+            (d / "llm_processor.sif").touch()
+        d.chmod(0o555)
+        if os.access(d, os.W_OK):
+            pytest.skip("cannot make a directory unwritable here (root, or ACLs)")
+        return d
+
+    @pytest.mark.parametrize("with_image", [True, False])
+    def test_rebuild_is_refused_when_the_dir_is_not_writable(
+        self, tmp_path, capsys, with_image
+    ):
+        """Refused even when the image is already there: --rebuild overwrites it."""
+        from llmflux.cli import _ensure_container
+
+        d = self._read_only_containers(tmp_path, with_image)
+        try:
+            with patch("llmflux.cli.subprocess.run") as run:
+                assert _ensure_container(self._config(tmp_path, d), rebuild=True) is False
+            assert not run.called
+        finally:
+            d.chmod(0o755)
+
+        err = capsys.readouterr().err
+        assert "--rebuild" in err
+        assert "not writable" in err
+        assert "LLMFLUX_CONTAINERS_DIR" in err
+
+    def test_rebuild_is_allowed_when_the_dir_is_writable(self, tmp_path):
+        """The normal case must be untouched, and must not build locally —
+        the job does the rebuild itself."""
+        from llmflux.cli import _ensure_container
+
+        d = tmp_path / "containers"
+        d.mkdir()
+        with patch("llmflux.cli.subprocess.run") as run:
+            assert _ensure_container(self._config(tmp_path, d), rebuild=True) is True
+        assert not run.called, "--rebuild must not build on the submit node"
+
+    def test_run_command_refuses_rather_than_submitting(self, tmp_path, sample_jsonl, capsys):
+        """Through the CLI: no SLURM submission happens."""
+        d = self._read_only_containers(tmp_path, with_image=True)
+        try:
+            with patch.dict(os.environ, {
+                "LLMFLUX_WORKSPACE": str(tmp_path),
+                "LLMFLUX_CONTAINERS_DIR": str(d),
+            }), patch("llmflux.cli.SlurmRunner") as runner:
+                result = main([
+                    "run", "--input", str(sample_jsonl),
+                    "--output", str(tmp_path / "out.json"),
+                    "--model", "Llama-3.2-3B-Instruct", "--rebuild",
+                ])
+            assert result == 1
+            assert not runner.return_value.run.called, "a doomed job was submitted"
+        finally:
+            d.chmod(0o755)
+        assert "not writable" in capsys.readouterr().err
