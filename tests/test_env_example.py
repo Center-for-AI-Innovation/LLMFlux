@@ -17,20 +17,12 @@ from dotenv import load_dotenv
 
 ENV_EXAMPLE = Path(__file__).resolve().parents[1] / ".env.example"
 
-# Blank entries that predate the check. Each one clobbers an exported value the
-# same way; they are grandfathered here so new blanks fail the test rather than
-# joining them silently. Removing a name from this list is always safe.
-KNOWN_BLANK_ENTRIES = {
-    "LLMFLUX_WORKSPACE",
-    "LLMFLUX_DATA_DIR",
-    "LLMFLUX_DATA_INPUT_DIR",
-    "LLMFLUX_DATA_OUTPUT_DIR",
-    "LLMFLUX_MODELS_DIR",
-    "LLMFLUX_LOGS_DIR",
-    "LLMFLUX_CONTAINERS_DIR",
-    "SLURM_ACCOUNT",
-    "HF_HOME",
-}
+# Blank entries that predate the check, grandfathered so that new blanks fail the
+# test rather than joining them silently. Now empty: every entry was commented
+# out for 2.0.0, so the guard below is fully enforcing rather than frozen around
+# nine known offenders. Removing a name from this list is always safe; adding
+# one should be a deliberate decision, not a way to make this test pass.
+KNOWN_BLANK_ENTRIES = set()
 
 
 def _assignments():

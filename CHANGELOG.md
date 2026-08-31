@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-08-31
 
 ### Breaking
 
@@ -29,6 +29,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at `nodes > 1`, the short hostname at `nodes == 1` — rather than `$(hostname)`,
   which returns an FQDN that can resolve to IPv6 link-local only. Anything
   parsing that field should expect either form.
+- **`Config.__init__` gained `workspace` as its first positional parameter, and
+  `data_input_dir` / `data_output_dir` at positions three and four.** Every
+  positional caller silently retargets rather than raising: `Config("/my/data")`
+  set `data_dir` at 1.0.0 and sets `workspace` now, with `data_dir` defaulting to
+  `{workspace}/data`. `models_dir`, `logs_dir` and `containers_dir` shift by three
+  positions, so a 1.0.0 `Config(d, m, l, c)` now reads as
+  `workspace=d, data_dir=m, data_input_dir=l, data_output_dir=c` — the entire
+  derived directory tree moves with no error and no warning. **Pass these as
+  keyword arguments.** The 1.0.0 signature was
+  `(data_dir, models_dir, logs_dir, containers_dir, slurm, models, engine)`.
+- **`llmflux connect` now validates the `node` and `port` it reads from
+  `connection.json`; 1.0.0 performed no validation.** The connection file lives on
+  a shared filesystem, so an unvalidated node or port lets anyone who can plant
+  one steer our HTTP request (SSRF) or inject options into the suggested `ssh`
+  command. Now rejected: hostnames that are not RFC 1123; `localhost` as the first
+  or last label; loopback, link-local, multicast, unspecified and reserved IP
+  literals; the legacy IPv4 encodings the OS resolver still honours (decimal, hex,
+  octal, and short forms like `127.1`), caught by resolving the name through
+  `getaddrinfo` and re-checking every address it maps to; and ports outside
+  `[1024, 65535]`, since engine servers always bind unprivileged ports. An
+  unresolvable name is left alone — there is no SSRF reach to guard against. A
+  connection file advertising a loopback address or a privileged port, which 1.0.0
+  accepted, now raises `ValueError`
+  (see [#109](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/109)).
+- **A directory passed to `--input` now raises instead of being accepted.**
+  1.0.0 let a directory through to the copy path, where it failed later and less
+  clearly.
+- **`llmflux.benchmark_utils.BENCHMARK_DATA_DIR` is removed.** Benchmark data no
+  longer lives inside the installed package. Use `ensure_benchmark_data_dir()`,
+  which resolves it at call time (below).
 
 ### Added
 
@@ -97,9 +127,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `{data_dir}/output`. This allows a read-only input location on one filesystem
   and results written to another
   (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
+- `LLMFLUX_NODE_PATTERN`, an optional `re.fullmatch` allowlist regex for the node
+  name in `connection.json`, applied on top of the checks above. A site that knows
+  its compute nodes are `gpu[a-z]*\d+` can reject anything else outright. An
+  invalid regex raises rather than being ignored.
+- `LLMFLUX_BENCHMARK_DATA_DIR`, to place the LiveBench benchmark dataset
+  explicitly. Defaults to `$LLMFLUX_DATA_DIR/benchmark`, then
+  `$LLMFLUX_WORKSPACE/data/benchmark`.
 
 ### Changed
 
+- Directory configuration values are now `expanduser()`d and `resolve()`d, so
+  `~/work` and relative paths behave the same wherever they are read. 1.0.0 stored
+  them verbatim (`config.py` went from 0 to 7 `expanduser` call sites).
+- Configured directories are now checked at `Config()` construction, and the
+  requirement differs by what LLMFlux does with each. The container, input and
+  models directories are only ever read, so they may be read-only — which is what
+  an admin-managed site install and the read-only input location both require —
+  and need only be readable and traversable. The workspace, data, output and log
+  directories are written to and must be writable. An unusable directory raises
+  `ConfigDirectoryError`, a subclass of `OSError`, naming the setting and the
+  environment variable that sets it; `llmflux` reports it as a configuration
+  error rather than a traceback
+  (see [#138](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/138)).
+- Every blank `KEY=` assignment in `.env.example` is now commented out. `.env` is
+  loaded with `override=True` and python-dotenv parses a bare `KEY=` as `''`, so
+  following the documented `cp .env.example .env` erased values exported in the
+  shell. This mattered most for `LLMFLUX_CONTAINERS_DIR`, which a site's module
+  file sets to the directory holding the shared container image, and for
+  `HF_HOME`, where it silently relocates a populated model cache.
 - `vision_to_jsonl()` no longer drops images without telling the caller, and
   its size limit is more realistic. `max_image_size` defaults to 25MB instead
   of 10MB: 12MP phone JPEGs are 2-6MB, but 48MP phones, DSLR JPEGs and
@@ -137,6 +193,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (see [#121](https://github.com/Center-for-AI-Innovation/LLMFlux/pull/121)).
 
 ### Fixed
+
+- `llmflux benchmark` no longer writes into the installed package. The LiveBench
+  dataset was downloaded to a directory resolved relative to `benchmark_utils.py`
+  itself, which fails outright on a site install where the package directory is
+  read-only, and otherwise writes shared data into the install tree where it is
+  lost on upgrade. It now resolves under the workspace — see
+  `LLMFLUX_BENCHMARK_DATA_DIR` above — and reports an unusable directory by name.
+- `llmflux serve --engine ollama` now exits with the server's status and
+  publishes one resolved endpoint host, matching the vLLM path. Both behaviours
+  are described unconditionally above but had been implemented for vLLM only:
+  the Ollama script ended with its cleanup block, so a collapsed server still
+  reported success, and its three publication sites each called `$(hostname)`
+  independently.
 - The generated batch stage now runs under the interpreter that generated it
   (`sys.executable`) instead of resolving a bare `python3` from whatever `PATH`
   the compute node inherits. The `llmflux` CLI has an absolute shebang and is
