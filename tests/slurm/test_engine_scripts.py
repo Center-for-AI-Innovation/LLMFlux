@@ -329,46 +329,72 @@ class TestServeTeardownParity(unittest.TestCase):
 class TestServeExitStatus(unittest.TestCase):
     """A serve job whose deployment collapses must not report success.
 
-    Without this the script's last command is `kill -9 ... || true`, so the exit
-    status is unconditionally 0: sacct says COMPLETED, `#SBATCH --mail-type=FAIL`
-    never fires, and `llmflux connect` only reports that the file is gone. At
-    nodes>1 `srun --kill-on-bad-exit=1` makes this status the only in-band signal
-    that a remote rank died.
+    Without this the exit status is unconditionally 0 — the script's last
+    command is cleanup, not the server (`kill -9 ... || true` on the vLLM path,
+    the `rm -rf` guard on the Ollama one). sacct then says COMPLETED,
+    `#SBATCH --mail-type=FAIL` never fires, and `llmflux connect` only reports
+    that the file is gone. At nodes>1 `srun --kill-on-bad-exit=1` makes this
+    status the only in-band signal that a remote rank died.
+
+    Swept over both engines. This was written for vLLM only, which is exactly
+    why the Ollama serve path shipped 2.0.0 with no exit-status handling at all
+    while the release notes claimed the behaviour unconditionally: a test that
+    builds one engine cannot see the other drift.
     """
 
-    def _script(self, nodes):
+    #: (engine, nodes, server-PID variable). Ollama is single-node only —
+    #: topology.resolve rejects it above one node at submit time — so it
+    #: contributes just the n=1 shape.
+    SHAPES = [
+        ("vllm", "1", "VLLM_PID"),
+        ("vllm", "2", "VLLM_PID"),
+        ("ollama", "1", "OLLAMA_PID"),
+    ]
+
+    def _script(self, engine, nodes):
         from tests.slurm.helpers import build_text
-        return build_text("vllm", "serve", nodes=nodes)
+        return build_text(engine, "serve", nodes=nodes)
 
     def test_serve_exits_with_the_server_status(self):
-        for nodes in ("1", "2"):
-            with self.subTest(nodes=nodes):
-                lines = [l for l in self._script(nodes).splitlines() if l.strip()]
+        for engine, nodes, _pid in self.SHAPES:
+            with self.subTest(engine=engine, nodes=nodes):
+                lines = [l for l in self._script(engine, nodes).splitlines() if l.strip()]
                 self.assertEqual(lines[-1], "exit ${LLMFLUX_SERVE_RC:-0}")
 
     def test_the_status_is_captured_immediately_after_wait(self):
         """Anything between `wait` and the capture overwrites $?."""
-        for nodes in ("1", "2"):
-            with self.subTest(nodes=nodes):
-                lines = self._script(nodes).splitlines()
-                i = next(i for i, l in enumerate(lines) if l.startswith("wait $VLLM_PID"))
+        for engine, nodes, pid in self.SHAPES:
+            with self.subTest(engine=engine, nodes=nodes):
+                lines = self._script(engine, nodes).splitlines()
+                i = next(i for i, l in enumerate(lines) if l.startswith(f"wait ${pid}"))
                 self.assertEqual(lines[i + 1], "LLMFLUX_SERVE_RC=$?")
 
     def test_a_cancelled_job_is_not_a_failure(self):
         """scancel and Ctrl-C are how a serve job normally ends. Run the real
         emitted case statement rather than asserting its text."""
         import subprocess
-        case_line = next(
-            l for l in self._script("2").splitlines()
-            if l.startswith('case "$LLMFLUX_SERVE_RC"')
-        )
-        for rc, expected in (("0", "0"), ("130", "0"), ("143", "0"), ("1", "1"), ("137", "137")):
-            with self.subTest(rc=rc):
-                out = subprocess.run(
-                    ["bash", "-c", f'LLMFLUX_SERVE_RC={rc}\n{case_line}\necho "$LLMFLUX_SERVE_RC"'],
-                    capture_output=True, text=True,
-                )
-                self.assertEqual(out.stdout.strip(), expected)
+        for engine, nodes, _pid in self.SHAPES:
+            case_line = next(
+                (l for l in self._script(engine, nodes).splitlines()
+                 if l.startswith('case "$LLMFLUX_SERVE_RC"')),
+                None,
+            )
+            if case_line is None:
+                # Reported as one clear failure rather than five confusing ones
+                # from feeding None to bash.
+                with self.subTest(engine=engine, nodes=nodes):
+                    self.fail(
+                        f"{engine}-serve-n{nodes} emits no 130/143 normalisation, "
+                        f"so scancel and Ctrl-C would be reported as failures"
+                    )
+                continue
+            for rc, expected in (("0", "0"), ("130", "0"), ("143", "0"), ("1", "1"), ("137", "137")):
+                with self.subTest(engine=engine, nodes=nodes, rc=rc):
+                    out = subprocess.run(
+                        ["bash", "-c", f'LLMFLUX_SERVE_RC={rc}\n{case_line}\necho "$LLMFLUX_SERVE_RC"'],
+                        capture_output=True, text=True,
+                    )
+                    self.assertEqual(out.stdout.strip(), expected)
 
 
 if __name__ == "__main__":
