@@ -276,6 +276,12 @@ class TestRunCommand:
         mock_config = MagicMock()
         mock_slurm_config = MagicMock()
         mock_config.get_slurm_config.return_value = mock_slurm_config
+        # This test sets args.rebuild = True, and a rebuild writes the image
+        # into containers_dir, so the directory has to be a real writable one.
+        # A bare MagicMock attribute is a path that does not exist and is
+        # correctly refused.
+        mock_config.containers_dir = str(temp_dir)
+        mock_config.workspace = Path(temp_dir)   # real Config.workspace is a Path
         mock_config_class.return_value = mock_config
         
         mock_runner = MagicMock()
@@ -511,6 +517,12 @@ class TestBenchmarkCommand:
         mock_config = MagicMock()
         mock_slurm_config = MagicMock()
         mock_config.get_slurm_config.return_value = mock_slurm_config
+        # args.rebuild is True below, and a rebuild writes the image into
+        # containers_dir, so it has to be a real writable directory rather than
+        # a MagicMock attribute (which is a non-existent path, correctly
+        # refused).
+        mock_config.containers_dir = str(temp_dir)
+        mock_config.workspace = Path(temp_dir)   # real Config.workspace is a Path
         mock_config_class.return_value = mock_config
         
         mock_runner = MagicMock()
@@ -2016,3 +2028,82 @@ class TestEnsureContainerOnAReadOnlyDirectory:
         err = capsys.readouterr().err
         assert "not writable" in err
         assert "LLMFLUX_CONTAINERS_DIR" in err
+
+
+class TestRebuildIntoAReadOnlyContainerDir:
+    """--rebuild must not submit a job that is guaranteed to fail.
+
+    The writability guard lived in `_ensure_container`, but both `_run_command`
+    and `_benchmark_command` skipped that call entirely when --rebuild was set,
+    while the generated script honours LLMFLUX_FORCE_REBUILD=1 by running
+    `apptainer build --force $CONTAINERS_DIR/llm_processor.sif`. So on the very
+    deployment the read-only support exists for — an admin-owned shared
+    container directory — `--rebuild` sailed past the guard, allocated GPUs, and
+    only then failed on the write.
+    """
+
+    def _config(self, tmp_path, containers_dir):
+        config = MagicMock()
+        config.containers_dir = str(containers_dir)
+        config.workspace = str(tmp_path)
+        return config
+
+    def _read_only_containers(self, tmp_path, with_image):
+        d = tmp_path / "containers"
+        d.mkdir()
+        if with_image:
+            (d / "llm_processor.sif").touch()
+        d.chmod(0o555)
+        if os.access(d, os.W_OK):
+            pytest.skip("cannot make a directory unwritable here (root, or ACLs)")
+        return d
+
+    @pytest.mark.parametrize("with_image", [True, False])
+    def test_rebuild_is_refused_when_the_dir_is_not_writable(
+        self, tmp_path, capsys, with_image
+    ):
+        """Refused even when the image is already there: --rebuild overwrites it."""
+        from llmflux.cli import _ensure_container
+
+        d = self._read_only_containers(tmp_path, with_image)
+        try:
+            with patch("llmflux.cli.subprocess.run") as run:
+                assert _ensure_container(self._config(tmp_path, d), rebuild=True) is False
+            assert not run.called
+        finally:
+            d.chmod(0o755)
+
+        err = capsys.readouterr().err
+        assert "--rebuild" in err
+        assert "not writable" in err
+        assert "LLMFLUX_CONTAINERS_DIR" in err
+
+    def test_rebuild_is_allowed_when_the_dir_is_writable(self, tmp_path):
+        """The normal case must be untouched, and must not build locally —
+        the job does the rebuild itself."""
+        from llmflux.cli import _ensure_container
+
+        d = tmp_path / "containers"
+        d.mkdir()
+        with patch("llmflux.cli.subprocess.run") as run:
+            assert _ensure_container(self._config(tmp_path, d), rebuild=True) is True
+        assert not run.called, "--rebuild must not build on the submit node"
+
+    def test_run_command_refuses_rather_than_submitting(self, tmp_path, sample_jsonl, capsys):
+        """Through the CLI: no SLURM submission happens."""
+        d = self._read_only_containers(tmp_path, with_image=True)
+        try:
+            with patch.dict(os.environ, {
+                "LLMFLUX_WORKSPACE": str(tmp_path),
+                "LLMFLUX_CONTAINERS_DIR": str(d),
+            }), patch("llmflux.cli.SlurmRunner") as runner:
+                result = main([
+                    "run", "--input", str(sample_jsonl),
+                    "--output", str(tmp_path / "out.json"),
+                    "--model", "Llama-3.2-3B-Instruct", "--rebuild",
+                ])
+            assert result == 1
+            assert not runner.return_value.run.called, "a doomed job was submitted"
+        finally:
+            d.chmod(0o755)
+        assert "not writable" in capsys.readouterr().err

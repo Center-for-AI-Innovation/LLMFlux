@@ -293,6 +293,12 @@ class TestBenchmarkDataDirLocation(unittest.TestCase):
         target.parent.mkdir()
         target.parent.chmod(0o555)
         self.addCleanup(target.parent.chmod, 0o755)
+        if os.access(target.parent, os.W_OK):
+            # Root ignores the write bit, and some networked filesystems apply
+            # ACLs that override it. mkdir would then succeed and no OSError
+            # would be raised, so this must skip rather than report success on
+            # a condition it could not create.
+            self.skipTest("cannot make a directory unwritable here (root, or ACLs)")
         os.environ["LLMFLUX_BENCHMARK_DATA_DIR"] = str(target)
         with self.assertRaises(OSError) as ctx:
             ensure_benchmark_data_dir()

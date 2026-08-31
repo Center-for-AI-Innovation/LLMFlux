@@ -474,16 +474,21 @@ class SlurmRunner:
         config.ensure_directory(input_file.parent if input_file.is_file() else input_file)
         config.ensure_directory(output_file.parent)
         
+        # A directory is never a valid input, wherever it sits. This check used
+        # to live inside the not-already-visible branch, so a directory under
+        # the workspace or data_input_dir was submitted and only failed inside
+        # the container, after the allocation had been granted.
+        if input_file.is_dir():
+            raise ValueError(
+                f"Input must be a JSONL file, got a directory: {input_file}"
+            )
+
         # Copy input into the data input dir only if the job can't already see it
         already_visible = (
             input_file.is_relative_to(self.workspace)
             or input_file.is_relative_to(self.data_input_dir)
         )
         if not already_visible and input_file.exists():
-            if input_file.is_dir():
-                raise ValueError(
-                    f"Input must be a JSONL file, got a directory: {input_file}"
-                )
             staged_input = self._staging_dir() / input_file.name
             staged_input.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(input_file, staged_input)

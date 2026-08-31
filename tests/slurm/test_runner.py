@@ -12,8 +12,13 @@ from llmflux.slurm.runner import SlurmRunner
 from llmflux.core.config import Config, SlurmConfig, ModelConfig, ModelParameters
 
 
-class TestSlurmRunner(unittest.TestCase):
-    """Test suite for the SlurmRunner class."""
+class _RunnerFixture:
+    """The shared setUp/tearDown for the runner tests.
+
+    Deliberately NOT a TestCase. A test class that subclasses a TestCase to
+    reuse its fixture also inherits — and re-runs — every one of its tests, so
+    the two cases below would each re-run the whole SlurmRunner suite.
+    """
 
     def setUp(self):
         """Set up test environment."""
@@ -95,6 +100,10 @@ class TestSlurmRunner(unittest.TestCase):
     def tearDown(self):
         """Clean up test environment."""
         self.temp_dir.cleanup()
+
+
+class TestSlurmRunner(_RunnerFixture, unittest.TestCase):
+    """Test suite for the SlurmRunner class."""
 
     @patch("llmflux.slurm.runner.ConfigManager")
     def test_slurm_runner_initialization(self, mock_config_manager):
@@ -1052,7 +1061,13 @@ class TestInputStagingDirectory(unittest.TestCase):
         self.assertEqual(probe.read_text(), '{"custom_id": "x"}\n')
 
     def test_copy_lands_in_the_fallback_and_the_file_is_readable(self):
-        """End to end: the copy the runner actually performs."""
+        """The copy itself works against a read-only input directory.
+
+        Note this exercises `_staging_dir()` and the copy separately; it does
+        NOT prove `run()` still calls them. `TestRunUsesTheStagingFallback`
+        below covers that, and is the test that would fail if the production
+        path stopped using the fallback.
+        """
         import shutil
 
         self._make_read_only(self.input_dir)
@@ -1069,3 +1084,135 @@ class TestInputStagingDirectory(unittest.TestCase):
             (self.input_dir / source.name).exists(),
             "nothing may be written into the read-only input directory",
         )
+
+
+class _WorkspaceScopedRunnerTest(_RunnerFixture, unittest.TestCase):
+    """The shared fixture's Config omits `workspace`, so it defaults to the current
+    directory — which means `run()` writes `job.sh`, and would write any staged
+    input, into whatever tree the suite is run from. These tests drive `run()`
+    for real, so they pin the workspace inside the temporary directory."""
+
+    def setUp(self):
+        super().setUp()
+        self.workspace = self.test_dir / "ws"
+        self.workspace.mkdir(parents=True, exist_ok=True)
+        self.config = Config(
+            workspace=str(self.workspace),
+            data_dir=str(self.data_dir),
+            models_dir=str(self.models_dir),
+            logs_dir=str(self.logs_dir),
+            containers_dir=str(self.containers_dir),
+            slurm=self.slurm_config,
+            models=[self.model_config],
+        )
+
+
+class TestRunUsesTheStagingFallback(_WorkspaceScopedRunnerTest):
+    """`run()` itself must route an out-of-tree input through the fallback.
+
+    The tests above call `_staging_dir()` directly, so they would all still
+    pass if `run()` stopped using it — the exact shape of a test that passes
+    through the regression it appears to guard. This one drives the real
+    production path and asserts on what the submitted job was told to read.
+    """
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_run_stages_into_the_workspace_when_input_dir_is_read_only(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        # An input the job cannot already see: outside workspace and input dir.
+        outside = self.test_dir / "outside"
+        outside.mkdir()
+        source = outside / "prompts.jsonl"
+        source.write_text('{"custom_id": "test-1"}\n')
+
+        runner = SlurmRunner()
+        input_dir = Path(runner.data_input_dir)
+        input_dir.mkdir(parents=True, exist_ok=True)
+        input_dir.chmod(0o555)
+        # tearDown removes the temp tree before doCleanups runs, so restoring
+        # the mode has to tolerate the directory already being gone.
+        self.addCleanup(lambda: input_dir.exists() and input_dir.chmod(0o755))
+        if os.access(input_dir, os.W_OK):
+            self.skipTest("cannot make a directory unwritable here (root, or ACLs)")
+
+        # debug=True preserves job.sh, which is what lets this assert on the
+        # script the job will actually run rather than on a helper's return.
+        job_id = runner.run(
+            input_path=str(source), output_path=str(self.output_path),
+            model="test:7b", debug=True,
+        )
+
+        self.assertEqual(job_id, "12345")
+        self.assertFalse(
+            (input_dir / source.name).exists(),
+            "run() wrote into the read-only input directory",
+        )
+        staged = Path(runner.workspace) / "staged-input" / source.name
+        self.assertTrue(
+            staged.is_file(),
+            f"run() did not stage the input into the workspace; {staged} missing",
+        )
+        # And the submitted script must actually read the staged copy, not the
+        # original. Asserting on the emitted job.sh is what makes this a test of
+        # the production path rather than of the helper.
+        job_sh = (Path(runner.workspace) / "job.sh").read_text()
+        self.assertIn(str(staged), job_sh, "the job does not read the staged file")
+        self.assertNotIn(
+            str(source), job_sh,
+            "the job still reads the original out-of-tree path",
+        )
+        # The registry records the same thing, independently of debug mode.
+        meta = mock_registry.return_value.create_job.call_args.kwargs["metadata"]
+        self.assertEqual(meta["input"], str(staged))
+
+
+class TestDirectoryInputIsAlwaysRejected(_WorkspaceScopedRunnerTest):
+    """A directory is never a valid --input, wherever it sits.
+
+    The check used to live inside the not-already-visible branch, so a
+    directory under the workspace or data_input_dir skipped it entirely and was
+    submitted, failing only inside the container after GPUs were allocated.
+    """
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_directory_input_raises_from_every_location(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+
+        runner = SlurmRunner()
+        locations = {
+            "outside every visible tree": self.test_dir / "outside-dir",
+            "under data_input_dir": Path(runner.data_input_dir) / "inside-input-dir",
+            "under the workspace": Path(runner.workspace) / "inside-workspace-dir",
+        }
+        for label, d in locations.items():
+            with self.subTest(location=label):
+                d.mkdir(parents=True, exist_ok=True)
+                mock_run.reset_mock()
+                with self.assertRaises(ValueError) as ctx:
+                    runner.run(
+                        input_path=str(d),
+                        output_path=str(self.output_path),
+                        model="test:7b",
+                    )
+                self.assertIn("directory", str(ctx.exception).lower())
+                self.assertFalse(
+                    mock_run.called,
+                    "a job was submitted for a directory input",
+                )
