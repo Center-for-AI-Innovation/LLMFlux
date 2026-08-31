@@ -31,7 +31,7 @@ from .slurm.commands import (
     extract_state,
 )
 from .processors import BatchProcessor
-from .core.config import Config, EngineConfig
+from .core.config import Config, ConfigDirectoryError, EngineConfig
 from .core.registry import JobRegistry
 from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
 
@@ -95,6 +95,19 @@ def _ensure_container(config: "Config") -> bool:
         return False
 
     containers_dir = Path(config.containers_dir)
+    if not os.access(containers_dir, os.W_OK):
+        # The image is allowed to live in a directory LLMFlux cannot write to —
+        # a site staging it for all users is the point. But then it has to
+        # actually be there; building it here is not an option.
+        print(
+            f"Error: container image not found at {sif_path}, and "
+            f"{containers_dir} is not writable, so it cannot be built there.\n"
+            "       Point LLMFLUX_CONTAINERS_DIR at a writable directory, or ask "
+            "whoever owns that one to stage llm_processor.sif in it.",
+            file=sys.stderr,
+        )
+        return False
+
     apptainer_tmp = Path(config.workspace) / "tmp"
     apptainer_cache = apptainer_tmp / "cache"
     apptainer_tmp.mkdir(parents=True, exist_ok=True)
@@ -1081,7 +1094,14 @@ def main(argv: list[str] | None = None) -> int:
     if not hasattr(args, "func"):
         parser.print_help()
         return 2
-    return args.func(args)
+    try:
+        return args.func(args)
+    except ConfigDirectoryError as exc:
+        # A directory the user (or their site's module file) pointed LLMFlux at
+        # is unusable. That is a configuration mistake with an obvious remedy,
+        # so report it and exit rather than showing a traceback.
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

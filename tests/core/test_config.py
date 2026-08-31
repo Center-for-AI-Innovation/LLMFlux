@@ -11,6 +11,7 @@ import yaml
 from pydantic import ValidationError
 
 from llmflux.core.config import (
+    ConfigDirectoryError,
     Config,
     ModelConfig,
     ModelParameters,
@@ -314,5 +315,172 @@ class TestModelConfigGetModelNameForEngine(unittest.TestCase):
         self.assertEqual(model.get_model_name_for_engine(), "mymodel:7b")
 
 
+
+
+class _ReadOnlyDirMixin:
+    """Helper for building directories the running user cannot write to.
+
+    Skips rather than silently passing where the mode does not take effect —
+    root ignores the write bit, and some networked filesystems apply ACLs that
+    override it. A test that cannot create the condition it is testing must say
+    so, not report success.
+    """
+
+    def make_dir(self, name, mode=0o755):
+        path = Path(self.tmp_dir) / name
+        path.mkdir(parents=True, exist_ok=True)
+        path.chmod(mode)
+        self.addCleanup(path.chmod, 0o755)
+        return path
+
+    def make_unwritable_dir(self, name):
+        path = self.make_dir(name, mode=0o555)
+        if os.access(path, os.W_OK):
+            self.skipTest(
+                f"cannot make {path} unwritable (running as root, or the "
+                f"filesystem overrides the mode) — the condition under test "
+                f"cannot be created here"
+            )
+        return path
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp_dir = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+        # Config reads every directory from the environment when the
+        # corresponding argument is None, so a stray LLMFLUX_* in the caller's
+        # environment would silently retarget whatever this test did not set.
+        env_patch = patch.dict(os.environ, {})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        for var in (
+            "LLMFLUX_WORKSPACE", "LLMFLUX_DATA_DIR", "LLMFLUX_DATA_INPUT_DIR",
+            "LLMFLUX_DATA_OUTPUT_DIR", "LLMFLUX_MODELS_DIR", "LLMFLUX_LOGS_DIR",
+            "LLMFLUX_CONTAINERS_DIR",
+        ):
+            os.environ.pop(var, None)
+
+    def base_kwargs(self, **overrides):
+        """A fully-specified, writable Config so only the override is at issue."""
+        kwargs = {
+            "workspace": str(self.make_dir("ws")),
+            "data_dir": str(self.make_dir("data")),
+            "data_input_dir": str(self.make_dir("data/input")),
+            "data_output_dir": str(self.make_dir("data/output")),
+            "models_dir": str(self.make_dir("models")),
+            "logs_dir": str(self.make_dir("logs")),
+            "containers_dir": str(self.make_dir("containers")),
+        }
+        kwargs.update(overrides)
+        return kwargs
+
+
+class TestConfigDirectoryAccessRequirements(_ReadOnlyDirMixin, unittest.TestCase):
+    """Only the directories LLMFlux writes into may require write access.
+
+    Requiring it on all seven is what made LLMFlux undeployable as a module:
+    a site stages the container image in a versioned, service-account-owned
+    directory and points LLMFLUX_CONTAINERS_DIR at it, and `llmflux run` then
+    died in the Config constructor before doing anything. The same check also
+    blocked the read-only input directory that the input/output split exists to
+    support.
+    """
+
+    #: Directories LLMFlux only ever reads. Each has a legitimate read-only
+    #: deployment, so an unwritable one must construct fine.
+    READ_ONLY_OK = ("containers_dir", "models_dir", "data_input_dir")
+
+    #: Directories LLMFlux writes into. An unwritable one is a real
+    #: misconfiguration and must still fail early, at construction, rather than
+    #: part-way through a job.
+    MUST_BE_WRITABLE = ("workspace", "data_dir", "data_output_dir", "logs_dir")
+
+    def test_every_directory_is_classified(self):
+        """Guards the two lists against a new directory being added untested."""
+        cfg = Config(**self.base_kwargs())
+        configured = {
+            name for name in
+            ("workspace", "data_dir", "data_input_dir", "data_output_dir",
+             "models_dir", "logs_dir", "containers_dir")
+            if getattr(cfg, name, None) is not None
+        }
+        self.assertEqual(
+            configured,
+            set(self.READ_ONLY_OK) | set(self.MUST_BE_WRITABLE),
+            "a configured directory is in neither list, so its access "
+            "requirement is untested",
+        )
+
+    def test_read_only_directories_are_accepted(self):
+        for name in self.READ_ONLY_OK:
+            with self.subTest(directory=name):
+                ro = self.make_unwritable_dir(f"ro-{name}")
+                cfg = Config(**self.base_kwargs(**{name: str(ro)}))
+                self.assertEqual(
+                    str(getattr(cfg, name)), str(ro),
+                    "the directory was accepted but not the one we asked for",
+                )
+
+    def test_written_directories_still_reject_unwritable(self):
+        for name in self.MUST_BE_WRITABLE:
+            with self.subTest(directory=name):
+                ro = self.make_unwritable_dir(f"rw-{name}")
+                with self.assertRaises(OSError) as ctx:
+                    Config(**self.base_kwargs(**{name: str(ro)}))
+                self.assertIn(str(ro), str(ctx.exception))
+
+    def test_read_only_directories_must_still_be_readable(self):
+        """Relaxing the write requirement is not the same as no requirement.
+
+        A containers_dir that cannot even be listed is unusable — the image
+        cannot be read out of it — and must fail at construction rather than as
+        an obscure error inside apptainer later.
+        """
+        for name in self.READ_ONLY_OK:
+            with self.subTest(directory=name):
+                unreadable = self.make_dir(f"nx-{name}", mode=0o000)
+                if os.access(unreadable, os.R_OK | os.X_OK):
+                    self.skipTest("cannot make a directory unreadable here")
+                with self.assertRaises(OSError) as ctx:
+                    Config(**self.base_kwargs(**{name: str(unreadable)}))
+                self.assertIn(str(unreadable), str(ctx.exception))
+
+    def test_missing_read_only_directory_is_still_created(self):
+        """The relaxed directories keep workspace-relative defaults that
+        LLMFlux is expected to create on first run, so mkdir must still happen.
+        """
+        for name in self.READ_ONLY_OK:
+            with self.subTest(directory=name):
+                target = Path(self.tmp_dir) / f"new-{name}" / "nested"
+                self.assertFalse(target.exists())
+                Config(**self.base_kwargs(**{name: str(target)}))
+                self.assertTrue(
+                    target.is_dir(),
+                    "a not-yet-existing directory must still be created",
+                )
+
+
+class TestConfigDirectoryErrorReporting(_ReadOnlyDirMixin, unittest.TestCase):
+    """An unusable directory must be reported as a configuration mistake."""
+
+    def test_error_names_the_setting_and_its_env_var(self):
+        ro = self.make_unwritable_dir("ro-logs")
+        with self.assertRaises(OSError) as ctx:
+            Config(**self.base_kwargs(logs_dir=str(ro)))
+        message = str(ctx.exception)
+        self.assertIn(str(ro), message)
+        self.assertIn("logs_dir", message)
+        self.assertIn(
+            "LLMFLUX_LOGS_DIR", message,
+            "the message must name the variable to change, not just the path",
+        )
+
+    def test_error_is_an_oserror(self):
+        """ConfigDirectoryError narrows the type without breaking callers that
+        already catch OSError."""
+        self.assertTrue(issubclass(ConfigDirectoryError, OSError))
+        ro = self.make_unwritable_dir("ro-data")
+        with self.assertRaises(ConfigDirectoryError):
+            Config(**self.base_kwargs(data_dir=str(ro)))
 if __name__ == "__main__":
     unittest.main()

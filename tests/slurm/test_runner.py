@@ -995,3 +995,77 @@ class TestBuildJobName(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestInputStagingDirectory(unittest.TestCase):
+    """An input file outside the job's visible tree is copied in first.
+
+    The copy targeted data_input_dir unconditionally. That directory may
+    legitimately be read-only — a site-staged, admin-owned prompt directory is
+    the case the input/output split was added for — and the copy then failed
+    with a bare PermissionError. Accepting a read-only input directory in
+    Config without this is only half the fix: construction succeeds and the run
+    dies later, which is worse than failing early.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp_dir = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+        self.workspace = self.tmp_dir / "ws"
+        self.input_dir = self.tmp_dir / "input"
+        for d in (self.workspace, self.input_dir):
+            d.mkdir(parents=True)
+
+        self.runner = SlurmRunner.__new__(SlurmRunner)
+        self.runner.workspace = self.workspace
+        self.runner.data_input_dir = self.input_dir
+
+    def _make_read_only(self, path):
+        path.chmod(0o555)
+        self.addCleanup(path.chmod, 0o755)
+        if os.access(path, os.W_OK):
+            self.skipTest("cannot make a directory unwritable here (root, or ACLs)")
+
+    def test_writable_input_dir_is_used(self):
+        """The ordinary install must be unaffected."""
+        self.assertEqual(self.runner._staging_dir(), self.input_dir)
+
+    def test_read_only_input_dir_falls_back_to_the_workspace(self):
+        self._make_read_only(self.input_dir)
+        staging = self.runner._staging_dir()
+
+        self.assertNotEqual(staging, self.input_dir)
+        self.assertEqual(staging, self.workspace / "staged-input")
+
+    def test_the_fallback_is_actually_writable(self):
+        """A fallback that cannot be written to has moved the failure, not
+        fixed it. Config guarantees the workspace is writable; this pins the
+        property the fallback depends on rather than trusting it."""
+        self._make_read_only(self.input_dir)
+        staging = self.runner._staging_dir()
+        staging.mkdir(parents=True, exist_ok=True)
+
+        probe = staging / "probe.jsonl"
+        probe.write_text('{"custom_id": "x"}\n')
+        self.assertEqual(probe.read_text(), '{"custom_id": "x"}\n')
+
+    def test_copy_lands_in_the_fallback_and_the_file_is_readable(self):
+        """End to end: the copy the runner actually performs."""
+        import shutil
+
+        self._make_read_only(self.input_dir)
+        source = self.tmp_dir / "outside.jsonl"
+        source.write_text('{"custom_id": "test-1"}\n')
+
+        staged = self.runner._staging_dir() / source.name
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, staged)
+
+        self.assertTrue(staged.is_file())
+        self.assertEqual(staged.read_text(), source.read_text())
+        self.assertFalse(
+            (self.input_dir / source.name).exists(),
+            "nothing may be written into the read-only input directory",
+        )
