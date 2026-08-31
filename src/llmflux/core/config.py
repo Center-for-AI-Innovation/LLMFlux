@@ -173,6 +173,15 @@ def parse_gpu_memory(memory_str: str) -> int:
         raise ValueError(f"Invalid GPU memory format: {memory_str}")
     return int(match.group(1))
 
+class ConfigDirectoryError(OSError):
+    """A configured directory cannot be used for what LLMFlux needs it for.
+
+    Subclasses OSError so callers that already catch OSError keep working, while
+    giving the CLI something specific enough to report as a configuration error
+    instead of letting a traceback reach the user.
+    """
+
+
 class Config:
     """Central configuration management."""
     
@@ -207,16 +216,37 @@ class Config:
         # Load environment variables from .env file if it exists
         self._load_env_file()
 
-        # Initialize workspace paths
-        self.workspace = self._validate_dir(Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd()).expanduser().resolve())
+        # Initialize workspace paths.
+        #
+        # need_write records what LLMFlux actually does with each directory, not
+        # what its name suggests. Requiring write access on all seven made a
+        # site install with an admin-owned container directory — and the
+        # read-only input directory the input/output split exists to allow —
+        # fail at construction. See _validate_dir for the per-directory
+        # evidence.
+        self.workspace = self._validate_dir(
+            Path(workspace or os.getenv('LLMFLUX_WORKSPACE') or Path.cwd()).expanduser().resolve(),
+            label='workspace', env_var='LLMFLUX_WORKSPACE')
 
         # Set directories from parameters or environment variables
-        self.data_dir = str(self._validate_dir(Path(data_dir or os.getenv('LLMFLUX_DATA_DIR') or self.workspace / "data").expanduser().resolve()))
-        self.data_input_dir = str(self._validate_dir(Path(data_input_dir or os.getenv('LLMFLUX_DATA_INPUT_DIR') or Path(self.data_dir) / "input").expanduser().resolve()))
-        self.data_output_dir = str(self._validate_dir(Path(data_output_dir or os.getenv('LLMFLUX_DATA_OUTPUT_DIR') or Path(self.data_dir) / "output").expanduser().resolve()))
-        self.models_dir = str(self._validate_dir(Path(models_dir or os.getenv('LLMFLUX_MODELS_DIR') or self.workspace / "models").expanduser().resolve()))
-        self.logs_dir = str(self._validate_dir(Path(logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or self.workspace / "logs").expanduser().resolve()))
-        self.containers_dir = str(self._validate_dir(Path(containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or self.workspace / "containers").expanduser().resolve()))
+        self.data_dir = str(self._validate_dir(
+            Path(data_dir or os.getenv('LLMFLUX_DATA_DIR') or self.workspace / "data").expanduser().resolve(),
+            label='data_dir', env_var='LLMFLUX_DATA_DIR'))
+        self.data_input_dir = str(self._validate_dir(
+            Path(data_input_dir or os.getenv('LLMFLUX_DATA_INPUT_DIR') or Path(self.data_dir) / "input").expanduser().resolve(),
+            need_write=False, label='data_input_dir', env_var='LLMFLUX_DATA_INPUT_DIR'))
+        self.data_output_dir = str(self._validate_dir(
+            Path(data_output_dir or os.getenv('LLMFLUX_DATA_OUTPUT_DIR') or Path(self.data_dir) / "output").expanduser().resolve(),
+            label='data_output_dir', env_var='LLMFLUX_DATA_OUTPUT_DIR'))
+        self.models_dir = str(self._validate_dir(
+            Path(models_dir or os.getenv('LLMFLUX_MODELS_DIR') or self.workspace / "models").expanduser().resolve(),
+            need_write=False, label='models_dir', env_var='LLMFLUX_MODELS_DIR'))
+        self.logs_dir = str(self._validate_dir(
+            Path(logs_dir or os.getenv('LLMFLUX_LOGS_DIR') or self.workspace / "logs").expanduser().resolve(),
+            label='logs_dir', env_var='LLMFLUX_LOGS_DIR'))
+        self.containers_dir = str(self._validate_dir(
+            Path(containers_dir or os.getenv('LLMFLUX_CONTAINERS_DIR') or self.workspace / "containers").expanduser().resolve(),
+            need_write=False, label='containers_dir', env_var='LLMFLUX_CONTAINERS_DIR'))
         
         # Set SLURM configuration
         self.slurm = slurm or SlurmConfig()
@@ -237,24 +267,70 @@ class Config:
                 home=str(self.workspace / ".vllm")
             )
 
-    def _validate_dir(self, path: Path) -> Path:
-        """Ensure a directory exists and is writable, creating it if necessary.
+    def _validate_dir(
+        self,
+        path: Path,
+        need_write: bool = True,
+        label: Optional[str] = None,
+        env_var: Optional[str] = None,
+    ) -> Path:
+        """Ensure a directory exists and grants the access LLMFlux needs.
+
+        Three of the directories LLMFlux is configured with are only ever read,
+        and each has a legitimate read-only deployment:
+
+        * ``containers_dir`` — only ``$CONTAINERS_DIR/llm_processor.sif`` is
+          read. ``_ensure_container`` returns as soon as the image exists, and
+          both the runner and the generated batch script only ever
+          ``mkdir -p`` the directory, which is a no-op on one that is already
+          there. A site shipping LLMFlux as a module points this at a
+          versioned, service-account-owned directory holding the image.
+        * ``data_input_dir`` — bind-mounted into the container and read. A
+          read-only input location with results written elsewhere is the reason
+          the input/output split exists.
+        * ``models_dir`` — bind-mounted at ``/app/models`` and read. Downloaded
+          weights go to ``HF_HOME`` / ``OLLAMA_MODELS`` / ``VLLM_MODELS``, all
+          under the workspace, so a site can stage a shared read-only cache
+          here.
+
+        The other four are written to: the workspace holds ``job.sh``, ``tmp/``
+        and the engine homes; ``data_dir`` is the default parent LLMFlux has to
+        create ``input/`` and ``output/`` inside; ``data_output_dir`` receives
+        results; ``logs_dir`` is where SLURM writes ``%j.out`` / ``%j.err``.
+        Those keep the writability check, so a genuinely unusable one still
+        fails early with a message naming it.
+
+        ``mkdir(parents=True, exist_ok=True)`` runs in both modes: it is a
+        no-op on an existing directory even when the parent is read-only, and
+        the read-only directories all have workspace-relative defaults that
+        LLMFlux is expected to create on first run.
 
         Args:
             path: Directory path to validate
+            need_write: Whether LLMFlux writes into this directory. When False,
+                the directory only has to be readable and traversable.
+            label: Configuration name to use in the error message
+            env_var: Environment variable that sets this directory, named in
+                the error message as the thing to change
 
         Returns:
             The same path
 
         Raises:
-            OSError: If the directory cannot be created or is not writable
+            ConfigDirectoryError: If the directory cannot be created or does
+                not grant the required access
         """
         try:
             path.mkdir(parents=True, exist_ok=True)
-            if not os.access(path, os.W_OK):
-                raise PermissionError(f"Directory is not writable: {path}")
+            if need_write:
+                if not os.access(path, os.W_OK):
+                    raise PermissionError(f"Directory is not writable: {path}")
+            elif not os.access(path, os.R_OK | os.X_OK):
+                raise PermissionError(f"Directory is not readable: {path}")
         except (OSError, PermissionError) as e:
-            raise OSError(f"Cannot use directory '{path}': {e}") from e
+            what = f"{label} directory" if label else "directory"
+            hint = f" Set {env_var} to a usable path." if env_var else ""
+            raise ConfigDirectoryError(f"Cannot use {what} '{path}': {e}.{hint}") from e
         return path
 
     def _load_env_file(self):
