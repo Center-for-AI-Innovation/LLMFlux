@@ -1,5 +1,7 @@
 import io
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from llmflux import cli
@@ -108,11 +110,21 @@ class TestCliJobs(unittest.TestCase):
     @patch("llmflux.cli.JobRegistry")
     @patch("sys.stdout", new_callable=io.StringIO)
     def test_remove_deletes_when_nothing_is_running(
-        self, mock_stdout, mock_registry_cls, _mock_active, mock_delete, _mock_config
+        self, mock_stdout, mock_registry_cls, _mock_active, mock_delete, mock_config_cls
     ):
         mock_registry_cls.return_value = _FakeRegistry({"100": {}})
-
-        exit_code = cli.main(["remove"])
+        # remove_paths() runs for real against this config, and two of the paths
+        # it returns come from Path.home(), not from the config at all. Pin both
+        # at a temp dir so the list is never made of real paths — only the
+        # patched delete() stands between this test and a live ~/.llmflux.
+        with tempfile.TemporaryDirectory() as tmp:
+            config = mock_config_cls.return_value
+            config.workspace = tmp
+            config.logs_dir = str(Path(tmp) / "logs")
+            config.containers_dir = str(Path(tmp) / "containers")
+            config.models_dir = str(Path(tmp) / "models")
+            with patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp)):
+                exit_code = cli.main(["remove"])
 
         self.assertEqual(exit_code, 0)
         mock_delete.assert_called_once()

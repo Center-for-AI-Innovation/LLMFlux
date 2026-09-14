@@ -5,11 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ### Added
 
-- `llmflux clean` and `llmflux remove`, to reclaim disk space. `clean` deletes
-  `logs/`, `tmp/`, `staged-input/`, `job.sh` and `~/.llmflux/serve/` (which
-  holds a plaintext API key); `remove` deletes those plus `containers/`,
+- `llmflux clean` and `llmflux remove`, to reclaim disk space. `clean` empties
+  `logs/`, `tmp/`, `staged-input/` and `~/.llmflux/serve/` (which holds a
+  plaintext API key) and deletes `job.sh`; `remove` also empties `containers/`,
   `models/`, `.cache/`, `.ollama/`, `.vllm/` and `~/.llmflux/`. Both work from
   a fixed path list rather than wiping the workspace, so `data/input/`,
   `data/output/` and — on a source checkout — the repo itself are never

@@ -53,7 +53,10 @@ def delete(paths) -> tuple:
         if not path.exists():
             continue
         try:
-            if path.is_dir():
+            # is_dir() follows symlinks, so a relocated cache — .cache pointing
+            # at scratch, a common answer to a home quota — would have its
+            # target emptied instead of the link removed. Unlink the link.
+            if path.is_dir() and not path.is_symlink():
                 for child in path.iterdir():
                     if child.is_dir() and not child.is_symlink():
                         shutil.rmtree(child)

@@ -62,6 +62,20 @@ class TestDelete(unittest.TestCase):
         self.assertEqual(list(logs.iterdir()), [])
         self.assertFalse(script.exists())
 
+    def test_a_symlinked_directory_is_unlinked_not_emptied(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "keep.txt").write_text("belongs to someone else")
+        link = self.root / ".cache"
+        link.symlink_to(outside, target_is_directory=True)
+
+        deleted, errors = delete([link])
+
+        self.assertEqual(errors, [])
+        self.assertEqual(deleted, [link])
+        self.assertFalse(link.is_symlink())
+        self.assertTrue((outside / "keep.txt").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

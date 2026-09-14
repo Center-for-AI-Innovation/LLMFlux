@@ -211,9 +211,10 @@ llmflux remove
 Notes:
 - `jobs` and `status` derive live state from Slurm JSON output.
 - `logs` and `cancel` only operate on jobs present in the LLMFlux registry.
-- `clean` deletes `logs/`, `tmp/`, `staged-input/`, `job.sh` and
-  `~/.llmflux/serve/`. `remove` deletes those plus `containers/`, `models/`,
-  `.cache/`, `.ollama/`, `.vllm/` and `~/.llmflux/`.
+- `clean` empties `logs/`, `tmp/`, `staged-input/` and `~/.llmflux/serve/`, and
+  deletes `job.sh`. `remove` also empties `containers/`, `models/`, `.cache/`,
+  `.ollama/`, `.vllm/` and `~/.llmflux/`. The directories themselves stay — only
+  their contents go.
 - Neither command touches `data/input/` or `data/output/`, and neither wipes the
   workspace itself — on a source checkout that is where the repo lives.
 - Both refuse to run while any LLMFlux job is running. Stop it with
