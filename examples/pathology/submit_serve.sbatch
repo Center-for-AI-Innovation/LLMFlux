@@ -74,12 +74,19 @@ mkdir -p logs
 (umask 077 && mkdir -p "$CONNECTION_DIR" "$CURRENT_DIR")
 
 # --- activate environment (edit for your setup) ---
-# module load anaconda3_gpu
-# conda activate pathology
-# --- or ---
+# Verified working on Delta: `module load pytorch-conda/2.8` provides
+# everything in requirements.txt except open_clip_torch -- one-time
+# `pip install --user "open_clip_torch>=2.24"` after loading the module
+# covers that. See README.md § Setup.
+module load pytorch-conda/2.8
+# --- or, without that module ---
 # source /path/to/venv/bin/activate
 
-cd "$(dirname "$0")"
+# No `cd` needed: Slurm starts a batch job in the directory sbatch was
+# invoked from ($SLURM_SUBMIT_DIR), not the directory containing this
+# script -- $0 here is a spooled copy of this file
+# (/var/spool/slurmd/job<id>/slurm_script), so `cd "$(dirname "$0")"` would
+# silently land you in the wrong place instead of erroring.
 
 export PATHOLOGY_MODEL="$MODEL"
 # Reuse the API key handed out at the start of the chain if this job is a
@@ -131,14 +138,24 @@ resubmit_chain() {
     local account reservation args
     account=$(job_field Account)
     reservation=$(job_field Reservation)
+    # -nodelist needs the short name Slurm knows the node by (e.g. gpua052),
+    # not the FQDN `hostname` alone returns (e.g. gpua052.delta.ncsa.
+    # illinois.edu) -- the latter makes sbatch reject the whole resubmission
+    # with "Invalid node name specified".
     args=(--job-name="$SLURM_JOB_NAME" --account="$account"
-          --nodelist="$(hostname)" --dependency="afterany:$SLURM_JOB_ID"
+          --nodelist="$(hostname -s)" --dependency="afterany:$SLURM_JOB_ID"
           --export="ALL")
     if [ -n "$reservation" ] && [ "$reservation" != "(null)" ]; then
         args+=(--reservation="$reservation")
     fi
     echo "Walltime approaching, resubmitting chain: sbatch ${args[*]} $0 $MODEL"
-    sbatch "${args[@]}" "$0" "$MODEL"
+    # A failed resubmit (bad nodelist, account/reservation hiccup, etc.)
+    # must not take down the *current* server early via set -e -- it should
+    # just keep serving until its own walltime and let the gap show up as a
+    # missing next link, not an unexplained early outage.
+    if ! sbatch "${args[@]}" "$0" "$MODEL"; then
+        echo "WARNING: resubmit failed -- chain will end when this job's walltime is reached." >&2
+    fi
 }
 
 # Only the walltime-approaching signal (SIGUSR1) resubmits. A manual

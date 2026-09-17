@@ -56,18 +56,25 @@ submit it as a batch job with `submit.sbatch` / `submit_serve.sbatch` instead.
    export HF_TOKEN=hf_...
    ```
 
-2. **Install dependencies.** These models ship as small research packages
-   installed straight from their GitHub repos, not PyPI releases — install
-   inside a venv/conda env. This step (only) is fine on the login node, since
-   it needs internet access:
+2. **Install dependencies.** Verified working on Delta as of 2026-09-17:
+   `module load pytorch-conda/2.8` already provides everything in
+   `requirements.txt` except `open_clip_torch` (torch, torchvision, timm,
+   transformers, huggingface_hub, Pillow, pandas, tqdm, fastapi, uvicorn,
+   requests all included) — just add that one package:
 
    ```bash
-   pip install -r requirements.txt
+   module load pytorch-conda/2.8
+   pip install --user "open_clip_torch>=2.24"
    ```
 
-   `requirements.txt` pins the generic dependencies (torch, timm,
-   huggingface_hub, Pillow, pandas). **Before relying on `models.py`**, check
-   each project's own README for its current install command and loading API
+   `submit.sbatch`/`submit_serve.sbatch` already `module load` this. Without
+   that module (a different cluster, or you want an isolated env), fall back
+   to a plain venv/conda env with `pip install -r requirements.txt` — this
+   step (only) is fine on the login node, since it needs internet access.
+   Either way, CONCH and MUSK themselves still ship as small research
+   packages installed straight from their GitHub repos, not through
+   `requirements.txt`. **Before relying on `models.py`**, check each
+   project's own README for its current install command and loading API
    — these are small academic repos that change without a stable public API,
    and the adapters below reflect what was documented as of this writing, not
    a guaranteed-stable interface:
@@ -191,18 +198,28 @@ same info.
 
 **Multi-day events (e.g. Friday afternoon → Monday EOD): the job
 auto-resubmits itself.** Delta's `gpuA100x4` partition caps a single job at
-48h, shorter than a weekend-long event. `submit_serve.sbatch` now resubmits
-itself shortly before hitting its own walltime (same node, same account and
-`--reservation`, same API key), so the service keeps running across the
-whole event without anyone resubmitting it by hand. This means a real
-`scancel` at the end of the event isn't enough by itself to stop it — see
-"stop the chain for good" in the script's header comment
-(`touch ~/.pathology/serve/STOP_CHAIN-<job-name>` before the next walltime
-boundary, or right after your final `scancel`). This mechanism hasn't been
-exercised on a real Delta allocation yet — verify it end-to-end (does it
-actually resubmit, does the node/port/key really stay stable, does the stop
-file actually stop it) during the pre-event test run, not for the first time
-during the event itself.
+48h, shorter than a weekend-long event. `submit_serve.sbatch` resubmits
+itself shortly before hitting its own walltime, so the service keeps running
+across the whole event without anyone resubmitting it by hand. This means a
+real `scancel` at the end of the event isn't enough by itself to stop it —
+see "stop the chain for good" in the script's header comment (`touch
+~/.pathology/serve/STOP_CHAIN-<job-name>` before the next walltime boundary,
+or right after your final `scancel`).
+
+**Verified on a real Delta allocation on 2026-09-17:** the resubmit fires,
+the API key carries over (same key, no redistribution needed), and
+`STOP_CHAIN-<job-name>` does stop it. **One real gap found:** the chain pins
+the next link to the *same* node (`--nodelist`) so the endpoint doesn't
+move, but on the shared `gpuA100x4` queue (no reservation active during this
+test) the pinned successor sat `PENDING (Priority)` for 7+ minutes waiting
+for that specific node, rather than starting immediately on any free node.
+Without a reservation guaranteeing dedicated nodes, this node-pinning
+approach risks turning each ~48h resubmission into several minutes of real
+downtime — worth re-testing once the reservation is in place (dedicated
+nodes should make this instant), and worth revisiting whether to drop
+`--nodelist` entirely and accept a moving host (already handled by the
+stable `current-<job-name>/connection.json` file) in exchange for the
+successor being schedulable on *any* free node.
 
 Teams call it with `client.py`:
 
@@ -261,9 +278,9 @@ very high p95 latency at your target team count, lower
 server's environment, or split teams across a second `submit_serve.sbatch`
 instance.
 
-The auto-resubmit chain (see "Serve mode" above) is likewise untested
-against real Slurm behavior — the `--signal=B:USR1@180` timing, the
-`--nodelist`/`--dependency` handoff to the next link, and `STOP_CHAIN`
-actually stopping it all need a real run on Delta (a short `--time` override
-works fine for a quick dry run) before you rely on it across an actual
-weekend.
+The auto-resubmit chain (see "Serve mode" above and its "Verified on a real
+Delta allocation" note) has been exercised end-to-end with a short `--time`
+override: the signal fires, the resubmit is submitted, the API key carries
+over, and `STOP_CHAIN-<job-name>` stops it. The open question from that test
+is queue delay for the `--nodelist`-pinned successor without a reservation
+— see the note above.

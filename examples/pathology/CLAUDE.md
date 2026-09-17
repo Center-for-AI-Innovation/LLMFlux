@@ -26,8 +26,11 @@ once — that's why this is one persistent micro-batching server per model
 1. **Get `HF_TOKEN`** and accept the license on each gated model's HF page
    (CONCH, MUSK — see README.md § Setup). Not needed for the generic
    OpenCLIP/CLIP adapters unless the specific repo is gated.
-2. **Install deps** on the login node (network access, fine there):
-   `pip install -r requirements.txt`.
+2. **Install deps** on the login node (network access, fine there). Verified
+   2026-09-17: `module load pytorch-conda/2.8` covers everything except
+   `open_clip_torch` (`pip install --user "open_clip_torch>=2.24"` after
+   loading it) — see README.md § Setup. `submit.sbatch`/`submit_serve.sbatch`
+   already load this module.
 3. **Dry-run the serving infra without a GPU or gated access**, using the
    dependency-free `test` adapter, from the login node (HTTP only, no model
    load):
@@ -38,23 +41,25 @@ once — that's why this is one persistent micro-batching server per model
        --teams 20 --images-per-team 3
    ```
    This validates request batching and per-team result isolation without
-   touching a real model.
+   touching a real model. **Verified 2026-09-17**: 20 teams, 0 errors, no
+   cross-request mix-ups.
 4. **Smoke-test each real model you intend to stage** on a real allocation
    with a handful of tiles before the event — `run_embeddings.py --model
    conch --input-dir <a few test tiles> --output smoke.csv`. Never on the
-   login node (see below).
+   login node (see below). Not yet done — CONCH/MUSK need `HF_TOKEN` and
+   license acceptance, which the 2026-09-17 test run didn't have set up.
 5. **Re-run `loadtest.py` against the real model** at your expected team
    count to check latency/OOM before committing to `PATHOLOGY_MAX_BATCH_SIZE`
    / `PATHOLOGY_MAX_WAIT_MS` defaults (see README.md's serve-mode section for
    what those trade off).
-6. **Exercise the auto-resubmit chain** (new, untested on real Slurm as of
-   this writing) at least once before the event — submit with a short
-   `--time` override so you don't have to wait 48h to see it fire, confirm a
-   second job actually gets queued on the same node when the first
-   approaches its limit, and confirm `touch ~/.pathology/serve/STOP_CHAIN-<job-name>`
-   actually stops it from resubmitting. See "Multi-day events" in
-   README.md's serve-mode section and the header comment in
-   `submit_serve.sbatch` for the mechanism.
+6. **Auto-resubmit chain: verified working 2026-09-17**, with one real gap
+   found — see "Verified on a real Delta allocation" in README.md's
+   serve-mode section. Short version: the resubmit itself, the API key
+   carry-over, and `STOP_CHAIN-<job-name>` all work; the `--nodelist`-pinned
+   successor queued for 7+ minutes on the shared partition without a
+   reservation active. Re-test once the reservation exists — if it still
+   queues for minutes even with dedicated nodes, revisit dropping
+   `--nodelist` (see the design question below).
 7. **Reservation**: Josh is filing the NCSA ticket for the event's Delta
    reservation and separately asking whether a job running under it can get
    a walltime longer than the standard 48h `gpuA100x4` cap. Even if granted,
@@ -62,6 +67,25 @@ once — that's why this is one persistent micro-batching server per model
    (fewer/no restarts needed if the cap is raised, same behavior if not) —
    just pass `--reservation=<name>` on the initial `sbatch` call once it
    exists.
+8. **`/projects/bhws` (the shared read-only datasets: Quilt-1M, PathMMU,
+   NCT-CRC-HE-100K) is NOT currently readable under the `bfqi` account** —
+   confirmed 2026-09-17 via `ls -ld /projects/bhws` (group `delta_bhws`) and
+   `groups` (Josh's account has `delta_bfqi` but not `delta_bhws`). Whoever
+   TAs needs to be added to Charles's `bhws` group specifically, separate
+   from being on the `bfqi` account used to run the model servers — confirm
+   this before planning to use those datasets in the smoke test or the
+   event itself.
+
+**Open design question from the 2026-09-17 test**: is pinning the
+resubmitted job to the same node (`--nodelist` in `resubmit_chain()`,
+`submit_serve.sbatch`) worth the queue-delay risk it showed without a
+reservation? The stable `current-<job-name>/connection.json` file already
+handles a host that changes between links, so dropping `--nodelist` (and
+the `--dependency=afterany` that exists to serialize onto that same node)
+would very likely let Slurm schedule the successor on any free node much
+faster — probably eliminating the downtime gap — at the cost of the host
+no longer being guaranteed stable across a resubmission. Worth deciding
+before the event, not during it.
 
 ## Never run this on the login node
 

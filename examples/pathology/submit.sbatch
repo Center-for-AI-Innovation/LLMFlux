@@ -31,12 +31,19 @@ TEXT_PROMPTS="${4:-}"
 mkdir -p logs
 
 # --- activate environment (edit for your setup) ---
-# module load anaconda3_gpu
-# conda activate pathology
-# --- or ---
+# Verified working on Delta: `module load pytorch-conda/2.8` provides
+# everything in requirements.txt except open_clip_torch -- one-time
+# `pip install --user "open_clip_torch>=2.24"` after loading the module
+# covers that. See README.md § Setup.
+module load pytorch-conda/2.8
+# --- or, without that module ---
 # source /path/to/venv/bin/activate
 
-cd "$(dirname "$0")"
+# No `cd` needed: Slurm starts a batch job in the directory sbatch was
+# invoked from ($SLURM_SUBMIT_DIR), not the directory containing this
+# script -- $0 here is a spooled copy of this file
+# (/var/spool/slurmd/job<id>/slurm_script), so `cd "$(dirname "$0")"` would
+# silently land you in the wrong place instead of erroring.
 
 EXTRA_ARGS=()
 if [ -n "$TEXT_PROMPTS" ]; then
