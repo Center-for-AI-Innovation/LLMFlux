@@ -166,7 +166,7 @@ processed images are skipped.
 Run `python run_embeddings.py --help` for all options.
 
 ```bash
-sbatch --account=$SLURM_ACCOUNT submit.sbatch /path/to/image/tiles embeddings.csv conch
+sbatch --account=delta_bfqi submit.sbatch /path/to/image/tiles embeddings.csv conch
 ```
 
 `submit.sbatch` targets Delta's `gpuA100x4` partition by default; adjust the
@@ -178,14 +178,31 @@ however you installed the dependencies (conda env vs. venv vs. container).
 Stage one model for the whole event:
 
 ```bash
-sbatch --account=$SLURM_ACCOUNT submit_serve.sbatch conch
+sbatch --account=delta_bfqi --reservation=<name> submit_serve.sbatch conch
 ```
 
 This starts `serve.py` on a GPU node, waits for it to come up, and writes
-`~/.pathology/serve/<job_id>/connection.json` (host, port, a generated API
-key) — read that file (or `tail logs/<job_id>.out`) to get the endpoint to
-hand out to teams. It runs for the `#SBATCH --time` you set (default 8h);
-`scancel` it when the event is over.
+connection info (host, port, a generated API key) to two places: a per-job
+file at `~/.pathology/serve/<job_id>/connection.json`, and a stable one at
+`~/.pathology/serve/current-<job-name>/connection.json` (job name defaults
+to `pathology-serve`) that doesn't move for the life of the whole chain (see
+below) — **hand out the stable one**, or `tail logs/<job_id>.out` for the
+same info.
+
+**Multi-day events (e.g. Friday afternoon → Monday EOD): the job
+auto-resubmits itself.** Delta's `gpuA100x4` partition caps a single job at
+48h, shorter than a weekend-long event. `submit_serve.sbatch` now resubmits
+itself shortly before hitting its own walltime (same node, same account and
+`--reservation`, same API key), so the service keeps running across the
+whole event without anyone resubmitting it by hand. This means a real
+`scancel` at the end of the event isn't enough by itself to stop it — see
+"stop the chain for good" in the script's header comment
+(`touch ~/.pathology/serve/STOP_CHAIN-<job-name>` before the next walltime
+boundary, or right after your final `scancel`). This mechanism hasn't been
+exercised on a real Delta allocation yet — verify it end-to-end (does it
+actually resubmit, does the node/port/key really stay stable, does the stop
+file actually stop it) during the pre-event test run, not for the first time
+during the event itself.
 
 Teams call it with `client.py`:
 
@@ -243,3 +260,10 @@ very high p95 latency at your target team count, lower
 `PATHOLOGY_MAX_WAIT_MS` (more batching, more per-request latency) via the
 server's environment, or split teams across a second `submit_serve.sbatch`
 instance.
+
+The auto-resubmit chain (see "Serve mode" above) is likewise untested
+against real Slurm behavior — the `--signal=B:USR1@180` timing, the
+`--nodelist`/`--dependency` handoff to the next link, and `STOP_CHAIN`
+actually stopping it all need a real run on Delta (a short `--time` override
+works fine for a quick dry run) before you rely on it across an actual
+weekend.
