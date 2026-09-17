@@ -32,7 +32,7 @@ once — that's why this is one persistent micro-batching server per model
    dependency-free `test` adapter, from the login node (HTTP only, no model
    load):
    ```bash
-   sbatch --account=delta_bfqi submit_serve.sbatch test
+   sbatch --account=bfqi-delta-gpu submit_serve.sbatch test
    # once connection.json exists:
    python loadtest.py --endpoint http://<node>:<port> --api-key <key> \
        --teams 20 --images-per-team 3
@@ -74,7 +74,7 @@ are lightweight/network-only and are fine on the login node.
 ## Day-of: staging a model
 
 ```bash
-sbatch --account=delta_bfqi --reservation=<name> submit_serve.sbatch <model>
+sbatch --account=bfqi-delta-gpu --reservation=<name> submit_serve.sbatch <model>
 tail -f logs/<job_id>.out   # watch for "Server ready on port ..."
 cat ~/.pathology/serve/current-<job-name>/connection.json   # host, port, api_key -- stable across chain restarts, job name defaults to pathology-serve
 ```

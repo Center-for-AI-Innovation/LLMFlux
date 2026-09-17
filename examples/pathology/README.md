@@ -166,7 +166,7 @@ processed images are skipped.
 Run `python run_embeddings.py --help` for all options.
 
 ```bash
-sbatch --account=delta_bfqi submit.sbatch /path/to/image/tiles embeddings.csv conch
+sbatch --account=bfqi-delta-gpu submit.sbatch /path/to/image/tiles embeddings.csv conch
 ```
 
 `submit.sbatch` targets Delta's `gpuA100x4` partition by default; adjust the
@@ -178,7 +178,7 @@ however you installed the dependencies (conda env vs. venv vs. container).
 Stage one model for the whole event:
 
 ```bash
-sbatch --account=delta_bfqi --reservation=<name> submit_serve.sbatch conch
+sbatch --account=bfqi-delta-gpu --reservation=<name> submit_serve.sbatch conch
 ```
 
 This starts `serve.py` on a GPU node, waits for it to come up, and writes
