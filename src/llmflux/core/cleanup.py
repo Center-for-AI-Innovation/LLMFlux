@@ -42,12 +42,21 @@ def remove_paths() -> list:
     ]
 
 
+def _protected(path: Path) -> bool:
+    """True for the workspace, any of its parents, or home."""
+    resolved = path.resolve()
+    return _workspace().resolve().is_relative_to(resolved) or resolved == Path.home().resolve()
+
+
 def delete(paths) -> tuple:
     """Empty each directory and unlink each file. Returns (deleted, errors)."""
     deleted = []
     errors = []
     for path in paths:
         if not path.exists():
+            continue
+        if _protected(path):
+            errors.append(f"{path}: refusing to delete the workspace, a parent of it, or home")
             continue
         # Unlink symlinks; don't empty their targets.
         try:

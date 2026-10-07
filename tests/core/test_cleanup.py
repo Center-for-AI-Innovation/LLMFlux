@@ -74,6 +74,18 @@ class TestDelete(unittest.TestCase):
         self.assertFalse(link.is_symlink())
         self.assertTrue((outside / "keep.txt").exists())
 
+    def test_refuses_the_workspace_and_its_parents(self):
+        workspace = self.root / "ws"
+        workspace.mkdir()
+        (workspace / "keep.txt").write_text("x")
+
+        with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": str(workspace)}):
+            deleted, errors = delete([workspace, self.root])
+
+        self.assertEqual(deleted, [])
+        self.assertEqual(len(errors), 2)
+        self.assertTrue((workspace / "keep.txt").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
