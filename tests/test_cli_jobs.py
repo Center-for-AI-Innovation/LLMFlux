@@ -1,4 +1,5 @@
 import io
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -104,37 +105,29 @@ class TestCliJobs(unittest.TestCase):
         self.assertIn("llmflux cancel --all", mock_stderr.getvalue())
         mock_delete.assert_not_called()
 
-    @patch("llmflux.cli.Config")
     @patch("llmflux.cli.delete", return_value=([], []))
     @patch("llmflux.cli.get_active_job_details", return_value={})
     @patch("llmflux.cli.JobRegistry")
     @patch("sys.stdout", new_callable=io.StringIO)
     def test_remove_deletes_when_nothing_is_running(
-        self, mock_stdout, mock_registry_cls, _mock_active, mock_delete, mock_config_cls
+        self, mock_stdout, mock_registry_cls, _mock_active, mock_delete
     ):
         mock_registry_cls.return_value = _FakeRegistry({"100": {}})
-        # remove_paths() runs for real against this config, and two of the paths
-        # it returns come from Path.home(), not from the config at all. Pin both
-        # at a temp dir so the list is never made of real paths — only the
-        # patched delete() stands between this test and a live ~/.llmflux.
+        # Keep the real path list away from real dirs.
         with tempfile.TemporaryDirectory() as tmp:
-            config = mock_config_cls.return_value
-            config.workspace = tmp
-            config.logs_dir = str(Path(tmp) / "logs")
-            config.containers_dir = str(Path(tmp) / "containers")
-            config.models_dir = str(Path(tmp) / "models")
-            with patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp)):
+            with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": tmp}), \
+                 patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp)):
                 exit_code = cli.main(["remove"])
 
         self.assertEqual(exit_code, 0)
         mock_delete.assert_called_once()
 
-    @patch("llmflux.cli.cancel_job")
+    @patch("llmflux.cli.cancel_jobs")
     @patch("llmflux.cli.get_active_job_details")
     @patch("llmflux.cli.JobRegistry")
     @patch("sys.stdout", new_callable=io.StringIO)
     def test_cancel_all_cancels_every_running_job(
-        self, mock_stdout, mock_registry_cls, mock_get_active_job_details, mock_cancel_job
+        self, mock_stdout, mock_registry_cls, mock_get_active_job_details, mock_cancel_jobs
     ):
         mock_registry_cls.return_value = _FakeRegistry({"100": {}, "200": {}})
         mock_get_active_job_details.return_value = {
@@ -145,7 +138,7 @@ class TestCliJobs(unittest.TestCase):
         exit_code = cli.main(["cancel", "--all"])
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(mock_cancel_job.call_count, 2)
+        mock_cancel_jobs.assert_called_once_with(["100", "200"], force=False)
 
     @patch("llmflux.cli.Path.exists", return_value=False)
     @patch("llmflux.cli.get_job_state", return_value="PENDING")

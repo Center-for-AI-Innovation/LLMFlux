@@ -14,6 +14,7 @@ import logging
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Optional, List, Dict
+from dotenv import find_dotenv, load_dotenv
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
 from .slurm.runner import SlurmRunner
@@ -23,6 +24,7 @@ from .slurm.commands import (
     TERMINAL_STATES,
     SlurmCommandError,
     cancel_job,
+    cancel_jobs,
     get_active_job_details,
     get_job_details,
     get_list_of_jobs_details,
@@ -904,15 +906,14 @@ def _cancel_command(args: argparse.Namespace) -> int:
         if not running:
             print("No active LLMFlux jobs to cancel.")
             return 0
-        failed = False
-        for job_id in running:
-            try:
-                cancel_job(job_id, force=bool(args.force))
-                print(f"Job {job_id} cancelled successfully.")
-            except SlurmCommandError as exc:
-                print(str(exc), file=sys.stderr)
-                failed = True
-        return 1 if failed else 0
+        job_ids = sorted(running, key=int)
+        try:
+            cancel_jobs(job_ids, force=bool(args.force))
+        except SlurmCommandError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(f"Cancelled {len(job_ids)} job(s): {', '.join(job_ids)}")
+        return 0
 
     job_id = str(args.job_id)
     if registry.get_job(job_id) is None:
@@ -945,7 +946,7 @@ def _cleanup(paths_for, verb: str) -> int:
     if running:
         print(f"Cannot {verb}: {len(running)} LLMFlux job(s) still running.", file=sys.stderr)
         _render_table(
-            [[job_id, extract_state(data)] for job_id, data in sorted(running.items())],
+            [[job_id, extract_state(data)] for job_id, data in sorted(running.items(), key=lambda kv: int(kv[0]))],
             ["JOB ID", "STATE"],
         )
         print(
@@ -955,7 +956,8 @@ def _cleanup(paths_for, verb: str) -> int:
         )
         return 1
 
-    deleted, errors = delete(paths_for(Config()))
+    load_dotenv(find_dotenv(usecwd=True))  # Config() used to do this
+    deleted, errors = delete(paths_for())
     for path in deleted:
         print(f"Deleted {path}")
     for error in errors:
