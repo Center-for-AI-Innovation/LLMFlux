@@ -214,7 +214,8 @@ Notes:
 - `clean` empties `logs/`, `tmp/`, `staged-input/` and `~/.llmflux/serve/`, and
   deletes `job.sh`. `remove` also empties `containers/`, `models/`, `.cache/`,
   `.ollama/`, `.vllm/` and `~/.llmflux/`. The directories themselves stay — only
-  their contents go.
+  their contents go. A configured directory outside the workspace (e.g. a
+  site-wide `LLMFLUX_CONTAINERS_DIR`) is skipped, not emptied.
 - Neither command touches `data/input/` or `data/output/`, and neither wipes the
   workspace itself — on a source checkout that is where the repo lives.
 - Both refuse to run while any LLMFlux job is running. Stop it with

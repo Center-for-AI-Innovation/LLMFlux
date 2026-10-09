@@ -42,21 +42,33 @@ def remove_paths() -> list:
     ]
 
 
-def _protected(path: Path) -> bool:
-    """True for the workspace, any of its parents, or home."""
-    resolved = path.resolve()
-    return _workspace().resolve().is_relative_to(resolved) or resolved == Path.home().resolve()
+def _skip_reason(path: Path) -> str:
+    """Why `path` must not be touched, or "" if it is managed by these commands."""
+    if path.name in ("", ".."):
+        location = path.resolve()
+    else:
+        location = path.parent.resolve() / path.name  # don't follow a symlink at `path`
+    workspace = _workspace().resolve()
+    home = Path.home().resolve()
+    if location in (workspace, home, Path(location.anchor)):
+        return "is the workspace, home, or root"
+    allowed = (workspace, home / ".llmflux", (home / ".llmflux").resolve())
+    if any(location.is_relative_to(root) for root in allowed):
+        return ""
+    return "outside the workspace, not managed by this command"
 
 
 def delete(paths) -> tuple:
-    """Empty each directory and unlink each file. Returns (deleted, errors)."""
+    """Empty each managed directory and unlink each file. Returns (deleted, skipped, errors)."""
     deleted = []
+    skipped = []
     errors = []
     for path in paths:
-        if not path.exists():
+        if not path.exists() and not path.is_symlink():
             continue
-        if _protected(path):
-            errors.append(f"{path}: refusing to delete the workspace, a parent of it, or home")
+        reason = _skip_reason(path)
+        if reason:
+            skipped.append(f"Skipping {path}: {reason}")
             continue
         # Unlink symlinks; don't empty their targets.
         try:
@@ -79,4 +91,4 @@ def delete(paths) -> tuple:
                 ok = False
         if ok:
             deleted.append(path)
-    return deleted, errors
+    return deleted, skipped, errors

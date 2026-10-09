@@ -930,39 +930,44 @@ def _cancel_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cleanup(paths_for, verb: str) -> int:
-    """Shared body of `clean` and `remove`: refuse while jobs run, else delete.
-
-    Nothing is cancelled here. A running job means the files are still in use,
-    so the user is told to stop it themselves and re-run.
-    """
-    registry = JobRegistry()
+def _blocked_by_running_jobs(registry: JobRegistry, verb: str) -> bool:
+    """Print why `verb` can't run and return True if any tracked job is active."""
     try:
         running = _running_jobs(registry)
     except SlurmCommandError as exc:
         print(f"Error: could not check for running jobs: {exc}", file=sys.stderr)
-        return 1
+        return True
+    if not running:
+        return False
+    print(f"Cannot {verb}: {len(running)} LLMFlux job(s) still running.", file=sys.stderr)
+    _render_table(
+        [[job_id, extract_state(data)] for job_id, data in sorted(running.items(), key=lambda kv: int(kv[0]))],
+        ["JOB ID", "STATE"],
+    )
+    print(
+        "Stop them first with 'llmflux cancel <job-id>', or all at once with\n"
+        f"'llmflux cancel --all', then re-run 'llmflux {verb}'.",
+        file=sys.stderr,
+    )
+    return True
 
-    if running:
-        print(f"Cannot {verb}: {len(running)} LLMFlux job(s) still running.", file=sys.stderr)
-        _render_table(
-            [[job_id, extract_state(data)] for job_id, data in sorted(running.items(), key=lambda kv: int(kv[0]))],
-            ["JOB ID", "STATE"],
-        )
-        print(
-            "Stop them first with 'llmflux cancel <job-id>', or all at once with\n"
-            f"'llmflux cancel --all', then re-run 'llmflux {verb}'.",
-            file=sys.stderr,
-        )
-        return 1
 
+def _cleanup(paths_for, verb: str) -> int:
+    """Shared body of `clean` and `remove`: refuse while jobs run, else delete."""
     load_dotenv(find_dotenv(usecwd=True))  # Config() used to do this
-    deleted, errors = delete(paths_for())
+    paths = paths_for()
+    # Checked last, right before deleting, so a job can't start in between.
+    if _blocked_by_running_jobs(JobRegistry(), verb):
+        return 1
+
+    deleted, skipped, errors = delete(paths)
     for path in deleted:
         print(f"Deleted {path}")
+    for message in skipped:
+        print(message)
     for error in errors:
         print(error, file=sys.stderr)
-    if not deleted and not errors:
+    if not deleted and not skipped and not errors:
         print("Nothing to delete.")
     return 1 if errors else 0
 

@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `models/`, `.cache/`, `.ollama/`, `.vllm/` and `~/.llmflux/`. Both work from
   a fixed path list rather than wiping the workspace, so `data/input/`,
   `data/output/` and — on a source checkout — the repo itself are never
-  touched. Both refuse to run while any LLMFlux job is running; stop it with
+  touched, and configured directories outside the workspace are
+  skipped. Both refuse to run while any LLMFlux job is running; stop it with
   `llmflux cancel` first.
 - `llmflux cancel --all`, cancelling every LLMFlux job Slurm currently reports
   as running or pending, in one command instead of one `cancel <job-id>` at a

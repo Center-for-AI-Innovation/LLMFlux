@@ -165,3 +165,15 @@ class TestCancelJob(unittest.TestCase):
         cancel_jobs(["100", "200"])
         mock_run.assert_called_once()
         self.assertEqual(mock_run.call_args[0][0], ["scancel", "100", "200"])
+
+    @patch("llmflux.slurm.commands.subprocess.run")
+    def test_cancel_jobs_force_adds_signal(self, mock_run):
+        mock_run.return_value = _completed("", returncode=0)
+        cancel_jobs(["100"], force=True)
+        self.assertEqual(mock_run.call_args[0][0], ["scancel", "--signal=KILL", "100"])
+
+    @patch("llmflux.slurm.commands.subprocess.run")
+    def test_cancel_jobs_raises_on_failure(self, mock_run):
+        mock_run.return_value = _completed("", returncode=1, stderr="Invalid job id")
+        with self.assertRaises(SlurmCommandError):
+            cancel_jobs(["100"])
