@@ -1,8 +1,12 @@
 import io
+import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from llmflux import cli
+from llmflux.slurm.commands import SlurmCommandError
 
 
 class _FakeRegistry:
@@ -84,6 +88,97 @@ class TestCliJobs(unittest.TestCase):
         self.assertIn("Job ID:", output)
         self.assertIn("llmflux_model_ollama", output)
         self.assertIn("Tip: Run `llmflux logs 300`", output)
+
+    @patch("llmflux.cli.delete")
+    @patch("llmflux.cli.get_active_job_details")
+    @patch("llmflux.cli.JobRegistry")
+    @patch("sys.stderr", new_callable=io.StringIO)
+    def test_clean_refuses_while_a_job_is_running(
+        self, mock_stderr, mock_registry_cls, mock_get_active_job_details, mock_delete
+    ):
+        mock_registry_cls.return_value = _FakeRegistry({"100": {"job_name": "llmflux_a_vllm"}})
+        mock_get_active_job_details.return_value = {"100": {"job_state": "RUNNING"}}
+
+        exit_code = cli.main(["clean"])
+
+        self.assertEqual(exit_code, 1)
+        self.assertIn("still running", mock_stderr.getvalue())
+        self.assertIn("llmflux cancel --all", mock_stderr.getvalue())
+        mock_delete.assert_not_called()
+
+    @patch("llmflux.cli.delete", return_value=([], [], []))
+    @patch("llmflux.cli.get_active_job_details", return_value={})
+    @patch("llmflux.cli.JobRegistry")
+    @patch("sys.stdout", new_callable=io.StringIO)
+    def test_remove_deletes_when_nothing_is_running(
+        self, mock_stdout, mock_registry_cls, _mock_active, mock_delete
+    ):
+        mock_registry_cls.return_value = _FakeRegistry({"100": {}})
+        # Keep the real path list away from real dirs.
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": tmp}), \
+                 patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp)):
+                exit_code = cli.main(["remove"])
+
+        self.assertEqual(exit_code, 0)
+        mock_delete.assert_called_once()
+
+    @patch("llmflux.cli.cancel_jobs")
+    @patch("llmflux.cli.get_active_job_details")
+    @patch("llmflux.cli.JobRegistry")
+    @patch("sys.stdout", new_callable=io.StringIO)
+    def test_cancel_all_cancels_every_running_job(
+        self, mock_stdout, mock_registry_cls, mock_get_active_job_details, mock_cancel_jobs
+    ):
+        mock_registry_cls.return_value = _FakeRegistry({"100": {}, "200": {}})
+        mock_get_active_job_details.return_value = {
+            "100": {"job_state": "RUNNING"},
+            "200": {"job_state": "PENDING"},
+        }
+
+        exit_code = cli.main(["cancel", "--all"])
+
+        self.assertEqual(exit_code, 0)
+        mock_cancel_jobs.assert_called_once_with(["100", "200"], force=False)
+
+    def _run(self, argv, active=None, active_error=None):
+        """Run the CLI with one tracked job (100) and the given sacct result."""
+        with patch("llmflux.cli.JobRegistry", return_value=_FakeRegistry({"100": {}})), \
+             patch("llmflux.cli.get_active_job_details",
+                   return_value=active or {}, side_effect=active_error), \
+             patch("sys.stdout", new_callable=io.StringIO), \
+             patch("sys.stderr", new_callable=io.StringIO):
+            return cli.main(argv)
+
+    def test_cancel_needs_exactly_one_of_job_id_or_all(self):
+        self.assertEqual(self._run(["cancel"]), 2)
+        self.assertEqual(self._run(["cancel", "123", "--all"]), 2)
+
+    @patch("llmflux.cli.cancel_jobs")
+    def test_cancel_all_with_nothing_active(self, mock_cancel_jobs):
+        self.assertEqual(self._run(["cancel", "--all"]), 0)
+        mock_cancel_jobs.assert_not_called()
+
+    def test_cancel_all_when_slurm_query_fails(self):
+        self.assertEqual(self._run(["cancel", "--all"], active_error=SlurmCommandError("down")), 1)
+
+    @patch("llmflux.cli.cancel_jobs", side_effect=SlurmCommandError("scancel failed"))
+    def test_cancel_all_when_scancel_fails(self, _mock_cancel_jobs):
+        self.assertEqual(self._run(["cancel", "--all"], active={"100": {"job_state": "RUNNING"}}), 1)
+
+    @patch("llmflux.cli.cancel_jobs")
+    def test_cancel_all_forwards_force(self, mock_cancel_jobs):
+        self._run(["cancel", "--all", "--force"], active={"100": {"job_state": "RUNNING"}})
+        mock_cancel_jobs.assert_called_once_with(["100"], force=True)
+
+    @patch("llmflux.cli.delete")
+    def test_clean_when_slurm_query_fails(self, mock_delete):
+        self.assertEqual(self._run(["clean"], active_error=SlurmCommandError("down")), 1)
+        mock_delete.assert_not_called()
+
+    @patch("llmflux.cli.delete", return_value=([], [], ["logs/1.out: Permission denied"]))
+    def test_clean_exits_1_when_a_delete_fails(self, _mock_delete):
+        self.assertEqual(self._run(["clean"]), 1)
 
     @patch("llmflux.cli.Path.exists", return_value=False)
     @patch("llmflux.cli.get_job_state", return_value="PENDING")
