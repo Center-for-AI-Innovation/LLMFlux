@@ -8,6 +8,7 @@ from llmflux.slurm.commands import (
     _parse_state_value,
     _run_json_command,
     cancel_job,
+    cancel_jobs,
     extract_state,
     get_active_job_details,
     get_job_details,
@@ -157,3 +158,22 @@ class TestCancelJob(unittest.TestCase):
         cancel_job("123", force=False)
         cmd = mock_run.call_args[0][0]
         self.assertNotIn("--signal=KILL", cmd)
+
+    @patch("llmflux.slurm.commands.subprocess.run")
+    def test_cancel_jobs_uses_one_scancel_call(self, mock_run):
+        mock_run.return_value = _completed("", returncode=0)
+        cancel_jobs(["100", "200"])
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args[0][0], ["scancel", "100", "200"])
+
+    @patch("llmflux.slurm.commands.subprocess.run")
+    def test_cancel_jobs_force_adds_signal(self, mock_run):
+        mock_run.return_value = _completed("", returncode=0)
+        cancel_jobs(["100"], force=True)
+        self.assertEqual(mock_run.call_args[0][0], ["scancel", "--signal=KILL", "100"])
+
+    @patch("llmflux.slurm.commands.subprocess.run")
+    def test_cancel_jobs_raises_on_failure(self, mock_run):
+        mock_run.return_value = _completed("", returncode=1, stderr="Invalid job id")
+        with self.assertRaises(SlurmCommandError):
+            cancel_jobs(["100"])

@@ -174,3 +174,15 @@ def cancel_job(job_id: str, force: bool = False) -> None:
         raise SlurmCommandError(f"Failed to cancel job {job_id}: {stderr}")
 
 
+def cancel_jobs(job_ids: list[str], force: bool = False) -> None:
+    """Cancel several jobs with a single scancel call."""
+    command = ["scancel"]
+    if force:
+        command.append("--signal=KILL")
+    command.extend(str(job_id) for job_id in job_ids)
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        stderr = result.stderr.strip() or result.stdout.strip()
+        raise SlurmCommandError(f"Failed to cancel jobs {', '.join(map(str, job_ids))}: {stderr}")
+
+

@@ -62,12 +62,12 @@ Confirm the installation by running a base command and ensuring your system give
 
 ```bash
 $llmflux -h
-usage: llmflux [-h] [--version] {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel} ...
+usage: llmflux [-h] [--version] {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel,clean,remove} ...
 
 LLMFlux CLI
 
 positional arguments:
-  {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel}
+  {run,serve,connect,benchmark,show-models,jobs,status,logs,cancel,clean,remove}
     run                 Submit a batch processing job
     serve               Start a model as a long-running service on a compute node
     connect             Show connection info for a running serve job
@@ -77,6 +77,8 @@ positional arguments:
     status              Show detailed status for a job
     logs                Show last lines of stdout and stderr for a tracked job
     cancel              Cancel a tracked running/pending job
+    clean               Delete LLMFlux scratch, logs and connection files, keeping model weights
+    remove              Delete all LLMFlux data, including model weights and engine caches
 
 options:
   -h, --help            show this help message and exit
@@ -195,11 +197,29 @@ llmflux logs <job-id> -f
 # Cancel a tracked job
 llmflux cancel <job-id>
 llmflux cancel <job-id> --force
+
+# Cancel every active LLMFlux job at once
+llmflux cancel --all
+
+# Delete logs and scratch files, keeping model weights
+llmflux clean
+
+# Delete logs, scratch, model weights and engine caches
+llmflux remove
 ```
 
 Notes:
 - `jobs` and `status` derive live state from Slurm JSON output.
 - `logs` and `cancel` only operate on jobs present in the LLMFlux registry.
+- `clean` empties `logs/`, `tmp/`, `staged-input/` and `~/.llmflux/serve/`, and
+  deletes `job.sh`. `remove` also empties `containers/`, `models/`, `.cache/`,
+  `.ollama/`, `.vllm/` and `~/.llmflux/`. The directories themselves stay — only
+  their contents go. A configured directory outside the workspace (e.g. a
+  site-wide `LLMFLUX_CONTAINERS_DIR`) is skipped, not emptied.
+- Neither command touches `data/input/` or `data/output/`, and neither wipes the
+  workspace itself — on a source checkout that is where the repo lives.
+- Both refuse to run while any LLMFlux job is running. Stop it with
+  `llmflux cancel <job-id>` or `llmflux cancel --all` first, then re-run.
 
 ## Output Format
 

@@ -336,10 +336,13 @@ class TestStatusCommandIntegration(unittest.TestCase):
 
 
 class TestCancelCommandIntegration(unittest.TestCase):
-    def _args(self, job_id="123", force=False):
+    def _args(self, job_id="123", force=False, all=False):
         args = MagicMock()
         args.job_id = job_id
         args.force = force
+        # Explicit: a bare MagicMock would hand back a truthy `all`, which
+        # `_cancel_command` reads as "job ID and --all both given".
+        args.all = all
         return args
 
     @patch("llmflux.cli.JobRegistry")

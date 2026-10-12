@@ -14,6 +14,7 @@ import logging
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Optional, List, Dict
+from dotenv import find_dotenv, load_dotenv
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
 from .slurm.runner import SlurmRunner
@@ -23,6 +24,7 @@ from .slurm.commands import (
     TERMINAL_STATES,
     SlurmCommandError,
     cancel_job,
+    cancel_jobs,
     get_active_job_details,
     get_job_details,
     get_list_of_jobs_details,
@@ -33,6 +35,7 @@ from .slurm.commands import (
 from .processors import BatchProcessor
 from .core.config import Config, ConfigDirectoryError, EngineConfig
 from .core.registry import JobRegistry
+from .core.cleanup import clean_paths, delete, remove_paths
 from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
 
 
@@ -866,12 +869,53 @@ def _logs_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _running_jobs(registry: JobRegistry) -> Dict[str, dict]:
+    """Registry-tracked jobs that Slurm still reports as RUNNING or PENDING.
+
+    The same intersection `_jobs_command` computes for its default view.
+    """
+    tracked = registry.get_all_jobs()
+    if not tracked:
+        return {}
+    return {
+        job_id: data
+        for job_id, data in get_active_job_details().items()
+        if job_id in tracked and extract_state(data) in ACTIVE_STATES
+    }
+
+
 def _cancel_command(args: argparse.Namespace) -> int:
     """Handle the `cancel` command.
-    Cancels a specific job.
+    Cancels a specific job, or every active LLMFlux job with --all.
     """
-    job_id = str(args.job_id)
+    if args.job_id and args.all:
+        print("Specify either a job ID or --all, not both.", file=sys.stderr)
+        return 2
+    if not args.job_id and not args.all:
+        print("Specify a job ID or --all.", file=sys.stderr)
+        return 2
+
     registry = JobRegistry()
+
+    if args.all:
+        try:
+            running = _running_jobs(registry)
+        except SlurmCommandError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        if not running:
+            print("No active LLMFlux jobs to cancel.")
+            return 0
+        job_ids = sorted(running, key=int)
+        try:
+            cancel_jobs(job_ids, force=bool(args.force))
+        except SlurmCommandError as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(f"Cancelled {len(job_ids)} job(s): {', '.join(job_ids)}")
+        return 0
+
+    job_id = str(args.job_id)
     if registry.get_job(job_id) is None:
         print(f"Job {job_id} is not tracked by LLMFlux registry.", file=sys.stderr)
         return 1
@@ -884,6 +928,58 @@ def _cancel_command(args: argparse.Namespace) -> int:
 
     print(f"Job {job_id} cancelled successfully.")
     return 0
+
+
+def _blocked_by_running_jobs(registry: JobRegistry, verb: str) -> bool:
+    """Print why `verb` can't run and return True if any tracked job is active."""
+    try:
+        running = _running_jobs(registry)
+    except SlurmCommandError as exc:
+        print(f"Error: could not check for running jobs: {exc}", file=sys.stderr)
+        return True
+    if not running:
+        return False
+    print(f"Cannot {verb}: {len(running)} LLMFlux job(s) still running.", file=sys.stderr)
+    _render_table(
+        [[job_id, extract_state(data)] for job_id, data in sorted(running.items(), key=lambda kv: int(kv[0]))],
+        ["JOB ID", "STATE"],
+    )
+    print(
+        "Stop them first with 'llmflux cancel <job-id>', or all at once with\n"
+        f"'llmflux cancel --all', then re-run 'llmflux {verb}'.",
+        file=sys.stderr,
+    )
+    return True
+
+
+def _cleanup(paths_for, verb: str) -> int:
+    """Shared body of `clean` and `remove`: refuse while jobs run, else delete."""
+    load_dotenv(find_dotenv(usecwd=True))  # Config() used to do this
+    paths = paths_for()
+    # Checked last, right before deleting, so a job can't start in between.
+    if _blocked_by_running_jobs(JobRegistry(), verb):
+        return 1
+
+    deleted, skipped, errors = delete(paths)
+    for path in deleted:
+        print(f"Deleted {path}")
+    for message in skipped:
+        print(message)
+    for error in errors:
+        print(error, file=sys.stderr)
+    if not deleted and not skipped and not errors:
+        print("Nothing to delete.")
+    return 1 if errors else 0
+
+
+def _clean_command(args: argparse.Namespace) -> int:
+    """Handle the `clean` command: delete logs and scratch, keeping models."""
+    return _cleanup(clean_paths, "clean")
+
+
+def _remove_command(args: argparse.Namespace) -> int:
+    """Handle the `remove` command: delete everything `clean` does, plus models."""
+    return _cleanup(remove_paths, "remove")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1103,9 +1199,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     # cancel subcommand
     cancel_parser = subparsers.add_parser("cancel", help="Cancel a tracked running/pending job")
-    cancel_parser.add_argument("job_id", help="Slurm job ID")
+    cancel_parser.add_argument("job_id", nargs="?", help="Slurm job ID")
+    cancel_parser.add_argument("--all", action="store_true", dest="all", help="Cancel every active LLMFlux job")
     cancel_parser.add_argument("--force", action="store_true", help="Force kill with scancel --signal=KILL")
     cancel_parser.set_defaults(func=_cancel_command)
+
+    # clean subcommand
+    clean_parser = subparsers.add_parser(
+        "clean", help="Delete LLMFlux logs and scratch files, keeping model weights"
+    )
+    clean_parser.set_defaults(func=_clean_command)
+
+    # remove subcommand
+    remove_parser = subparsers.add_parser(
+        "remove", help="Delete LLMFlux logs, scratch, model weights and caches"
+    )
+    remove_parser.set_defaults(func=_remove_command)
 
     return parser
 
