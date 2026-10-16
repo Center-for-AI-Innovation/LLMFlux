@@ -76,14 +76,14 @@ Read-only copies of Quilt-1M, PathMMU, NCT-CRC-HE-100K and PathGen will be
 on Delta. **The path will be posted in the event channel and at the 8:30
 briefing.** Read them in place; don't copy them into your own space.
 
-Where to write your own files:
+Where to write your own files: **your home directory** (`~`, 100 GB and
+750k files per person) for code, outputs, and environments. Check usage with
+`quota`.
 
-- **Your home directory** (`~`, 100 GB) for code, small outputs, and
-  environments.
-- **`/work/hdd/bfqi/$USER`** for larger outputs (embeddings, checkpoints);
-  `mkdir -p /work/hdd/bfqi/$USER` if it doesn't exist yet.
-- **Not `/projects/bfqi`** — that project space is full, and writes there
-  will fail.
+Don't write to `/projects/bfqi` (that project space is full, so writes will
+fail) or `/work` (`/work/hdd` is having filesystem problems this weekend).
+Big intermediate files (e.g. embeddings for millions of tiles) should stay
+on your laptop or be computed on the fly.
 
 ## 4. LLMs: Lumen
 
