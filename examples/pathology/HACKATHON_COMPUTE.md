@@ -158,6 +158,7 @@ and make a new one.
 
 ## 5. Your own resources
 
-Any laptop works for calling Lumen and the pathology servers — they're just
-HTTP. For your own GPU work beyond what Delta can give you, Google Colab or
+Lumen works from any laptop. The pathology embedding servers run on a Delta
+compute node, so call them from inside Delta (login node, OnDemand, or a
+Slurm job), then copy the embeddings to your laptop if you like. For your own GPU work beyond what Delta can give you, Google Colab or
 your own lab/cloud resources are fair game.

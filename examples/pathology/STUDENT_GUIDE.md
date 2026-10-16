@@ -3,8 +3,11 @@
 This is for teams at the hackathon using the pathology/CLIP model the
 organizers staged for the event. You do **not** need CONCH, MUSK, torch, a
 GPU, or any of the model code in this directory — all of that runs on a
-server the organizers are hosting. Your machine just sends it images over
-HTTP and gets back embeddings or predicted labels.
+server the organizers are hosting on a Delta compute node. You send it images
+over HTTP and get back embeddings or predicted labels. **Send requests from
+inside Delta** (a login-node shell, an OnDemand shell/Jupyter, or your own
+Slurm job): Delta compute nodes aren't reachable from a laptop. Embeddings
+you get back are small, so you can copy them to your laptop afterwards.
 
 New to Delta, or looking for LLM access (Lumen) and GPU job rules? Start
 with `HACKATHON_COMPUTE.md`.
