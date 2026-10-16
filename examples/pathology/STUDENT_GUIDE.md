@@ -6,6 +6,9 @@ GPU, or any of the model code in this directory — all of that runs on a
 server the organizers are hosting. Your machine just sends it images over
 HTTP and gets back embeddings or predicted labels.
 
+New to Delta, or looking for LLM access (Lumen) and GPU job rules? Start
+with `HACKATHON_COMPUTE.md`.
+
 If you're looking for how to *set up* that server, see `README.md` instead —
 this doc is the other side of it: what to do with the endpoint once you have
 it.
