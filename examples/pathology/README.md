@@ -1,5 +1,7 @@
 # CONCH / MUSK Pathology Embeddings (standalone)
 
+> **Moved:** this tooling now lives at https://github.com/ncsa/ashby-hackathon-2026 (history preserved). This copy is no longer updated.
+
 Tooling for running the CONCH and MUSK computational-pathology foundation
 models on Delta, for the pathology track of the hackathon.
 
