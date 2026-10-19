@@ -444,5 +444,87 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertIn("does not match requested model", str(ctx.exception))
 
 
+class TestRunSamplingDefaults(unittest.TestCase):
+    """run(**kwargs) supplies sampling defaults beneath each request's body.
+
+    LLMFlux#144: run() used to discard its kwargs, so --max-tokens,
+    --temperature, --top-p and --top-k reached the processor and went nowhere.
+    Precedence is body, then the run's value, then the model config.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        root = Path(self.temp_dir.name)
+        self.model_config = ModelConfig(
+            name="test:7b",
+            hf_name="test/test-model",
+            parameters=ModelParameters(temperature=0.7, max_tokens=500, top_p=0.9, top_k=40),
+        )
+        self.input = root / "in.jsonl"
+        self.output = root / "out.json"
+
+    def _run(self, bodies, url="/v1/chat/completions", **run_kwargs):
+        """Run the processor over bodies; return the kwargs of each chat call."""
+        with open(self.input, "w") as f:
+            for i, body in enumerate(bodies):
+                f.write(json.dumps({"custom_id": f"r{i}", "url": url, "body": body}) + "\n")
+        with patch("llmflux.processors.batch.LLMClient") as client_cls:
+            client = client_cls.return_value
+            client.chat.return_value = ("ok", {})
+            processor = BatchProcessor(model_config=self.model_config, retry_delay=0)
+            results = processor.run(str(self.input), str(self.output), "vllm", **run_kwargs)
+        self.assertTrue(all(r.error is None for r in results))
+        calls = client.chat.call_args_list[1:]  # [0] is setup()'s warmup
+        self.assertEqual(len(calls), len(bodies))
+        return [c.kwargs for c in calls]
+
+    def test_run_values_apply_when_body_is_silent(self):
+        [sent] = self._run(
+            [{"messages": []}], max_tokens=32, temperature=0.2, top_p=0.5, top_k=5,
+        )
+        self.assertEqual(
+            {k: sent[k] for k in ("max_tokens", "temperature", "top_p", "top_k")},
+            {"max_tokens": 32, "temperature": 0.2, "top_p": 0.5, "top_k": 5},
+        )
+
+    def test_body_beats_run_values(self):
+        [sent] = self._run(
+            [{"messages": [], "max_tokens": 7, "temperature": 0.0, "top_k": 2}],
+            max_tokens=32, temperature=0.2, top_k=5,
+        )
+        self.assertEqual(sent["max_tokens"], 7)
+        self.assertEqual(sent["temperature"], 0.0)  # falsy, but still the body's
+        self.assertEqual(sent["top_k"], 2)
+
+    def test_model_config_is_the_fallback(self):
+        [sent] = self._run([{"messages": []}], max_tokens=32)
+        self.assertEqual(sent["max_tokens"], 32)
+        self.assertEqual(sent["temperature"], 0.7)
+        self.assertEqual(sent["top_p"], 0.9)
+
+    def test_top_k_not_sent_unless_asked_for(self):
+        """The model config's top_k (40) is not a fallback: sending it would
+        change every request that never asked for top-k sampling."""
+        [sent] = self._run([{"messages": []}])
+        self.assertNotIn("top_k", sent)
+
+    def test_none_run_values_are_ignored(self):
+        """The CLI passes unset flags as absent, but a library caller may pass None."""
+        [sent] = self._run([{"messages": []}], max_tokens=None, top_k=None)
+        self.assertEqual(sent["max_tokens"], 500)
+        self.assertNotIn("top_k", sent)
+
+    def test_completions_endpoint_uses_run_values_too(self):
+        [sent] = self._run([{"prompt": "hi"}], url="/v1/completions", max_tokens=32, top_k=5)
+        self.assertEqual(sent["max_tokens"], 32)
+        self.assertEqual(sent["top_k"], 5)
+
+    def test_unrelated_kwargs_still_ignored(self):
+        [sent] = self._run([{"messages": []}], rebuild=True, debug=True)
+        self.assertNotIn("rebuild", sent)
+        self.assertNotIn("debug", sent)
+
+
 if __name__ == "__main__":
     unittest.main() 

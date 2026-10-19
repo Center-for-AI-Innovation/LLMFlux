@@ -223,6 +223,12 @@ def create_ollama_batch_script(
             "# failures.",
             "case \"$LLMFLUX_SERVE_RC\" in 130|143) LLMFLUX_SERVE_RC=0 ;; esac",
         ] if mode == "serve" else [
+            # The stage runs on the host, where Apptainer never strips the
+            # APPTAINERENV_ prefix, so it reads every value SlurmRunner.run()
+            # exports under its APPTAINERENV_ name. A bare BATCH_SIZE here is
+            # either unset or a stale value from the submitting shell
+            # (LLMFlux#144). The port is the exception: the script itself owns
+            # it, and multi-node unsets APPTAINERENV_VLLM_PORT on purpose.
             "# Run processor",
             f"{shlex.quote(sys.executable)} -c \"",
             "import os",
@@ -250,19 +256,20 @@ def create_ollama_batch_script(
             "# Create batch processor with JSONL input",
             "batch_processor = BatchProcessor(",
             "    model_config=model_config,",
-            "    batch_size=int(os.environ.get('BATCH_SIZE', '4')),",
-            "    save_frequency=int(os.environ.get('SAVE_FREQUENCY', '50')),",
-            "    max_retries=int(os.environ.get('MAX_RETRIES', '3')),",
-            "    retry_delay=float(os.environ.get('RETRY_DELAY', '1.0'))",
+            "    batch_size=int(os.environ.get('APPTAINERENV_BATCH_SIZE', '4')),",
+            "    save_frequency=int(os.environ.get('APPTAINERENV_SAVE_FREQUENCY', '50')),",
+            "    max_retries=int(os.environ.get('APPTAINERENV_MAX_RETRIES', '3')),",
+            "    retry_delay=float(os.environ.get('APPTAINERENV_RETRY_DELAY', '1.0'))",
             ")",
             "",
             "# Prepare run kwargs",
             "run_kwargs = {}",
             "",
-            "# Add any other kwargs from environment variables",
-            "for key in ['max_tokens', 'temperature', 'top_p', 'top_k']:",
-            "    if key.upper() in os.environ:",
-            "        run_kwargs[key] = os.environ[key.upper()]",
+            "# Sampling flags from llmflux run; a request's own body value still wins",
+            "for key, cast in (('max_tokens', int), ('temperature', float), ('top_p', float), ('top_k', int)):",
+            "    value = os.environ.get('APPTAINERENV_' + key.upper())",
+            "    if value is not None:",
+            "        run_kwargs[key] = cast(value)",
             "",
             f"batch_processor.run('{input_file}', '{output_file}', 'ollama', **run_kwargs)",
             "\"",
