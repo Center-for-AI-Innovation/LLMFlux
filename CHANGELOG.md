@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as running or pending, in one command instead of one `cancel <job-id>` at a
   time.
 
+### Fixed
+
+- `--vllm-engine-args` (and `VLLM_ENGINE_ARGS`) that is not a JSON object now
+  stops `run`, `serve` and `benchmark` with an error before anything is
+  submitted or staged. It used to log a warning and submit the job without the
+  settings, so a raised `max-model-len` surfaced as context-length errors after
+  the queue wait. The help text now says "JSON object" and gives an example
+  (see [#153](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/153)).
+
 ## [2.0.0] - 2026-08-31
 
 ### Breaking
