@@ -1004,7 +1004,7 @@ def build_parser() -> argparse.ArgumentParser:
     # Common tuning options
     # No argparse defaults: an unset flag falls back to its environment
     # variable (.env) and then to the default named in its help.
-    run_parser.add_argument("--batch-size", type=int, help="Requests per batch (env BATCH_SIZE; default 4)")
+    run_parser.add_argument("--batch-size", type=int, help="Requests in flight at once (env BATCH_SIZE; default 4)")
     run_parser.add_argument("--save-frequency", type=int, help="Items between intermediate saves (env SAVE_FREQUENCY; default 50)")
     run_parser.add_argument("--max-retries", type=int, help="Retries per failed request (env MAX_RETRIES; default 3)")
     run_parser.add_argument("--retry-delay", type=float, help="Seconds between retries (env RETRY_DELAY; default 1.0)")
@@ -1120,7 +1120,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--output", type=str, help="Path to output JSON file")
 
     # Common tuning options
-    benchmark_parser.add_argument("--batch-size", type=int, help="Requests per batch (env BATCH_SIZE; default 4)")
+    benchmark_parser.add_argument("--batch-size", type=int, help="Requests in flight at once (env BATCH_SIZE; default 4)")
     benchmark_parser.add_argument("--max-tokens", type=int)
     benchmark_parser.add_argument("--temperature", type=float)
 

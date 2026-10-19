@@ -22,6 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as running or pending, in one command instead of one `cancel <job-id>` at a
   time.
 
+### Changed
+
+- The batch stage sends requests concurrently: `--batch-size` (`BATCH_SIZE`) is
+  now the number of requests in flight, as the configuration guide always said
+  ("Number of prompts to process in parallel"). Requests used to go out one at
+  a time, so a vLLM server served one request however large the batch. With
+  the default of 4, a job now has 4 requests in flight instead of 1. Results
+  are still written in input order and every request keeps its own retries.
+  Intermediate saves now happen every `save_frequency` items, rather than at
+  multiples of `lcm(batch_size, save_frequency)`
+  (see [#152](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/152)).
+- `LLMClient` takes `pool_size`, the number of connections it keeps open, so
+  threads sharing one client do not overflow requests' default pool of 10.
+
 ### Fixed
 
 - `llmflux run`'s tuning flags reach the batch stage again. `--batch-size`,
