@@ -350,28 +350,46 @@ class TestRunCommand:
             result = _run_command(args)
             assert result == 2  # Exit code for error
     
+    @staticmethod
+    def _local_args(temp_dir, sample_jsonl, **flags):
+        args = build_parser().parse_args(
+            ["run", "--model", "Llama-3.2-3B-Instruct",
+             "--input", str(sample_jsonl), "--output", str(temp_dir / "output.json")]
+            + [f"--{k.replace('_', '-')}={v}" for k, v in flags.items()]
+        )
+        args.local = True  # the --local flag itself is commented out of the parser
+        return args
+
     @patch('llmflux.cli.BatchProcessor')
     @patch('llmflux.cli.Config')
-    def test_run_command_local_mode(self, mock_config_class, mock_processor_class, temp_dir, sample_jsonl):
-        """Test run command in local mode (not implemented yet, but tests structure)."""
-        # Note: Local mode is commented out in CLI, but we test the structure
-        args = MagicMock()
-        args.input = str(sample_jsonl)
-        args.output = str(temp_dir / "output.json")
-        args.model = "Llama-3.2-3B-Instruct"
-        args.local = True  # This would enable local mode if implemented
-        args.batch_size = 4
-        args.save_frequency = 50
-        args.max_retries = 3
-        args.retry_delay = 1.0
-        args.max_tokens = None
-        args.temperature = None
-        args.top_p = None
-        args.top_k = None
-        
-        # Since local mode is not fully implemented, this test structure is ready
-        # for when local mode is enabled
-        pass
+    def test_run_command_local_mode_uses_flags(self, mock_config_class, mock_processor_class, temp_dir, sample_jsonl):
+        """--local hands the processor the flags, typed (LLMFlux#144)."""
+        args = self._local_args(temp_dir, sample_jsonl, batch_size=16, max_retries=9,
+                                max_tokens=32, temperature=0.2, top_k=5)
+        with patch.dict(os.environ, {"BATCH_SIZE": "8", "TOP_P": "0.5"}):
+            assert _run_command(args) == 0
+        init = mock_processor_class.call_args.kwargs
+        assert (init["batch_size"], init["save_frequency"], init["max_retries"], init["retry_delay"]) == (16, 50, 9, 1.0)
+        run_kwargs = mock_processor_class.return_value.run.call_args.kwargs
+        assert {k: run_kwargs[k] for k in ("max_tokens", "temperature", "top_p", "top_k")} == \
+            {"max_tokens": 32, "temperature": 0.2, "top_p": 0.5, "top_k": 5}
+
+    @patch('llmflux.cli.BatchProcessor')
+    @patch('llmflux.cli.Config')
+    def test_run_command_local_mode_rejects_malformed_env(self, mock_config_class, mock_processor_class, temp_dir, sample_jsonl, capsys):
+        args = self._local_args(temp_dir, sample_jsonl)
+        with patch.dict(os.environ, {"BATCH_SIZE": "eight"}):
+            assert _run_command(args) == 1
+        assert "batch_size" in capsys.readouterr().err
+        mock_processor_class.assert_not_called()
+
+    def test_run_tuning_flags_have_no_argparse_defaults(self):
+        """An argparse default would always count as an explicit value and
+        shadow BATCH_SIZE etc. from .env."""
+        args = build_parser().parse_args(["run", "--model", "m", "--input", "in.jsonl"])
+        for key in ("batch_size", "save_frequency", "max_retries", "retry_delay",
+                    "max_tokens", "temperature", "top_p", "top_k"):
+            assert getattr(args, key) is None, key
 
 
 class TestBenchmarkCommand:
