@@ -66,6 +66,19 @@ UNSUPPORTED_ENTRY = {
 # 1. BatchProcessor end-to-end pipeline
 # ===========================================================================
 
+
+def _engine_response(content):
+    """A chat completion as the engine returns it (what chat_completion() gives)."""
+    return {
+        "id": "chatcmpl-1",
+        "object": "chat.completion",
+        "created": 1,
+        "model": "test/test-model",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": content},
+                     "finish_reason": "stop"}],
+        "usage": {},
+    }
+
 class TestBatchProcessorPipeline(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -79,9 +92,7 @@ class TestBatchProcessorPipeline(unittest.TestCase):
     def _run(self, mock_cls, entries, response="answer", batch_size=4, save_frequency=50, output=None):
         """Wire the mock class so setup() gets a properly configured client."""
         mock_client = MagicMock()
-        # Tuple form matches the (content, usage) contract client.chat() returns
-        # with return_usage=True, used once benchmarking's batch.py changes land.
-        mock_client.chat.return_value = (response, {})
+        mock_client.chat_completion.return_value = _engine_response(response)
         mock_cls.return_value = mock_client
         input_path = self.d / "input.jsonl"
         _write_jsonl(input_path, entries)
@@ -475,7 +486,7 @@ class TestJsonToJsonlToBatchProcessorPipeline(unittest.TestCase):
         self.assertEqual(convert_result["successful_conversions"], 3)
 
         mock_client = MagicMock()
-        mock_client.chat.return_value = ("answer", {})
+        mock_client.chat_completion.return_value = _engine_response("answer")
         mock_cls.return_value = mock_client
 
         output_path = str(self.d / "results.json")
@@ -501,13 +512,13 @@ class TestJsonToJsonlToBatchProcessorPipeline(unittest.TestCase):
         self.assertEqual(entry["body"]["model"], "test/test-model")
 
         mock_client = MagicMock()
-        mock_client.chat.return_value = ("ok", {})
+        mock_client.chat_completion.return_value = _engine_response("ok")
         mock_cls.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
         processor.run(str(jsonl_path), str(self.d / "out.json"), "vllm")
 
-        call_kwargs = mock_client.chat.call_args[1]
+        call_kwargs = mock_client.chat_completion.call_args[1]
         self.assertEqual(call_kwargs["model"], "test/test-model")
 
     @patch("llmflux.processors.batch.LLMClient")
@@ -537,7 +548,7 @@ class TestJsonToJsonlToBatchProcessorPipeline(unittest.TestCase):
         self.assertEqual(entry["body"]["temperature"], 0.5)
 
         mock_client = MagicMock()
-        mock_client.chat.return_value = ("response", {})
+        mock_client.chat_completion.return_value = _engine_response("response")
         mock_cls.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)

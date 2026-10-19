@@ -11,6 +11,22 @@ from llmflux.processors.batch import BatchProcessor
 from llmflux.core.config import ModelConfig, ModelParameters
 from llmflux.io.base import OutputResult
 
+
+def engine_response(content, usage=None, finish_reason="stop"):
+    """A chat completion as the engine returns it (what chat_completion() gives)."""
+    return {
+        "id": "chatcmpl-1",
+        "object": "chat.completion",
+        "created": 1,
+        "model": "test/test-model",
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": content},
+            "finish_reason": finish_reason,
+        }],
+        "usage": {} if usage is None else usage,
+    }
+
 class TestBatchProcessor(unittest.TestCase):
     """Test suite for the BatchProcessor class."""
     
@@ -130,7 +146,7 @@ class TestBatchProcessor(unittest.TestCase):
         """Test processing a batch of items."""
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = ("This is a test response.", {})
+        mock_client.chat_completion.return_value = engine_response("This is a test response.")
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
@@ -148,7 +164,7 @@ class TestBatchProcessor(unittest.TestCase):
         self.assertIn("This is a test response.", str(results[0].output))
 
         # Check that chat was called with correct parameters
-        mock_client.chat.assert_any_call(
+        mock_client.chat_completion.assert_any_call(
             model="test/test-model",
             engine="vllm",
             messages=self.entries[0]["body"]["messages"],
@@ -156,14 +172,13 @@ class TestBatchProcessor(unittest.TestCase):
             max_tokens=500,
             top_p=0.9,
             stop=None,
-            return_usage=True
         )
 
     @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch_accepts_matching_jsonl_model(self, mock_client_class):
         """Model in JSONL body is accepted when it matches requested llmflux model."""
         mock_client = MagicMock()
-        mock_client.chat.return_value = ("This is a test response.", {})
+        mock_client.chat_completion.return_value = engine_response("This is a test response.")
         mock_client_class.return_value = mock_client
 
         matching_entry = {
@@ -182,7 +197,7 @@ class TestBatchProcessor(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertIsNone(results[0].error)
-        mock_client.chat.assert_any_call(
+        mock_client.chat_completion.assert_any_call(
             model="test/test-model",
             engine="vllm",
             messages=matching_entry["body"]["messages"],
@@ -190,14 +205,13 @@ class TestBatchProcessor(unittest.TestCase):
             max_tokens=500,
             top_p=0.9,
             stop=None,
-            return_usage=True,
         )
 
     @patch('llmflux.processors.batch.LLMClient')
     def test_process_batch_rejects_mismatched_jsonl_model(self, mock_client_class):
         """Model mismatch between JSONL body and requested llmflux model returns error."""
         mock_client = MagicMock()
-        mock_client.chat.return_value = ("This is a test response.", {})
+        mock_client.chat_completion.return_value = engine_response("This is a test response.")
         mock_client_class.return_value = mock_client
 
         mismatch_entry = {
@@ -225,7 +239,7 @@ class TestBatchProcessor(unittest.TestCase):
         """Test running the processor with a JSONL file."""
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = (
+        mock_client.chat_completion.return_value = engine_response(
             "This is a test response.",
             {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8},
         )
@@ -265,7 +279,7 @@ class TestBatchProcessor(unittest.TestCase):
         """Test error handling in processing."""
         # Mock client instance to raise an exception
         mock_client = MagicMock()
-        mock_client.chat.side_effect = Exception("Test error")
+        mock_client.chat_completion.side_effect = Exception("Test error")
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
@@ -335,7 +349,7 @@ class TestBatchProcessor(unittest.TestCase):
         
         # Mock client instance
         mock_client = MagicMock()
-        mock_client.chat.return_value = ("blue", {})
+        mock_client.chat_completion.return_value = engine_response("blue")
         mock_client_class.return_value = mock_client
 
         processor = BatchProcessor(model_config=self.model_config)
@@ -344,7 +358,7 @@ class TestBatchProcessor(unittest.TestCase):
         results = processor.run(completions_jsonl, self.output_path, "vllm")
 
         # Check that chat was called with expected parameters
-        mock_client.chat.assert_called_with(
+        mock_client.chat_completion.assert_called_with(
             model="test/test-model",
             engine="vllm",
             messages=[{"role": "user", "content": "Complete this sentence: The sky is"}],
@@ -352,7 +366,6 @@ class TestBatchProcessor(unittest.TestCase):
             max_tokens=500,
             top_p=0.9,
             stop=None,
-            return_usage=True
         )
         
         # Check output format
@@ -365,7 +378,7 @@ class TestBatchProcessor(unittest.TestCase):
     def test_completion_endpoint_rejects_mismatched_model(self, mock_client_class):
         """_get_validated_model raises on mismatch for /v1/completions requests."""
         mock_client = MagicMock()
-        mock_client.chat.return_value = "blue"
+        mock_client.chat_completion.return_value = engine_response("blue")
         mock_client_class.return_value = mock_client
 
         completions_jsonl = self.test_dir / "completions_mismatch.jsonl"
@@ -395,9 +408,7 @@ class TestBatchProcessor(unittest.TestCase):
     def test_completion_endpoint_accepts_matching_model(self, mock_client_class):
         """_get_validated_model accepts matching model field on /v1/completions."""
         mock_client = MagicMock()
-        # Tuple form matches the (content, usage) contract client.chat() returns
-        # with return_usage=True, used once benchmarking's batch.py changes land.
-        mock_client.chat.return_value = ("blue", {})
+        mock_client.chat_completion.return_value = engine_response("blue")
         mock_client_class.return_value = mock_client
 
         completions_jsonl = self.test_dir / "completions_match.jsonl"
@@ -471,11 +482,11 @@ class TestRunSamplingDefaults(unittest.TestCase):
                 f.write(json.dumps({"custom_id": f"r{i}", "url": url, "body": body}) + "\n")
         with patch("llmflux.processors.batch.LLMClient") as client_cls:
             client = client_cls.return_value
-            client.chat.return_value = ("ok", {})
+            client.chat_completion.return_value = engine_response("ok")
             processor = BatchProcessor(model_config=self.model_config, retry_delay=0)
             results = processor.run(str(self.input), str(self.output), "vllm", **run_kwargs)
         self.assertTrue(all(r.error is None for r in results))
-        calls = client.chat.call_args_list[1:]  # [0] is setup()'s warmup
+        calls = client.chat_completion.call_args_list
         self.assertEqual(len(calls), len(bodies))
         return [c.kwargs for c in calls]
 

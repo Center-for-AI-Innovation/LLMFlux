@@ -22,7 +22,13 @@ logger = logging.getLogger(__name__)
 
 class LLMClient:
     """OpenAI-compatible client for LLM services."""
-    
+
+    #: Request fields LLMFlux sets itself, beyond model and messages (which are
+    #: parameters). A caller's value for one of these is dropped: this client
+    #: reads one non-streamed JSON response, and vLLM rejects stream_options
+    #: without stream.
+    CONTROLLED_FIELDS = frozenset({"stream", "stream_options"})
+
     def __init__(
         self,
         engine: Optional[str] = None,
@@ -220,6 +226,80 @@ class LLMClient:
         logger.error(f"Failed to pull model '{model_name}' after {max_retries} attempts")
         return False
     
+    def _chat_payload(self, model: str, messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a /v1/chat/completions request: every param is sent as a field,
+        except CONTROLLED_FIELDS and an empty stop."""
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+        }
+        for key, value in params.items():
+            if key in self.CONTROLLED_FIELDS:
+                continue
+            if key == "stop" and not value:
+                continue
+            payload[key] = value
+        return payload
+
+    def _post_chat(self, engine: str, model: str, payload: Dict[str, Any]) -> requests.Response:
+        """POST a chat request; return the response, raising on HTTP errors."""
+        # Ensure model is available for ollama (not necessary for vllm)
+        if engine == 'ollama':
+            if not self.ensure_model_available(model):
+                error_msg = f"Model {model} is not available and could not be pulled"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+        url = f"{self.base_url}/v1/chat/completions"
+        try:
+            response = self.session.post(url, json=payload, timeout=self.timeout)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:
+            status = getattr(getattr(e, 'response', None), 'status_code', None)
+            if status in (401, 403) and not self.api_key:
+                logger.error(
+                    f"Authentication failed (HTTP {status}) and no API key is set. "
+                    f"Endpoints started with `llmflux serve` require one: pass "
+                    f"api_key=... or set LLMFLUX_API_KEY. Get the key with "
+                    f"`llmflux connect <job_id>`."
+                )
+            else:
+                logger.error(f"Error generating response: {e}")
+            raise
+
+    def chat_completion(
+        self,
+        model: str,
+        engine: str,
+        messages: List[Dict[str, Any]],
+        **params
+    ) -> Dict[str, Any]:
+        """Send a chat completion request and return the engine's response as received.
+
+        Unlike chat(), nothing is extracted or rebuilt: every choice, its
+        finish_reason, usage and any engine-specific fields come back intact.
+
+        Args:
+            model: Name of the model to use
+            engine: Either 'ollama' or 'vllm'
+            messages: Array of messages in OpenAI format
+            **params: Request fields, sent as given — temperature, max_tokens,
+                response_format, seed, n, tools, vLLM's structured_outputs, and so on.
+                stream and stream_options are set by LLMFlux and a value given
+                here is ignored; an empty stop is not sent.
+
+        Returns:
+            The decoded JSON response
+
+        Raises:
+            requests.exceptions.RequestException: If the API call fails
+            ValueError: If the model is not available, or the response is not JSON
+        """
+        response = self._post_chat(engine, model, self._chat_payload(model, messages, params))
+        return response.json()
+
     def chat(
         self,
         model: str,
@@ -237,12 +317,10 @@ class LLMClient:
             return_usage: If True, return a (content, usage_dict) tuple instead
                 of a bare string. usage_dict is the OpenAI-style "usage" object
                 from the response (empty dict if the server didn't provide one).
-            **kwargs: Additional model parameters:
-                - temperature: float
-                - top_p: float
-                - max_tokens: int
-                - top_k: int
-                - stop: List[str]
+            **kwargs: Request fields, sent as given (temperature, top_p,
+                max_tokens, top_k, stop, response_format, seed, ...); see
+                chat_completion(). Use chat_completion() for the full
+                response, including finish_reason.
 
         Returns:
             Model response text, or (text, usage_dict) if return_usage is True
@@ -251,41 +329,11 @@ class LLMClient:
             requests.exceptions.RequestException: If API call fails
             ValueError: If model is not available
         """
-        # Ensure model is available for ollama (not necessary for vllm)
-        if engine == 'ollama':
-            if not self.ensure_model_available(model):
-                error_msg = f"Model {model} is not available and could not be pulled"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-        
-        url = f"{self.base_url}/v1/chat/completions"
-        
-        # Create payload in OpenAI format
-        payload = {
-            "model": model,
-            "messages": messages,
-            "stream": False,
-        }
-        
-        # Add other parameters if provided
-        if "temperature" in kwargs:
-            payload["temperature"] = kwargs["temperature"]
-        if "top_p" in kwargs:
-            payload["top_p"] = kwargs["top_p"]
-        if "max_tokens" in kwargs:
-            payload["max_tokens"] = kwargs["max_tokens"]
-        if "top_k" in kwargs:
-            payload["top_k"] = kwargs["top_k"]
-        if "stop" in kwargs and kwargs["stop"]:
-            payload["stop"] = kwargs["stop"]
-        
+        response = self._post_chat(engine, model, self._chat_payload(model, messages, kwargs))
         try:
-            response = self.session.post(url, json=payload, timeout=self.timeout)
-            response.raise_for_status()
-            
             # Parse OpenAI response format
             response_data = response.json()
-            
+
             # Extract the content from the response
             usage = response_data.get('usage') or {}
             if (
@@ -301,18 +349,6 @@ class LLMClient:
 
             return (content, usage) if return_usage else content
 
-        except requests.exceptions.RequestException as e:
-            status = getattr(getattr(e, 'response', None), 'status_code', None)
-            if status in (401, 403) and not self.api_key:
-                logger.error(
-                    f"Authentication failed (HTTP {status}) and no API key is set. "
-                    f"Endpoints started with `llmflux serve` require one: pass "
-                    f"api_key=... or set LLMFLUX_API_KEY. Get the key with "
-                    f"`llmflux connect <job_id>`."
-                )
-            else:
-                logger.error(f"Error generating response: {e}")
-            raise
         except ValueError as e:
             logger.error(f"Error decoding response: {e}")
             return (response.text, {}) if return_usage else response.text

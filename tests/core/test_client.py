@@ -261,6 +261,52 @@ class TestChat(unittest.TestCase):
         client.chat(model="test/model", engine="vllm", messages=[])
         self.assertNotIn("top_k", client.session.post.call_args[1]["json"])
 
+    def test_any_request_field_is_forwarded(self):
+        """LLMFlux#154: the payload used to be a fixed six-field allow-list."""
+        client = self._make_client()
+        self._mock_response(client)
+        fields = {
+            "response_format": {"type": "json_object"},
+            "seed": 3,
+            "guided_choice": ["a", "b"],
+            "n": 2,
+        }
+        client.chat(model="test/model", engine="vllm", messages=[], **fields)
+        payload = client.session.post.call_args[1]["json"]
+        for key, value in fields.items():
+            self.assertEqual(payload[key], value, key)
+
+    def test_stream_fields_stay_under_llmflux_control(self):
+        client = self._make_client()
+        self._mock_response(client)
+        client.chat_completion(
+            model="test/model", engine="vllm", messages=[],
+            stream=True, stream_options={"include_usage": True},
+        )
+        payload = client.session.post.call_args[1]["json"]
+        self.assertIs(payload["stream"], False)
+        self.assertNotIn("stream_options", payload)
+
+    def test_empty_stop_not_sent(self):
+        client = self._make_client()
+        self._mock_response(client)
+        client.chat_completion(model="test/model", engine="vllm", messages=[], stop=None)
+        self.assertNotIn("stop", client.session.post.call_args[1]["json"])
+
+    def test_chat_completion_returns_the_response_unmodified(self):
+        client = self._make_client()
+        resp = self._mock_response(client)
+        resp.json.return_value = {
+            "id": "chatcmpl-9",
+            "choices": [
+                {"index": 0, "message": {"role": "assistant", "content": "a"}, "finish_reason": "length"},
+                {"index": 1, "message": {"role": "assistant", "content": "b"}, "finish_reason": "stop"},
+            ],
+            "usage": {"completion_tokens": 2},
+        }
+        result = client.chat_completion(model="test/model", engine="vllm", messages=[])
+        self.assertEqual(result, resp.json.return_value)
+
     def test_unexpected_response_returns_empty_string(self):
         client = self._make_client()
         resp = MagicMock()
