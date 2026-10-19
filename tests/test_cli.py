@@ -2107,3 +2107,36 @@ class TestRebuildIntoAReadOnlyContainerDir:
         finally:
             d.chmod(0o755)
         assert "not writable" in capsys.readouterr().err
+
+
+class TestVllmEngineArgsHelp:
+    """LLMFlux#153: the help must say JSON object and show a working example."""
+
+    @pytest.mark.parametrize("command", ["run", "serve", "benchmark"])
+    def test_help_says_json_object_with_example_that_parses(self, command):
+        parser = build_parser()
+        sub = next(a for a in parser._actions if isinstance(a, __import__("argparse")._SubParsersAction))
+        action = next(a for a in sub.choices[command]._actions if "--vllm-engine-args" in a.option_strings)
+        assert "JSON object" in action.help
+        example = action.help.split("e.g. ", 1)[1].split("'")[1]
+        assert isinstance(json.loads(example), dict)
+
+
+class TestMalformedEngineArgsExitCleanly:
+    """The CLI turns the runner's ValueError into a one-line error and exit 1,
+    not a traceback (LLMFlux#153)."""
+
+    @patch('llmflux.cli._ensure_container', return_value=True)
+    def test_run_reports_error_and_submits_nothing(self, _ensure, temp_dir, sample_jsonl, capsys):
+        args = build_parser().parse_args([
+            "run", "--model", "Llama-3.2-3B-Instruct", "--input", str(sample_jsonl),
+            "--output", str(temp_dir / "out.json"), "--account", "acct",
+            "--vllm-engine-args", "--max-model-len 32768",
+        ])
+        with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": str(temp_dir)}), \
+             patch("llmflux.slurm.runner.subprocess.run") as sbatch:
+            assert _run_command(args) == 1
+            sbatch.assert_not_called()
+        err = capsys.readouterr().err
+        assert err.startswith("Error: --vllm-engine-args is not valid JSON")
+        assert "Traceback" not in err

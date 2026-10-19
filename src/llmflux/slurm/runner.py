@@ -38,6 +38,13 @@ logger = logging.getLogger(__name__)
 #: occurrence — silently prefers the derived one.
 _PARALLEL_KEYS = ("tensor-parallel-size", "pipeline-parallel-size")
 
+#: How --vllm-engine-args / VLLM_ENGINE_ARGS must be written, for error
+#: messages. A plain flag string is the natural guess and is not accepted.
+ENGINE_ARGS_FORM = (
+    "Give vLLM engine args as a JSON object of flag names to values, e.g. "
+    "--vllm-engine-args '{\"max-model-len\": 32768, \"enforce-eager\": true}'."
+)
+
 
 def _canonical_keys(merged_args: Dict[str, Any]) -> Dict[str, Any]:
     """Fold the parallelism keys onto their canonical spelling.
@@ -323,7 +330,14 @@ class SlurmRunner:
             s.close()
 
     def _load_vllm_engine_args(self, raw_value: Any, source: str) -> Dict[str, Any]:
-        """Parse JSON engine args into a dict."""
+        """Parse JSON engine args into a dict.
+
+        Raises:
+            ValueError: if the value is not a JSON object. This used to be a
+                logged warning, after which the job was submitted without the
+                settings — so someone who raised max-model-len found out from
+                context-length errors after the queue wait (LLMFlux#153).
+        """
         if raw_value is None:
             return {}
         if isinstance(raw_value, dict):
@@ -334,15 +348,21 @@ class SlurmRunner:
             try:
                 parsed = json.loads(raw_value)
             except json.JSONDecodeError as exc:
-                logger.warning(f"Invalid JSON for {source}: {exc}")
-                return {}
+                raise ValueError(
+                    f"{source} is not valid JSON ({exc}): {raw_value!r}. "
+                    f"{ENGINE_ARGS_FORM}"
+                ) from None
             if not isinstance(parsed, dict):
-                logger.warning(f"{source} must be a JSON object")
-                return {}
+                raise ValueError(
+                    f"{source} must be a JSON object, not a JSON "
+                    f"{type(parsed).__name__}: {raw_value!r}. {ENGINE_ARGS_FORM}"
+                )
             return parsed
 
-        logger.warning(f"{source} must be a JSON object string")
-        return {}
+        raise ValueError(
+            f"{source} must be a JSON object string, not {type(raw_value).__name__}. "
+            f"{ENGINE_ARGS_FORM}"
+        )
 
     def _build_vllm_engine_args(self, merged_args: Dict[str, Any]) -> str:
         """Build a safe flag string for vLLM engine args."""
@@ -445,6 +465,11 @@ class SlurmRunner:
         # an unservable request fails in milliseconds instead of after a queue
         # wait. Raises TopologyError.
         self._topology()
+        # Same reason: a malformed --vllm-engine-args stops the submission
+        # here, before anything is staged. Raises ValueError.
+        vllm_engine_args = (
+            self._resolve_vllm_engine_args(kwargs) if self.engine.engine == 'vllm' else None
+        )
 
         # Setup paths following precedence: code paths > environment variables > defaults
         # Use config manager to resolve paths
@@ -563,8 +588,8 @@ class SlurmRunner:
         elif self.engine.engine == 'vllm':
             env['VLLM_MODEL_NAME'] = str(selected_model_name)
             env['VLLM_HOST'] = '0.0.0.0'
-            # Load vLLM engine args from environment and CLI, merging them with priority to CLI
-            env['VLLM_ENGINE_ARGS'] = self._resolve_vllm_engine_args(kwargs)
+            # vLLM engine args from environment and CLI, merged and validated above
+            env['VLLM_ENGINE_ARGS'] = vllm_engine_args
         # Container variables (used in Python inside container)
         # Always set MODEL_IDENTIFIER for reference
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
@@ -744,6 +769,9 @@ class SlurmRunner:
         """
         # Same topology gate as run(); serve has its own code path.
         self._topology()
+        vllm_engine_args = (
+            self._resolve_vllm_engine_args(kwargs) if self.engine.engine == 'vllm' else None
+        )
 
         env = self._setup_environment()
 
@@ -779,7 +807,7 @@ class SlurmRunner:
         elif self.engine.engine == 'vllm':
             env['VLLM_MODEL_NAME'] = str(selected_model_name)
             env['VLLM_HOST'] = '0.0.0.0'
-            env['VLLM_ENGINE_ARGS'] = self._resolve_vllm_engine_args(kwargs)
+            env['VLLM_ENGINE_ARGS'] = vllm_engine_args
 
         env['APPTAINERENV_MODEL_IDENTIFIER'] = str(model_identifier)
         env['APPTAINERENV_ENGINE'] = str(self.engine.engine)

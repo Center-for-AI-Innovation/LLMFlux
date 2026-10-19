@@ -982,6 +982,16 @@ def _remove_command(args: argparse.Namespace) -> int:
     return _cleanup(remove_paths, "remove")
 
 
+#: Help for --vllm-engine-args on run, serve and benchmark (LLMFlux#153).
+ENGINE_ARGS_HELP = (
+    "vLLM engine flags as a JSON object (not a flag string), e.g. "
+    "'{\"max-model-len\": 32768, \"enforce-eager\": true}'. Keys are vLLM flag "
+    "names (the leading -- is optional); true adds a bare flag. Merged over "
+    "VLLM_ENGINE_ARGS, which takes the same form. Invalid JSON stops the "
+    "submission."
+)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llmflux", description="LLMFlux CLI")
     parser.add_argument(
@@ -1046,7 +1056,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # VLLM specific options
-    run_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    run_parser.add_argument("--vllm-engine-args", type=str, metavar="JSON", help=ENGINE_ARGS_HELP)
     run_parser.add_argument(
         "--custom-config-path",
         type=str,
@@ -1102,7 +1112,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KEY=VALUE",
         help="Additional SBATCH directive. Can be used multiple times.",
     )
-    serve_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    serve_parser.add_argument("--vllm-engine-args", type=str, metavar="JSON", help=ENGINE_ARGS_HELP)
     serve_parser.add_argument("--rebuild", action="store_true", help="Force rebuild of the Apptainer/Singularity image")
     serve_parser.add_argument("--debug", action="store_true", help="Preserve generated SLURM job script for debugging")
     serve_parser.set_defaults(func=_serve_command)
@@ -1156,7 +1166,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # VLLM specific options
-    benchmark_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    benchmark_parser.add_argument("--vllm-engine-args", type=str, metavar="JSON", help=ENGINE_ARGS_HELP)
     benchmark_parser.add_argument(
         "--custom-config-path",
         type=str,

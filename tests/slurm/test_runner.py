@@ -921,18 +921,34 @@ class TestLoadVllmEngineArgs(unittest.TestCase):
         result = runner._load_vllm_engine_args('{"max_model_len": 4096}', "test")
         self.assertEqual(result, {"max_model_len": 4096})
 
-    def test_invalid_json_string_returns_empty(self):
+    def test_invalid_json_string_raises(self):
+        """LLMFlux#153: this used to log a warning and return {}, and the job
+        was submitted without the settings."""
         runner = self._make_runner()
-        self.assertEqual(runner._load_vllm_engine_args("{bad json}", "test"), {})
+        for raw in ("{bad json}", "--max-model-len 32768", "max-model-len=32768"):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError) as ctx:
+                    runner._load_vllm_engine_args(raw, "--vllm-engine-args")
+                message = str(ctx.exception)
+                self.assertIn("--vllm-engine-args is not valid JSON", message)
+                self.assertIn(repr(raw), message)
+                self.assertIn('{"max-model-len": 32768', message)  # shows the right form
 
-    def test_json_array_returns_empty(self):
+    def test_json_non_object_raises(self):
         runner = self._make_runner()
-        self.assertEqual(runner._load_vllm_engine_args("[1, 2, 3]", "test"), {})
+        for raw, kind in (("[1, 2, 3]", "list"), ('"--max-model-len 32768"', "str"),
+                          ("32768", "int"), ("null", "NoneType")):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError) as ctx:
+                    runner._load_vllm_engine_args(raw, "VLLM_ENGINE_ARGS")
+                self.assertIn(f"VLLM_ENGINE_ARGS must be a JSON object, not a JSON {kind}", str(ctx.exception))
 
-    def test_non_string_non_dict_returns_empty(self):
+    def test_non_string_non_dict_raises(self):
         runner = self._make_runner()
-        self.assertEqual(runner._load_vllm_engine_args(42, "test"), {})
-        self.assertEqual(runner._load_vllm_engine_args(["a"], "test"), {})
+        for raw in (42, ["a"]):
+            with self.subTest(raw=raw):
+                with self.assertRaises(ValueError):
+                    runner._load_vllm_engine_args(raw, "test")
 
 
 class TestBuildVllmEngineArgs(unittest.TestCase):
@@ -1216,3 +1232,84 @@ class TestDirectoryInputIsAlwaysRejected(_WorkspaceScopedRunnerTest):
                     mock_run.called,
                     "a job was submitted for a directory input",
                 )
+
+
+class TestMalformedEngineArgsStopTheSubmission(_WorkspaceScopedRunnerTest):
+    """LLMFlux#153, end to end: run() and serve() must refuse before sbatch,
+    and before staging anything, rather than submit a job without the args."""
+
+    BAD = ("--max-model-len 32768", "[\"--max-model-len\", \"32768\"]")
+
+    def _runner(self, mock_config_manager, mock_load_model_config):
+        mock_config_manager.return_value.get_config.return_value = self.config
+        mock_config_manager.return_value.get_parameter.return_value = "4"
+        mock_load_model_config.return_value = self.model_config
+        return SlurmRunner()
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_run_refuses_malformed_cli_value(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        # Out-of-tree input: a run that got as far as staging would copy it.
+        outside = self.test_dir / "outside"
+        outside.mkdir()
+        source = outside / "prompts.jsonl"
+        source.write_text('{"custom_id": "test-1"}\n')
+        for raw in self.BAD:
+            with self.subTest(raw=raw):
+                runner = self._runner(mock_config_manager, mock_load_model_config)
+                with self.assertRaises(ValueError) as ctx:
+                    runner.run(input_path=str(source), output_path=str(self.output_path),
+                               model="test:7b", vllm_engine_args=raw)
+                self.assertIn("--vllm-engine-args", str(ctx.exception))
+                mock_run.assert_not_called()
+                staged = [p for p in self.workspace.rglob("prompts.jsonl")]
+                self.assertEqual(staged, [])
+                self.assertFalse((self.workspace / "job.sh").exists())
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_run_refuses_malformed_environment_value(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        runner = self._runner(mock_config_manager, mock_load_model_config)
+        with patch.dict(os.environ, {"VLLM_ENGINE_ARGS": "--enforce-eager"}):
+            with self.assertRaises(ValueError) as ctx:
+                runner.run(input_path=str(self.jsonl_path), output_path=str(self.output_path),
+                           model="test:7b")
+        self.assertIn("VLLM_ENGINE_ARGS", str(ctx.exception))
+        mock_run.assert_not_called()
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_serve_refuses_malformed_value(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        for raw in self.BAD:
+            with self.subTest(raw=raw):
+                runner = self._runner(mock_config_manager, mock_load_model_config)
+                with self.assertRaises(ValueError):
+                    runner.serve(email="user@example.com", model="test:7b", vllm_engine_args=raw)
+                mock_run.assert_not_called()
+
+    @patch("llmflux.slurm.runner.ConfigManager")
+    @patch("llmflux.slurm.runner.JobRegistry")
+    @patch("llmflux.core.config.Config.load_model_config")
+    @patch("llmflux.slurm.runner.subprocess.run")
+    def test_valid_object_still_reaches_the_job(
+        self, mock_run, mock_load_model_config, mock_registry, mock_config_manager
+    ):
+        """The control: a JSON object is still submitted, as flags."""
+        mock_run.return_value.stdout = "Submitted batch job 12345"
+        runner = self._runner(mock_config_manager, mock_load_model_config)
+        runner.run(input_path=str(self.jsonl_path), output_path=str(self.output_path),
+                   model="test:7b", vllm_engine_args='{"max-model-len": 32768, "enforce-eager": true}')
+        env = mock_run.call_args.kwargs["env"]
+        self.assertEqual(env["VLLM_ENGINE_ARGS"], "--max-model-len 32768 --enforce-eager")

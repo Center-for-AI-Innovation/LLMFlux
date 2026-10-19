@@ -74,7 +74,7 @@ endpoint expects.
 
 You can configure LLMFlux in multiple ways, depending on your preference and needs.
 
-For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts.
+For vLLM engine flags, pass a JSON object via `VLLM_ENGINE_ARGS` or `--vllm-engine-args`. The two are merged, with CLI keys overriding env keys on conflicts. Keys are vLLM flag names (the leading `--` is optional) and `true` adds a bare flag, so `'{"max-model-len": 32768, "enforce-eager": true}'` becomes `--max-model-len 32768 --enforce-eager`. A plain flag string such as `"--max-model-len 32768"` is not accepted: a value that is not a JSON object stops the submission with an error.
 
 ### Method 1: Environment Variables (.env file)
 
