@@ -7,6 +7,7 @@ import time
 import json
 from typing import Dict, Any, Optional, List
 import requests
+from requests.adapters import HTTPAdapter
 from dotenv import load_dotenv
 
 
@@ -29,6 +30,7 @@ class LLMClient:
         host: Optional[str] = None,
         port: Optional[int] = None,
         api_key: Optional[str] = None,
+        pool_size: int = 10,
     ):
         """Initialize LLM client.
 
@@ -39,6 +41,10 @@ class LLMClient:
             api_key: Optional bearer token. Falls back to LLMFLUX_API_KEY.
                 Required to reach an endpoint started by `llmflux serve`, which
                 runs vLLM with --api-key and rejects unauthenticated requests.
+            pool_size: Connections to keep open to the engine; at least the
+                number of threads sharing this client. requests keeps 10 by
+                default and discards any surplus connection, with a
+                "Connection pool is full" warning, as each request finishes.
         """
         self.engine = engine
 
@@ -72,6 +78,9 @@ class LLMClient:
         
         logger.info(f"Connecting to LLM engine at: {self.base_url}")
         self.session = requests.Session()
+        adapter = HTTPAdapter(pool_maxsize=max(pool_size, 10))
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
 
         # Set on the session so every request (chat, list_models, pull_model)
         # carries it. Blank and whitespace-only values are treated as unset so an
