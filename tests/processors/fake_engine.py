@@ -35,9 +35,10 @@ class FakeEngine:
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                 with engine._lock:
                     engine.requests.append(body)
+                status = engine.status(body)
                 reply = engine.respond(body)
                 data = json.dumps(reply).encode()
-                self.send_response(200)
+                self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
@@ -53,6 +54,10 @@ class FakeEngine:
         self._server.shutdown()
         self._server.server_close()
         self._thread.join()
+
+    def status(self, body):
+        """HTTP status for this request; override with respond() to fail one."""
+        return 200
 
     def respond(self, body):
         limit = body.get("max_tokens") or len(REPLY_WORDS)

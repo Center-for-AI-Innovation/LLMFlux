@@ -55,7 +55,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than as an empty success
   (see [#154](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/154)).
 - `LLMClient.chat()` forwards any keyword argument as a request field, and the
-  new `LLMClient.chat_completion()` returns the whole response.
+  new `LLMClient.chat_completion()` takes the fields as a `params` dict and
+  returns the whole response.
+- An HTTP error from the engine carries the engine's own message, so a
+  rejected field is recorded as, for example, `400 Client Error: Bad Request
+  for url: …: <the engine's reason>` instead of only "Bad Request".
+- A `/v1/completions` body that also has `messages` is recorded as an error
+  that says to use `/v1/chat/completions`.
 
 ## [2.0.0] - 2026-08-31
 

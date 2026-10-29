@@ -152,6 +152,59 @@ class TestRequestPassthrough(unittest.TestCase):
         self.assertEqual(result.metadata["retry_count"], 1)
         self.assertEqual(len(engine.requests), 3)  # warmup + 2 attempts
 
+    def test_engine_error_message_is_saved_with_the_result(self):
+        """A 400 is the usual outcome of a bad passthrough field; the engine's
+        reason must reach the results file, not just "Bad Request"."""
+        reason = "response_format.json_schema.schema: Input should be a valid dictionary"
+
+        class Rejects(FakeEngine):
+            # vLLM 0.15.0's ErrorResponse shape.
+            def status(self, body):
+                return 400 if "response_format" in body else 200
+
+            def respond(self, body):
+                if "response_format" in body:
+                    return {"error": {"message": reason, "type": "BadRequestError", "param": None, "code": 400}}
+                return super().respond(body)
+
+        input_path = self.root / "in.jsonl"
+        body = {"messages": [], "response_format": {"type": "json_schema", "json_schema": {"schema": "x"}}}
+        input_path.write_text(json.dumps({"custom_id": "a", "body": body}) + "\n")
+        with Rejects() as engine, patch.dict(os.environ, {"VLLM_HOST": engine.url}):
+            processor = BatchProcessor(model_config=self.model_config, retry_delay=0, max_retries=0)
+            [result] = processor.run(str(input_path), str(self.root / "out.json"), "vllm")
+        self.assertIsNone(result.output)
+        self.assertIn("400 Client Error", result.error)
+        self.assertIn(reason, result.error)
+        saved = json.loads((self.root / "out.json").read_text())["results"][0]
+        self.assertIn(reason, saved["error"])
+
+    def test_completions_body_with_messages_is_rejected_clearly(self):
+        """It used to raise TypeError (messages passed twice) and be retried as
+        if it were a network error."""
+        body = {"prompt": "hi", "messages": [{"role": "user", "content": "hi"}]}
+        input_path = self.root / "in.jsonl"
+        input_path.write_text(json.dumps({"custom_id": "a", "url": "/v1/completions", "body": body}) + "\n")
+        with FakeEngine() as engine, patch.dict(os.environ, {"VLLM_HOST": engine.url}):
+            processor = BatchProcessor(model_config=self.model_config, retry_delay=0, max_retries=0)
+            [result] = processor.run(str(input_path), str(self.root / "out.json"), "vllm")
+        self.assertIn("/v1/chat/completions", result.error)
+        self.assertNotIn("TypeError", result.error)
+        self.assertNotIn("multiple values", result.error)
+        self.assertEqual(len(engine.requests), 1)  # the warmup only
+
+    def test_body_field_named_like_a_client_parameter_is_just_a_field(self):
+        """`engine` is a chat_completion() parameter; as a body field it must
+        not collide with it, on either endpoint."""
+        [chat, completion], sent = self._run([
+            {"custom_id": "c", "body": {"messages": [], "engine": "x", "model": MODEL}},
+            {"custom_id": "p", "url": "/v1/completions", "body": {"prompt": "hi", "engine": "x"}},
+        ])
+        self.assertIsNone(chat.error)
+        self.assertIsNone(completion.error)
+        self.assertEqual([s["engine"] for s in sent], ["x", "x"])
+        self.assertEqual([s["model"] for s in sent], [MODEL, MODEL])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -338,7 +338,7 @@ class BatchProcessor:
 
     def _chat(self, engine: str, model: str, messages: List[Dict[str, Any]], fields: Dict[str, Any]) -> Dict[str, Any]:
         """Send one chat request; return the engine's response as received."""
-        response = self.client.chat_completion(model=model, engine=engine, messages=messages, **fields)
+        response = self.client.chat_completion(model=model, engine=engine, messages=messages, params=fields)
         if not isinstance(response, dict) or not response.get('choices'):
             # A reply with no choices is not a completion. Raising sends it
             # through the retry and error accounting instead of recording an
@@ -375,6 +375,11 @@ class BatchProcessor:
             Completion response, with each choice's finish_reason as the engine
             reported it
         """
+        if 'messages' in body:
+            raise ValueError(
+                "A /v1/completions body has 'messages'; it takes 'prompt'. "
+                "Send messages to /v1/chat/completions instead."
+            )
         prompt = body.get('prompt', '')
         model = self._get_validated_model(body)
 

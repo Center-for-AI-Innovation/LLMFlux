@@ -168,10 +168,7 @@ class TestBatchProcessor(unittest.TestCase):
             model="test/test-model",
             engine="vllm",
             messages=self.entries[0]["body"]["messages"],
-            temperature=0.7,
-            max_tokens=500,
-            top_p=0.9,
-            stop=None,
+            params={"temperature": 0.7, "max_tokens": 500, "top_p": 0.9, "stop": None},
         )
 
     @patch('llmflux.processors.batch.LLMClient')
@@ -201,10 +198,7 @@ class TestBatchProcessor(unittest.TestCase):
             model="test/test-model",
             engine="vllm",
             messages=matching_entry["body"]["messages"],
-            temperature=0.7,
-            max_tokens=500,
-            top_p=0.9,
-            stop=None,
+            params={"temperature": 0.7, "max_tokens": 500, "top_p": 0.9, "stop": None},
         )
 
     @patch('llmflux.processors.batch.LLMClient')
@@ -362,10 +356,7 @@ class TestBatchProcessor(unittest.TestCase):
             model="test/test-model",
             engine="vllm",
             messages=[{"role": "user", "content": "Complete this sentence: The sky is"}],
-            temperature=0.7,
-            max_tokens=500,
-            top_p=0.9,
-            stop=None,
+            params={"temperature": 0.7, "max_tokens": 500, "top_p": 0.9, "stop": None},
         )
         
         # Check output format
@@ -476,7 +467,7 @@ class TestRunSamplingDefaults(unittest.TestCase):
         self.output = root / "out.json"
 
     def _run(self, bodies, url="/v1/chat/completions", **run_kwargs):
-        """Run the processor over bodies; return the kwargs of each chat call."""
+        """Run the processor over bodies; return the request fields of each chat call."""
         with open(self.input, "w") as f:
             for i, body in enumerate(bodies):
                 f.write(json.dumps({"custom_id": f"r{i}", "url": url, "body": body}) + "\n")
@@ -488,7 +479,7 @@ class TestRunSamplingDefaults(unittest.TestCase):
         self.assertTrue(all(r.error is None for r in results))
         calls = client.chat_completion.call_args_list
         self.assertEqual(len(calls), len(bodies))
-        return [c.kwargs for c in calls]
+        return [c.kwargs["params"] for c in calls]
 
     def test_run_values_apply_when_body_is_silent(self):
         [sent] = self._run(

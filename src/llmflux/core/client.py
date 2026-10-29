@@ -228,19 +228,41 @@ class LLMClient:
     
     def _chat_payload(self, model: str, messages: List[Dict[str, Any]], params: Dict[str, Any]) -> Dict[str, Any]:
         """Build a /v1/chat/completions request: every param is sent as a field,
-        except CONTROLLED_FIELDS and an empty stop."""
+        except CONTROLLED_FIELDS and an empty stop. model and messages always
+        come from the arguments, never from params."""
         payload = {
-            "model": model,
-            "messages": messages,
-            "stream": False,
+            key: value for key, value in params.items()
+            if key not in self.CONTROLLED_FIELDS and not (key == "stop" and not value)
         }
-        for key, value in params.items():
-            if key in self.CONTROLLED_FIELDS:
-                continue
-            if key == "stop" and not value:
-                continue
-            payload[key] = value
+        payload.update(model=model, messages=messages, stream=False)
         return payload
+
+    @staticmethod
+    def _engine_error_message(response: Optional[requests.Response]) -> Optional[str]:
+        """The engine's explanation of an HTTP error, from the response body.
+
+        vLLM 0.15 sends {"error": {"message": ...}} ({"error": "Unauthorized"}
+        for a bad key); older vLLM sent {"object": "error", "message": ...}.
+        Anything else falls back to the body text, truncated.
+        """
+        if response is None:
+            return None
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            error = data.get("error")
+            if isinstance(error, dict) and isinstance(error.get("message"), str):
+                return error["message"]
+            if isinstance(error, str):
+                return error
+            if isinstance(data.get("message"), str):
+                return data["message"]
+        text = getattr(response, "text", None)
+        if isinstance(text, str) and text.strip():
+            return text.strip()[:1000]
+        return None
 
     def _post_chat(self, engine: str, model: str, payload: Dict[str, Any]) -> requests.Response:
         """POST a chat request; return the response, raising on HTTP errors."""
@@ -257,6 +279,13 @@ class LLMClient:
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
+            error = e
+            if isinstance(e, requests.exceptions.HTTPError):
+                # raise_for_status() says only "400 Client Error: Bad Request";
+                # the reason (a bad response_format, an unknown tool) is in the body.
+                detail = self._engine_error_message(e.response)
+                if detail:
+                    error = requests.exceptions.HTTPError(f"{e}: {detail}", request=e.request, response=e.response)
             status = getattr(getattr(e, 'response', None), 'status_code', None)
             if status in (401, 403) and not self.api_key:
                 logger.error(
@@ -266,15 +295,17 @@ class LLMClient:
                     f"`llmflux connect <job_id>`."
                 )
             else:
-                logger.error(f"Error generating response: {e}")
-            raise
+                logger.error(f"Error generating response: {error}")
+            if error is e:
+                raise
+            raise error from e
 
     def chat_completion(
         self,
         model: str,
         engine: str,
         messages: List[Dict[str, Any]],
-        **params
+        params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Send a chat completion request and return the engine's response as received.
 
@@ -285,10 +316,12 @@ class LLMClient:
             model: Name of the model to use
             engine: Either 'ollama' or 'vllm'
             messages: Array of messages in OpenAI format
-            **params: Request fields, sent as given — temperature, max_tokens,
+            params: Request fields, sent as given — temperature, max_tokens,
                 response_format, seed, n, tools, vLLM's structured_outputs, and so on.
-                stream and stream_options are set by LLMFlux and a value given
-                here is ignored; an empty stop is not sent.
+                A dict rather than keyword arguments, so a field can never collide
+                with this method's own parameter names. model, messages, stream
+                and stream_options are set by LLMFlux and a value given here is
+                ignored; an empty stop is not sent.
 
         Returns:
             The decoded JSON response
@@ -297,7 +330,7 @@ class LLMClient:
             requests.exceptions.RequestException: If the API call fails
             ValueError: If the model is not available, or the response is not JSON
         """
-        response = self._post_chat(engine, model, self._chat_payload(model, messages, params))
+        response = self._post_chat(engine, model, self._chat_payload(model, messages, params or {}))
         return response.json()
 
     def chat(

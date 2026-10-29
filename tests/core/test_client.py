@@ -281,7 +281,7 @@ class TestChat(unittest.TestCase):
         self._mock_response(client)
         client.chat_completion(
             model="test/model", engine="vllm", messages=[],
-            stream=True, stream_options={"include_usage": True},
+            params={"stream": True, "stream_options": {"include_usage": True}},
         )
         payload = client.session.post.call_args[1]["json"]
         self.assertIs(payload["stream"], False)
@@ -290,7 +290,7 @@ class TestChat(unittest.TestCase):
     def test_empty_stop_not_sent(self):
         client = self._make_client()
         self._mock_response(client)
-        client.chat_completion(model="test/model", engine="vllm", messages=[], stop=None)
+        client.chat_completion(model="test/model", engine="vllm", messages=[], params={"stop": None})
         self.assertNotIn("stop", client.session.post.call_args[1]["json"])
 
     def test_chat_completion_returns_the_response_unmodified(self):
@@ -306,6 +306,55 @@ class TestChat(unittest.TestCase):
         }
         result = client.chat_completion(model="test/model", engine="vllm", messages=[])
         self.assertEqual(result, resp.json.return_value)
+
+    def test_params_cannot_replace_model_or_messages(self):
+        client = self._make_client()
+        self._mock_response(client)
+        messages = [{"role": "user", "content": "hi"}]
+        client.chat_completion(
+            model="test/model", engine="vllm", messages=messages,
+            params={"model": "other", "messages": [], "engine": "x"},
+        )
+        payload = client.session.post.call_args[1]["json"]
+        self.assertEqual((payload["model"], payload["messages"]), ("test/model", messages))
+        self.assertEqual(payload["engine"], "x")  # just a field
+
+    def _http_error(self, client, status, body):
+        """Make the next POST fail the way raise_for_status() does on `body`."""
+        import json
+        import requests
+        response = requests.Response()
+        response.status_code = status
+        response.reason = "Bad Request"
+        response.url = "http://localhost:11434/v1/chat/completions"
+        response._content = body if isinstance(body, bytes) else json.dumps(body).encode()
+        client.session.post.return_value = response
+
+    def test_http_error_carries_the_engine_message(self):
+        import requests
+        cases = {
+            "vllm 0.15": {"error": {"message": "unknown tool 'f'", "type": "BadRequestError", "code": 400}},
+            "older vllm": {"object": "error", "message": "unknown tool 'f'", "code": 400},
+        }
+        for name, body in cases.items():
+            with self.subTest(name):
+                client = self._make_client()
+                self._http_error(client, 400, body)
+                with self.assertLogs("llmflux.core.client", level="ERROR"):
+                    with self.assertRaises(requests.exceptions.HTTPError) as ctx:
+                        client.chat_completion(model="test/model", engine="vllm", messages=[])
+                self.assertIn("400 Client Error", str(ctx.exception))
+                self.assertIn("unknown tool 'f'", str(ctx.exception))
+                self.assertEqual(ctx.exception.response.status_code, 400)
+
+    def test_http_error_falls_back_to_body_text(self):
+        import requests
+        client = self._make_client()
+        self._http_error(client, 400, b"not json at all")
+        with self.assertLogs("llmflux.core.client", level="ERROR"):
+            with self.assertRaises(requests.exceptions.HTTPError) as ctx:
+                client.chat_completion(model="test/model", engine="vllm", messages=[])
+        self.assertIn("not json at all", str(ctx.exception))
 
     def test_unexpected_response_returns_empty_string(self):
         client = self._make_client()
