@@ -41,6 +41,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Anyone who worked around #144 by exporting `BATCH_SIZE` (or another bare
   name) keeps that setting, but a flag given on the command line now wins over
   it, as documented. Before, the exported value silently beat the flag.
+- Batch requests send every `body` field to the engine. Only `messages`,
+  `temperature`, `max_tokens`, `top_p` and `stop` were sent, so
+  `response_format`, `seed`, `n`, `logprobs`, `tools` and vLLM's
+  `structured_outputs` were silently dropped. LLMFlux still controls `model`
+  and `stream`.
+- The output for each request is the engine's response as received, so
+  `finish_reason` is the engine's (`"length"` when `max_tokens` cut the reply
+  off) instead of always `"stop"`, `n > 1` returns every choice, and the
+  response's `id` is the engine's. `/v1/completions` results keep their
+  `text_completion` shape with the engine's `finish_reason` per choice. A
+  response with no choices is now recorded as an error (and retried) rather
+  than as an empty success
+  (see [#154](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/154)).
+- `LLMClient.chat()` forwards any keyword argument as a request field, and the
+  new `LLMClient.chat_completion()` takes the fields as a `params` dict and
+  returns the whole response.
+- An HTTP error from the engine carries the engine's own message, so a
+  rejected field is recorded as, for example, `400 Client Error: Bad Request
+  for url: …: <the engine's reason>` instead of only "Bad Request".
+- A `/v1/completions` body that also has `messages` is recorded as an error
+  that says to use `/v1/chat/completions`.
 
 ## [2.0.0] - 2026-08-31
 

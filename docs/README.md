@@ -122,6 +122,17 @@ JSONL input format follows the OpenAI Batch API specification:
 {"custom_id":"request2","method":"POST","url":"/v1/chat/completions","body":{"messages":[{"role":"system","content":"You are a helpful assistant"},{"role":"user","content":"What is machine learning?"}],"temperature":0.7,"max_tokens":500}}
 ```
 
+Every `body` field is sent to the engine as written, so OpenAI and vLLM request
+options work: `response_format` (JSON mode and JSON-schema output), `seed`, `n`,
+`logprobs`, `tools`, `top_k`, and vLLM's `structured_outputs` (for example
+`"structured_outputs": {"choice": ["yes", "no"]}`). The vLLM in the LLMFlux
+container (0.15.0) no longer has the older `guided_json` / `guided_choice` /
+`guided_regex` fields: it accepts and ignores them, logging a warning.
+LLMFlux sets `stream` itself (results are read as one JSON response) and checks
+that `model`, if given, is the model the job serves. A `/v1/completions` request
+is sent to the engine's chat endpoint with its `prompt` as a single user
+message, so its other fields are read as chat-completion fields.
+
 For advanced options like custom batch sizes, processing settings, or SLURM configuration, see the [Configuration Guide](CONFIGURATION.md).
 
 For advanced model configuration, see the [Models Guide](MODELS.md).
@@ -223,7 +234,10 @@ Notes:
 
 ## Output Format
 
-Results are saved in the user's workspace:
+Results are saved in the user's workspace. Each `output` is the engine's
+response as it was received: every choice, and each choice's own
+`finish_reason` — `"length"` means the reply was cut off by `max_tokens`, which
+is the usual cause of truncated JSON.
 
 ```json
 [
