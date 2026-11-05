@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Anyone who worked around #144 by exporting `BATCH_SIZE` (or another bare
   name) keeps that setting, but a flag given on the command line now wins over
   it, as documented. Before, the exported value silently beat the flag.
+- `--vllm-engine-args` (and `VLLM_ENGINE_ARGS`) that is not a JSON object now
+  stops `run`, `serve` and `benchmark` with an error before anything is
+  submitted or staged. It used to log a warning and submit the job without the
+  settings, so a raised `max-model-len` surfaced as context-length errors after
+  the queue wait. The help text now says "JSON object" and gives an example
+  (see [#153](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/153)).
 
 ## [2.0.0] - 2026-08-31
 
