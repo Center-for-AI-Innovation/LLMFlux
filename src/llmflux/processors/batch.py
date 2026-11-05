@@ -8,8 +8,9 @@ import datetime
 import uuid
 import json
 import statistics
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Generator, Union
+from typing import Dict, Any, Iterable, Iterator, List, Optional, Generator, Union
 import tempfile
 
 from ..core.client import LLMClient
@@ -46,7 +47,9 @@ class BatchProcessor:
 
         Args:
             model_config: Model configuration
-            batch_size: Number of items to process in a batch
+            batch_size: Number of requests in flight at once. The engine
+                batches whatever is in flight, so this is what keeps the GPU
+                busy; results are still written in input order.
             save_frequency: How often to save intermediate results (items)
             temp_dir: Directory for storing temporary files
             max_retries: Maximum number of retry attempts for failed items
@@ -55,6 +58,8 @@ class BatchProcessor:
             api_key: Optional bearer token for the engine endpoint. Falls back to
                 LLMFLUX_API_KEY; needed when pointing at an `llmflux serve` job.
         """
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be at least 1, got {batch_size}")
         self.model_config = model_config
         self.api_key = api_key
         self.batch_size = batch_size
@@ -215,7 +220,9 @@ class BatchProcessor:
         """Initialize LLM client and warm up model."""
         # Initialize client, passing the engine from the model config
         logger.info("Initializing LLM client")
-        self.client = LLMClient(engine=self.model_config.engine, api_key=self.api_key)
+        self.client = LLMClient(
+            engine=self.model_config.engine, api_key=self.api_key, pool_size=self.batch_size
+        )
                 
         # Get the appropriate model name for this engine
         model = self.model_config.get_model_name_for_engine()
@@ -243,87 +250,100 @@ class BatchProcessor:
             self.client = None
     
     def process_batch(self, engine: str, batch: List[Dict[str, Any]]) -> List[OutputResult]:
-        """Process a batch of JSONL items.
-        
+        """Process a batch of JSONL items, up to batch_size at a time.
+
         Args:
             engine: Engine used for this run
             batch: List of parsed JSONL items
-            
+
         Returns:
-            List of processed output results
+            List of processed output results, in input order
         """
-        results = []
-        
-        for item in batch:
-            custom_id = item.get('custom_id', str(uuid.uuid4()))
-            method = item.get('method', 'POST')
-            url = item.get('url', '/v1/chat/completions')
-            body = item.get('body', {})
-            metadata = item.get('metadata', {})
-            request_start = time.perf_counter()
-            retries_used = 0
+        return list(self._process_items(engine, batch))
 
-            for attempt in range(self.max_retries + 1):
-                try:
-                    # Process with client based on URL endpoint
-                    if url == '/v1/chat/completions':
-                        response = self._process_chat_completion(engine, body)
-                    elif url == '/v1/completions':
-                        response = self._process_completion(engine, body)
-                    else:
-                        raise ValueError(f"Unsupported URL: {url}")
+    def _process_items(self, engine: str, items: Iterable[Dict[str, Any]]) -> Iterator[OutputResult]:
+        """Yield one result per item, in input order, with up to batch_size
+        requests in flight.
 
-                    request_latency_ms = (time.perf_counter() - request_start) * 1000.0
-                    # Build result
-                    result = OutputResult(
-                        input=item,
-                        output=response,
-                        metadata={
-                            "model": self.model_config.get_model_name_for_engine(),
-                            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
-                            "request_latency_ms": round(request_latency_ms, 2),
-                            "retry_count": retries_used,
-                            "method": method,
-                            "url": url,
-                            **metadata
-                        }
+        Requests used to go out one at a time, so a vLLM server — built to
+        batch many concurrent requests on the GPU — served one (LLMFlux#152).
+        Executor.map keeps input order however the requests finish. It reads
+        all of `items` up front; run() holds every input in memory for the
+        output file anyway.
+        """
+        with ThreadPoolExecutor(max_workers=self.batch_size, thread_name_prefix="llmflux-request") as pool:
+            yield from pool.map(lambda item: self._process_item(engine, item), items)
+
+    def _process_item(self, engine: str, item: Dict[str, Any]) -> OutputResult:
+        """Process one JSONL item, retrying up to max_retries times.
+
+        Runs on a worker thread: a retry's sleep holds only this request.
+        """
+        custom_id = item.get('custom_id', str(uuid.uuid4()))
+        method = item.get('method', 'POST')
+        url = item.get('url', '/v1/chat/completions')
+        body = item.get('body', {})
+        metadata = item.get('metadata', {})
+        request_start = time.perf_counter()
+        retries_used = 0
+
+        for attempt in range(self.max_retries + 1):
+            try:
+                # Process with client based on URL endpoint
+                if url == '/v1/chat/completions':
+                    response = self._process_chat_completion(engine, body)
+                elif url == '/v1/completions':
+                    response = self._process_completion(engine, body)
+                else:
+                    raise ValueError(f"Unsupported URL: {url}")
+
+                request_latency_ms = (time.perf_counter() - request_start) * 1000.0
+                # Build result
+                result = OutputResult(
+                    input=item,
+                    output=response,
+                    metadata={
+                        "model": self.model_config.get_model_name_for_engine(),
+                        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+                        "request_latency_ms": round(request_latency_ms, 2),
+                        "retry_count": retries_used,
+                        "method": method,
+                        "url": url,
+                        **metadata
+                    }
+                )
+                logger.debug(f"Processed item with ID: {custom_id}")
+                return result
+
+            except Exception as e:
+                if attempt < self.max_retries:
+                    retries_used += 1
+                    logger.warning(
+                        f"Error processing item {custom_id} (attempt {attempt + 1}/{self.max_retries + 1}): {e}"
                     )
-                    results.append(result)
-                    logger.debug(f"Processed item with ID: {custom_id}")
-                    break
+                    time.sleep(self.retry_delay)
+                    continue
 
-                except Exception as e:
-                    if attempt < self.max_retries:
-                        retries_used += 1
-                        logger.warning(
-                            f"Error processing item {custom_id} (attempt {attempt + 1}/{self.max_retries + 1}): {e}"
-                        )
-                        time.sleep(self.retry_delay)
-                        continue
+                logger.error(f"Error processing item: {e}")
+                # Add error result
+                request_latency_ms = (time.perf_counter() - request_start) * 1000.0
+                result = OutputResult(
+                    input=item,
+                    output=None,
+                    error=str(e),
+                    metadata={
+                        "model": self.model_config.get_model_name_for_engine(),
+                        "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+                        "error": True,
+                        "request_latency_ms": round(request_latency_ms, 2),
+                        "retry_count": retries_used,
+                        "method": method,
+                        "url": url,
+                        **item.get("metadata", {})
+                    }
+                )
+                return result
 
-                    logger.error(f"Error processing item: {e}")
-                    # Add error result
-                    request_latency_ms = (time.perf_counter() - request_start) * 1000.0
-                    result = OutputResult(
-                        input=item,
-                        output=None,
-                        error=str(e),
-                        metadata={
-                            "model": self.model_config.get_model_name_for_engine(),
-                            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
-                            "error": True,
-                            "request_latency_ms": round(request_latency_ms, 2),
-                            "retry_count": retries_used,
-                            "method": method,
-                            "url": url,
-                            **item.get("metadata", {})
-                        }
-                    )
-                    results.append(result)
-                    break
-        
-        return results
-    
     def _process_chat_completion(self, engine: str, body: Dict[str, Any]) -> Dict[str, Any]:
         """Process chat completion request.
         
@@ -441,35 +461,16 @@ class BatchProcessor:
         gpu_scraper.start()
 
         try:
-            # Process JSONL file
+            # Process the JSONL file, batch_size requests in flight
             all_results = []
-            current_batch = []
-            processed_count = 0
+            for result in self._process_items(engine, read_jsonl(input_path)):
+                all_results.append(result)
 
-            # Read JSONL file line by line
-            for item in read_jsonl(input_path):
-                current_batch.append(item)
-
-                # Process batch when it reaches batch size
-                if len(current_batch) >= self.batch_size:
-                    print("processing batch")
-                    batch_results = self.process_batch(engine, current_batch)
-                    all_results.extend(batch_results)
-                    current_batch = []
-
-                    # Save intermediate results
-                    processed_count += len(batch_results)
-                    if processed_count % self.save_frequency == 0:
-                        self._save_intermediate_results(all_results, output_path)
-                        logger.info(f"Processed {processed_count} items")
-
-            # Process remaining items
-            if current_batch:
-                print("processing  batch")
-                batch_results = self.process_batch(engine, current_batch)
-                all_results.extend(batch_results)
-                processed_count += len(batch_results)
-                logger.info(f"Processed {processed_count} items")
+                # Save intermediate results
+                if self.save_frequency and len(all_results) % self.save_frequency == 0:
+                    self._save_intermediate_results(all_results, output_path)
+                    logger.info(f"Processed {len(all_results)} items")
+            logger.info(f"Processed {len(all_results)} items")
 
             # Stop scrapers before saving so metrics are included in output
             if scraper:

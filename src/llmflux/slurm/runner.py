@@ -86,6 +86,9 @@ def resolve_stage_parameters(
             raise ValueError(
                 f"{key} must be {'an integer' if cast is int else 'a number'}, got {value!r}"
             ) from None
+    # The number of requests in flight; the stage cannot start with fewer than one.
+    if resolved['batch_size'] < 1:
+        raise ValueError(f"batch_size must be at least 1, got {resolved['batch_size']}")
     return resolved
 
 

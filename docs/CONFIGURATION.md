@@ -51,6 +51,12 @@ K is then not sent at all). The `llmflux run` flags `--batch-size`,
 `--temperature`, `--top-p` and `--top-k` are the "code setting" for the
 command line.
 
+Batch size is the number of requests the batch stage keeps in flight at once.
+The engine batches whatever is in flight, so this is the knob that keeps the GPU
+busy; results are still written in input order, and each request keeps its own
+retries. The Ollama engine runs with Ollama's default of one request at a time,
+so a larger batch size only queues requests there.
+
 ### Directory Configuration
 
 | Parameter | Environment Variable | Code Setting | Default | Description |
