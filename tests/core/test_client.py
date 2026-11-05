@@ -243,6 +243,24 @@ class TestChat(unittest.TestCase):
         self.assertEqual(call_payload["max_tokens"], 128)
         self.assertEqual(call_payload["top_p"], 0.9)
 
+    def test_top_k_forwarded(self):
+        """--top-k has no other path to the engine (LLMFlux#144)."""
+        client = self._make_client()
+        self._mock_response(client)
+        client.chat(
+            model="test/model",
+            engine="vllm",
+            messages=[{"role": "user", "content": "hi"}],
+            top_k=5,
+        )
+        self.assertEqual(client.session.post.call_args[1]["json"]["top_k"], 5)
+
+    def test_top_k_omitted_when_not_given(self):
+        client = self._make_client()
+        self._mock_response(client)
+        client.chat(model="test/model", engine="vllm", messages=[])
+        self.assertNotIn("top_k", client.session.post.call_args[1]["json"])
+
     def test_unexpected_response_returns_empty_string(self):
         client = self._make_client()
         resp = MagicMock()

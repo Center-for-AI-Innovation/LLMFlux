@@ -38,6 +38,56 @@ logger = logging.getLogger(__name__)
 #: occurrence — silently prefers the derived one.
 _PARALLEL_KEYS = ("tensor-parallel-size", "pipeline-parallel-size")
 
+#: Every tuning value the generated batch stage reads, with its type and the
+#: default used when neither the caller nor the environment sets it (None: not
+#: sent, so the request body and then the model config decide). run() exports
+#: each as APPTAINERENV_<NAME> and the stage reads exactly that name
+#: (LLMFlux#144).
+STAGE_PARAMETERS = {
+    'batch_size': (int, 4),
+    'save_frequency': (int, 50),
+    'max_retries': (int, 3),
+    'retry_delay': (float, 1.0),
+    'max_tokens': (int, None),
+    'temperature': (float, None),
+    'top_p': (float, None),
+    'top_k': (int, None),
+}
+
+
+def resolve_stage_parameters(
+    values: Dict[str, Any], obj: Any = None, get_parameter=ConfigManager.get_parameter
+) -> Dict[str, Any]:
+    """Resolve the batch stage's tuning values, typed.
+
+    Each follows the documented priority (docs/CONFIGURATION.md): the explicit
+    value, then an attribute of obj, then the environment variable of the
+    upper-cased name (which a .env file sets), then the default. A value that
+    resolves to None is left out.
+
+    Raises:
+        ValueError: if a value does not convert to its type. Raised at submit
+            time, so a bad BATCH_SIZE in .env does not cost a queue wait.
+    """
+    resolved = {}
+    for key, (cast, default) in STAGE_PARAMETERS.items():
+        value = get_parameter(
+            param_name=key,
+            code_value=values.get(key),
+            obj=obj if obj is not None and hasattr(obj, key) else None,
+            env_var=key.upper(),
+            default=default,
+        )
+        if value is None:
+            continue
+        try:
+            resolved[key] = cast(value)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"{key} must be {'an integer' if cast is int else 'a number'}, got {value!r}"
+            ) from None
+    return resolved
+
 
 def _canonical_keys(merged_args: Dict[str, Any]) -> Dict[str, Any]:
     """Fold the parallelism keys onto their canonical spelling.
@@ -445,6 +495,10 @@ class SlurmRunner:
         # an unservable request fails in milliseconds instead of after a queue
         # wait. Raises TopologyError.
         self._topology()
+        # Same reason: a malformed tuning value fails here, not in the job.
+        stage_parameters = resolve_stage_parameters(
+            kwargs, processor, get_parameter=self.config_manager.get_parameter
+        )
 
         # Setup paths following precedence: code paths > environment variables > defaults
         # Use config manager to resolve paths
@@ -580,30 +634,14 @@ class SlurmRunner:
         elif self.engine.engine == 'vllm':
             env['APPTAINERENV_VLLM_MODEL_NAME'] = str(selected_model_name)
 
-        # Get batch size using config manager priority system
-        batch_size = self.config_manager.get_parameter(
-            param_name="batch_size",
-            code_value=kwargs.get('batch_size'),
-            obj=processor,
-            env_var="BATCH_SIZE",
-            default="4"
-        )
-        env['APPTAINERENV_BATCH_SIZE'] = str(batch_size)
-        
-        # Get save_frequency using config manager priority system
-        save_frequency = self.config_manager.get_parameter(
-            param_name="save_frequency",
-            code_value=kwargs.get('save_frequency'),
-            obj=processor,
-            env_var="SAVE_FREQUENCY",
-            default="50"
-        )
-        env['APPTAINERENV_SAVE_FREQUENCY'] = str(save_frequency)
-        
+        # The batch stage's tuning values, under the names it reads.
+        for key, value in stage_parameters.items():
+            env[f'APPTAINERENV_{key.upper()}'] = str(value)
+
         # Add additional parameters from kwargs through config manager
         for key, value in kwargs.items():
             # Skip parameters that are already handled
-            if key in ['model', 'batch_size', 'save_frequency', 'vllm_engine_args', 'custom_config_path']:
+            if key in ['model', 'vllm_engine_args', 'custom_config_path', *STAGE_PARAMETERS]:
                 continue
                 
             # Use config manager to get the value with proper priority

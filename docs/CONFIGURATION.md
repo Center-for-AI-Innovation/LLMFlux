@@ -35,11 +35,21 @@ The tables below show each parameter with its environment variable name, code se
 | Model name | `MODEL_NAME` | `model="llama3.2:3b"` (in `run()`) | `llama3.2:3b` | Model to use (format: `model:size`) |
 | Batch size | `BATCH_SIZE` | `batch_size=8` (in `run()`) | `4` | Number of prompts to process in parallel |
 | Save frequency | `SAVE_FREQUENCY` | `save_frequency=100` (in `run()`) | `50` | How often to save intermediate results |
+| Max retries | `MAX_RETRIES` | `max_retries=5` (in `run()`) | `3` | Retries per failed request |
+| Retry delay | `RETRY_DELAY` | `retry_delay=2.0` (in `run()`) | `1.0` | Seconds between retries |
 | Temperature | `TEMPERATURE` | `temperature=0.8` (in `run()`) | `0.7` | Sampling temperature |
 | Max tokens | `MAX_TOKENS` | `max_tokens=4096` (in `run()`) | `2048` | Maximum tokens to generate |
 | Top P | `TOP_P` | `top_p=0.95` (in `run()`) | `0.9` | Top-p sampling parameter |
-| Top K | `TOP_K` | `top_k=50` (in `run()`) | `40` | Top-k sampling parameter |
+| Top K | `TOP_K` | `top_k=50` (in `run()`) | (not sent) | Top-k sampling parameter |
 | vLLM engine args | `VLLM_ENGINE_ARGS` | `--vllm-engine-args '{"trust-remote-code":true}'` | (optional) | JSON object of vLLM engine flags |
+
+The sampling values (temperature, max tokens, top P, top K) are defaults: a
+request whose JSONL `body` sets one keeps its own value, and anything neither
+the body, the flag nor the environment sets comes from the model's config (top
+K is then not sent at all). The `llmflux run` flags `--batch-size`,
+`--save-frequency`, `--max-retries`, `--retry-delay`, `--max-tokens`,
+`--temperature`, `--top-p` and `--top-k` are the "code setting" for the
+command line.
 
 ### Directory Configuration
 

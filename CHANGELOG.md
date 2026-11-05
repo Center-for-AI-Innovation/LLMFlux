@@ -22,6 +22,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as running or pending, in one command instead of one `cancel <job-id>` at a
   time.
 
+### Fixed
+
+- `llmflux run`'s tuning flags reach the batch stage again. `--batch-size`,
+  `--save-frequency`, `--max-retries`, `--retry-delay`, `--max-tokens`,
+  `--temperature`, `--top-p` and `--top-k` were exported to the job only as
+  `APPTAINERENV_*`, while the stage, which runs on the host, read the bare
+  names, so every job ran with the hardcoded defaults. The stage now reads the
+  exported names, and the batch processor applies the four sampling values to
+  every request whose body does not set them (body, then flag, then model
+  config); `top_k` is now sent to the engine at all. Every release since
+  `v0.1.1` had this
+  (see [#144](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/144)).
+- The documented priority for those values — flag, then environment variable
+  or `.env`, then default — now holds for `llmflux run` too: the flags no
+  longer have argparse defaults that shadowed `BATCH_SIZE` and the others. A
+  malformed value (`BATCH_SIZE=eight`) is rejected at submit time.
+- Anyone who worked around #144 by exporting `BATCH_SIZE` (or another bare
+  name) keeps that setting, but a flag given on the command line now wins over
+  it, as documented. Before, the exported value silently beat the flag.
+
 ## [2.0.0] - 2026-08-31
 
 ### Breaking

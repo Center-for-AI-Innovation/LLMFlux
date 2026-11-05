@@ -113,20 +113,21 @@ except Exception as e:
 print('Create batch processor with JSONL input')
 batch_processor = BatchProcessor(
     model_config=model_config,
-    batch_size=int(os.environ.get('BATCH_SIZE', '4')),
-    save_frequency=int(os.environ.get('SAVE_FREQUENCY', '50')),
-    max_retries=int(os.environ.get('MAX_RETRIES', '3')),
-    retry_delay=float(os.environ.get('RETRY_DELAY', '1.0'))
+    batch_size=int(os.environ.get('APPTAINERENV_BATCH_SIZE', '4')),
+    save_frequency=int(os.environ.get('APPTAINERENV_SAVE_FREQUENCY', '50')),
+    max_retries=int(os.environ.get('APPTAINERENV_MAX_RETRIES', '3')),
+    retry_delay=float(os.environ.get('APPTAINERENV_RETRY_DELAY', '1.0'))
 )
 print(f'batch processor: {batch_processor}')
 
 # Prepare run kwargs
 run_kwargs = {}
 
-# Add any other kwargs from environment variables
-for key in ['max_tokens', 'temperature', 'top_p', 'top_k']:
-    if key.upper() in os.environ:
-        run_kwargs[key] = os.environ[key.upper()]
+# Sampling flags from llmflux run; a request's own body value still wins
+for key, cast in (('max_tokens', int), ('temperature', float), ('top_p', float), ('top_k', int)):
+    value = os.environ.get('APPTAINERENV_' + key.upper())
+    if value is not None:
+        run_kwargs[key] = cast(value)
 
 batch_processor.run('/data/in.jsonl', '/data/out.json', 'vllm', **run_kwargs)
 "

@@ -241,6 +241,7 @@ class LLMClient:
                 - temperature: float
                 - top_p: float
                 - max_tokens: int
+                - top_k: int
                 - stop: List[str]
 
         Returns:
@@ -273,6 +274,8 @@ class LLMClient:
             payload["top_p"] = kwargs["top_p"]
         if "max_tokens" in kwargs:
             payload["max_tokens"] = kwargs["max_tokens"]
+        if "top_k" in kwargs:
+            payload["top_k"] = kwargs["top_k"]
         if "stop" in kwargs and kwargs["stop"]:
             payload["stop"] = kwargs["stop"]
         

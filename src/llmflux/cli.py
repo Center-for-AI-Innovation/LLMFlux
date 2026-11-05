@@ -17,7 +17,7 @@ from typing import Optional, List, Dict
 from dotenv import find_dotenv, load_dotenv
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 
-from .slurm.runner import SlurmRunner
+from .slurm.runner import SlurmRunner, STAGE_PARAMETERS, resolve_stage_parameters
 from .slurm.connection import connect, read_connection_info
 from .slurm.commands import (
     ACTIVE_STATES,
@@ -236,7 +236,7 @@ def _benchmark_command(args: argparse.Namespace) -> int:
 
     kwargs = {
         "model": args.model,
-        "batch_size": getattr(args, "batch_size", 4),
+        "batch_size": getattr(args, "batch_size", None),
     }
 
     if getattr(args, "rebuild", False):
@@ -314,24 +314,26 @@ def _run_command(args: argparse.Namespace) -> int:
         model_size = model.split(":")[1] if ":" in model else "3b"
         model_config = config.load_model_config(model_type, model_size)
 
+        # The same resolution a submitted job gets: flag, environment, default.
+        try:
+            tuning = resolve_stage_parameters({key: getattr(args, key) for key in STAGE_PARAMETERS})
+        except ValueError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
         processor = BatchProcessor(
             model_config=model_config,
-            batch_size=args.batch_size,
-            save_frequency=args.save_frequency,
-            max_retries=args.max_retries,
-            retry_delay=args.retry_delay,
+            batch_size=tuning["batch_size"],
+            save_frequency=tuning["save_frequency"],
+            max_retries=tuning["max_retries"],
+            retry_delay=tuning["retry_delay"],
         )
 
-        # Additional kwargs that map to processor.run or underlying client params
-        run_kwargs = {}
-        if args.max_tokens is not None:
-            run_kwargs["max_tokens"] = args.max_tokens
-        if args.temperature is not None:
-            run_kwargs["temperature"] = args.temperature
-        if args.top_p is not None:
-            run_kwargs["top_p"] = args.top_p
-        if args.top_k is not None:
-            run_kwargs["top_k"] = args.top_k
+        # Sampling defaults for requests whose body does not set them
+        run_kwargs = {
+            key: tuning[key]
+            for key in ("max_tokens", "temperature", "top_p", "top_k")
+            if key in tuning
+        }
 
         processor.run(input_path=input_path, output_path=output_path or str(Path("results") / "output.json"), engine=args.engine, **run_kwargs)
         return 0
@@ -1000,14 +1002,16 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--output", required=False, help="Path to output JSON file")
 
     # Common tuning options
-    run_parser.add_argument("--batch-size", type=int, default=4)
-    run_parser.add_argument("--save-frequency", type=int, default=50)
-    run_parser.add_argument("--max-retries", type=int, default=3)
-    run_parser.add_argument("--retry-delay", type=float, default=1.0)
-    run_parser.add_argument("--max-tokens", type=int)
-    run_parser.add_argument("--temperature", type=float)
-    run_parser.add_argument("--top-p", type=float)
-    run_parser.add_argument("--top-k", type=int)
+    # No argparse defaults: an unset flag falls back to its environment
+    # variable (.env) and then to the default named in its help.
+    run_parser.add_argument("--batch-size", type=int, help="Requests per batch (env BATCH_SIZE; default 4)")
+    run_parser.add_argument("--save-frequency", type=int, help="Items between intermediate saves (env SAVE_FREQUENCY; default 50)")
+    run_parser.add_argument("--max-retries", type=int, help="Retries per failed request (env MAX_RETRIES; default 3)")
+    run_parser.add_argument("--retry-delay", type=float, help="Seconds between retries (env RETRY_DELAY; default 1.0)")
+    run_parser.add_argument("--max-tokens", type=int, help="Default max_tokens for requests that do not set it (env MAX_TOKENS)")
+    run_parser.add_argument("--temperature", type=float, help="Default temperature for requests that do not set it (env TEMPERATURE)")
+    run_parser.add_argument("--top-p", type=float, help="Default top_p for requests that do not set it (env TOP_P)")
+    run_parser.add_argument("--top-k", type=int, help="Default top_k for requests that do not set it (env TOP_K)")
 
     # SLURM configuration
     run_parser.add_argument("--account", type=str)
@@ -1116,7 +1120,7 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_parser.add_argument("--output", type=str, help="Path to output JSON file")
 
     # Common tuning options
-    benchmark_parser.add_argument("--batch-size", type=int, default=4)
+    benchmark_parser.add_argument("--batch-size", type=int, help="Requests per batch (env BATCH_SIZE; default 4)")
     benchmark_parser.add_argument("--max-tokens", type=int)
     benchmark_parser.add_argument("--temperature", type=float)
 

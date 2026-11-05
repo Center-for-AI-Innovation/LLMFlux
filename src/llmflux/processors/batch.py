@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 
 class BatchProcessor:
     """Processor for batch processing JSONL inputs with LLM."""
-    
+
+    #: Sampling parameters run() accepts as defaults for every request.
+    SAMPLING_KEYS = ("max_tokens", "temperature", "top_p", "top_k")
+
     def __init__(
         self,
         model_config: ModelConfig,
@@ -60,6 +63,7 @@ class BatchProcessor:
         self.retry_delay = retry_delay
         self.output_handler = output_handler
         self.client = None
+        self.request_defaults: Dict[str, Any] = {}
         self._vllm_metrics: Dict[str, Any] = {}
         self._gpu_metrics: Dict[str, Any] = {}
         self.temp_dir = temp_dir or tempfile.gettempdir()
@@ -79,6 +83,32 @@ class BatchProcessor:
             )
 
         return jsonl_model or requested_model
+
+    def _sampling_params(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve one request's sampling parameters.
+
+        Precedence: the request's own body, then the run's defaults (the
+        `llmflux run` flags), then the model config. top_k has no model-config
+        fallback: it was never sent before the --top-k flag reached the
+        processor, and the config's default (40) would change every request.
+        """
+        params = self.model_config.parameters
+        config_values = {
+            "temperature": params.temperature,
+            "max_tokens": params.max_tokens,
+            "top_p": params.top_p,
+            "top_k": None,
+        }
+        resolved = {}
+        for key in self.SAMPLING_KEYS:
+            if key in body:
+                resolved[key] = body[key]
+            elif key in self.request_defaults:
+                resolved[key] = self.request_defaults[key]
+            elif config_values[key] is not None:
+                resolved[key] = config_values[key]
+        resolved["stop"] = body.get('stop', params.stop_sequences)
+        return resolved
 
     @staticmethod
     def _percentile(values: List[float], pct: float) -> Optional[float]:
@@ -306,23 +336,14 @@ class BatchProcessor:
         """
         messages = body.get('messages', [])
         model = self._get_validated_model(body)
-        
-        # Extract parameters with defaults from model config
-        temperature = body.get('temperature', self.model_config.parameters.temperature)
-        max_tokens = body.get('max_tokens', self.model_config.parameters.max_tokens)
-        top_p = body.get('top_p', self.model_config.parameters.top_p)
-        stop = body.get('stop', self.model_config.parameters.stop_sequences)
 
         # Generate response
         response, usage = self.client.chat(
             model=model,
             engine=engine,
             messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            stop=stop,
-            return_usage=True
+            return_usage=True,
+            **self._sampling_params(body)
         )
 
         # Format in OpenAI-compatible format
@@ -357,12 +378,6 @@ class BatchProcessor:
         prompt = body.get('prompt', '')
         model = self._get_validated_model(body)
 
-        # Extract parameters with defaults from model config
-        temperature = body.get('temperature', self.model_config.parameters.temperature)
-        max_tokens = body.get('max_tokens', self.model_config.parameters.max_tokens)
-        top_p = body.get('top_p', self.model_config.parameters.top_p)
-        stop = body.get('stop', self.model_config.parameters.stop_sequences)
-
         # Convert prompt to messages
         messages = [{"role": "user", "content": prompt}]
 
@@ -371,11 +386,8 @@ class BatchProcessor:
             model=model,
             engine=engine,
             messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            stop=stop,
-            return_usage=True
+            return_usage=True,
+            **self._sampling_params(body)
         )
 
         # Format in OpenAI-compatible format
@@ -401,11 +413,16 @@ class BatchProcessor:
             input_path: Path to JSONL input file
             output_path: Path to save output results
             engine: the engine being used for this run
-            **kwargs: Additional parameters (ignored for compatibility)
-            
+            **kwargs: Defaults for max_tokens, temperature, top_p and top_k,
+                applied to every request whose body does not set them; they
+                take precedence over the model config. Other keys are ignored.
+
         Returns:
             List of results
         """
+        self.request_defaults = {
+            key: kwargs[key] for key in self.SAMPLING_KEYS if kwargs.get(key) is not None
+        }
         if not os.path.exists(input_path):
             raise FileNotFoundError(f"Input file not found: {input_path}")
             
