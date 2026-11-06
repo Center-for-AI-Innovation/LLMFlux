@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from llmflux.core.cleanup import clean_paths, delete, remove_paths
+from llmflux.core.cleanup import clean_paths, delete, home_workspace_error, remove_paths
 
 
 class TestPathLists(unittest.TestCase):
@@ -103,6 +103,61 @@ class TestDelete(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(any(str(site) in message for message in skipped))
         self.assertTrue((site / "llm_processor.sif").exists())
+
+
+class TestHomeWorkspace(unittest.TestCase):
+    """LLMFlux#155: with home as the workspace, clean/remove would empty ~/tmp,
+    ~/.cache and ~/models in full, so the check has to refuse it."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name).resolve() / "home"
+        self.home.mkdir()
+        home = patch("llmflux.core.cleanup.Path.home", return_value=self.home)
+        home.start()
+        self.addCleanup(home.stop)
+        env = patch.dict(os.environ)  # restores anything popped below
+        env.start()
+        self.addCleanup(env.stop)
+        for var in ("LLMFLUX_WORKSPACE", "LLMFLUX_LOGS_DIR", "LLMFLUX_CONTAINERS_DIR", "LLMFLUX_MODELS_DIR"):
+            os.environ.pop(var, None)
+
+    def test_running_from_home_with_no_workspace_set_is_refused(self):
+        with patch("llmflux.core.cleanup.Path.cwd", return_value=self.home):
+            reason = home_workspace_error(remove_paths())
+        self.assertIn("the workspace is your home directory", reason)
+        self.assertIn("LLMFLUX_WORKSPACE", reason)
+        # It names what would have been emptied, but not ~/.llmflux, which is LLMFlux's own.
+        for target in ("~/tmp", "~/.cache", "~/models"):
+            self.assertIn(target, reason)
+        self.assertNotIn("~/.llmflux", reason)
+
+    def test_clean_lists_only_its_own_targets(self):
+        with patch("llmflux.core.cleanup.Path.cwd", return_value=self.home):
+            reason = home_workspace_error(clean_paths())
+        self.assertIn("~/tmp", reason)
+        self.assertNotIn("~/.cache", reason)
+        self.assertNotIn("~/models", reason)
+
+    def test_an_explicit_home_workspace_is_refused_too(self):
+        for value in (str(self.home), str(self.home) + "/", str(self.home / "ws" / "..")):
+            with self.subTest(value=value), patch.dict(os.environ, {"LLMFLUX_WORKSPACE": value}):
+                self.assertNotEqual(home_workspace_error(clean_paths()), "")
+
+    def test_a_symlink_to_home_is_still_home(self):
+        link = self.home.parent / "home-link"
+        link.symlink_to(self.home, target_is_directory=True)
+        with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": str(link)}):
+            self.assertNotEqual(home_workspace_error(clean_paths()), "")
+
+    def test_a_workspace_inside_home_is_fine(self):
+        workspace = self.home / "llmflux-ws"
+        workspace.mkdir()
+        with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": str(workspace)}):
+            self.assertEqual(home_workspace_error(remove_paths()), "")
+        with patch("llmflux.core.cleanup.Path.cwd", return_value=workspace):
+            self.assertEqual(home_workspace_error(remove_paths()), "")
 
 
 if __name__ == "__main__":

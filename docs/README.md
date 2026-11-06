@@ -220,6 +220,11 @@ Notes:
   workspace itself — on a source checkout that is where the repo lives.
 - Both refuse to run while any LLMFlux job is running. Stop it with
   `llmflux cancel <job-id>` or `llmflux cancel --all` first, then re-run.
+- Both also refuse to run when the workspace is your home directory. Without
+  `LLMFLUX_WORKSPACE`, the workspace is the directory you run from, so from `~`
+  they would empty `~/tmp`, `~/.cache`, `~/models` and the rest in full, along
+  with whatever else lives there. Set `LLMFLUX_WORKSPACE` to your LLMFlux
+  workspace, or run from inside it.
 
 ## Output Format
 
