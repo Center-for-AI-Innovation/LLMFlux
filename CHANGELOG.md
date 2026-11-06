@@ -17,7 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `data/output/` and — on a source checkout — the repo itself are never
   touched, and configured directories outside the workspace are
   skipped. Both refuse to run while any LLMFlux job is running; stop it with
-  `llmflux cancel` first.
+  `llmflux cancel` first. Both also refuse when the workspace is your home
+  directory, which is what it is when you run from `~` without
+  `LLMFLUX_WORKSPACE` set: `~/tmp`, `~/.cache` and `~/models` hold more than
+  LLMFlux's files (see [#155](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/155)).
 - `llmflux cancel --all`, cancelling every LLMFlux job Slurm currently reports
   as running or pending, in one command instead of one `cancel <job-id>` at a
   time.

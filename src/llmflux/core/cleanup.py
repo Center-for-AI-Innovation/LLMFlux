@@ -17,6 +17,32 @@ def _dir(env_var: str, default: Path) -> Path:
     return Path(os.getenv(env_var) or default).expanduser()
 
 
+def home_workspace_error(paths) -> str:
+    """Why `clean`/`remove` must not run, or "" if the workspace is not home.
+
+    The workspace defaults to the current directory, so running from ~ makes
+    home the workspace, and `paths` then include ~/tmp, ~/.cache, ~/models and
+    the like. Those are emptied in full, and in a home directory they hold far
+    more than LLMFlux's files: pip's and other tools' caches, people's own
+    scratch files and model weights (LLMFlux#155). An explicit
+    LLMFLUX_WORKSPACE=~ is refused too: the risk is the same, and a dedicated
+    workspace costs one env var.
+    """
+    home = Path.home().resolve()
+    if _workspace().resolve() != home:
+        return ""
+    targets = []
+    for path in paths:
+        location = path.parent.resolve() / path.name  # as in _skip_reason: don't follow a final symlink
+        if location.is_relative_to(home) and not location.is_relative_to(home / ".llmflux"):
+            targets.append(f"~/{location.relative_to(home)}")
+    return (
+        f"the workspace is your home directory, so this would empty {', '.join(targets)} "
+        "in full, including files that aren't LLMFlux's. Set LLMFLUX_WORKSPACE to your "
+        "LLMFlux workspace, or run from inside it."
+    )
+
+
 def clean_paths() -> list:
     """Logs, build scratch and leftover job files."""
     workspace = _workspace()

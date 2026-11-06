@@ -114,14 +114,51 @@ class TestCliJobs(unittest.TestCase):
         self, mock_stdout, mock_registry_cls, _mock_active, mock_delete
     ):
         mock_registry_cls.return_value = _FakeRegistry({"100": {}})
-        # Keep the real path list away from real dirs.
+        # Keep the real path list away from real dirs. Home and workspace are
+        # separate: a workspace that *is* home is refused (LLMFlux#155).
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": tmp}), \
-                 patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp)):
+            with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": str(Path(tmp) / "ws")}), \
+                 patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp) / "home"):
                 exit_code = cli.main(["remove"])
 
         self.assertEqual(exit_code, 0)
         mock_delete.assert_called_once()
+
+    @patch("llmflux.cli.get_active_job_details", return_value={})
+    @patch("llmflux.cli.JobRegistry")
+    def test_clean_and_remove_refuse_when_run_from_home(self, mock_registry_cls, mock_active):
+        """LLMFlux#155 regression: from ~ with LLMFLUX_WORKSPACE unset, clean
+        emptied ~/tmp and remove emptied ~/.cache and ~/models, with exit 0."""
+        mock_registry_cls.return_value = _FakeRegistry({"100": {}})
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp).resolve()
+            keep = {
+                home / "tmp" / "notes.txt": "mine",
+                home / ".cache" / "pip" / "wheels" / "numpy.whl": "pip's",
+                home / "models" / "my-finetune.bin": "weights",
+            }
+            for path, text in keep.items():
+                path.parent.mkdir(parents=True)
+                path.write_text(text)
+            env = {k: v for k, v in os.environ.items() if not k.startswith("LLMFLUX_")}
+
+            for verb in ("clean", "remove"):
+                with self.subTest(verb=verb), \
+                     patch.dict(os.environ, env, clear=True), \
+                     patch("llmflux.core.cleanup.Path.home", return_value=home), \
+                     patch("llmflux.core.cleanup.Path.cwd", return_value=home), \
+                     patch("llmflux.cli.load_dotenv"), \
+                     patch("sys.stdout", new_callable=io.StringIO), \
+                     patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                    exit_code = cli.main([verb])
+
+                    self.assertEqual(exit_code, 1)
+                    self.assertIn(f"Refusing to {verb}: the workspace is your home directory", stderr.getvalue())
+                    for path, text in keep.items():
+                        self.assertEqual(path.read_text(), text)
+
+            # Refused before Slurm was even asked about running jobs.
+            mock_active.assert_not_called()
 
     @patch("llmflux.cli.cancel_jobs")
     @patch("llmflux.cli.get_active_job_details")
