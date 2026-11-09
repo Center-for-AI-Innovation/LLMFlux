@@ -216,6 +216,8 @@ Notes:
   `.ollama/`, `.vllm/` and `~/.llmflux/`. The directories themselves stay — only
   their contents go. A configured directory outside the workspace (e.g. a
   site-wide `LLMFLUX_CONTAINERS_DIR`) is skipped, not emptied.
+- Both refuse to run when the workspace is your home directory or a parent of
+  it (e.g. running from `~` with `LLMFLUX_WORKSPACE` unset).
 - Neither command touches `data/input/` or `data/output/`, and neither wipes the
   workspace itself — on a source checkout that is where the repo lives.
 - Both refuse to run while any LLMFlux job is running. Stop it with
