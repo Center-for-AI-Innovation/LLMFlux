@@ -35,7 +35,7 @@ from .slurm.commands import (
 from .processors import BatchProcessor
 from .core.config import Config, ConfigDirectoryError, EngineConfig
 from .core.registry import JobRegistry
-from .core.cleanup import clean_paths, delete, remove_paths
+from .core.cleanup import clean_paths, delete, remove_paths, workspace_contains_home
 from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
 
 
@@ -957,6 +957,13 @@ def _blocked_by_running_jobs(registry: JobRegistry, verb: str) -> bool:
 def _cleanup(paths_for, verb: str) -> int:
     """Shared body of `clean` and `remove`: refuse while jobs run, else delete."""
     load_dotenv(find_dotenv(usecwd=True))  # Config() used to do this
+    if workspace_contains_home():
+        print(
+            f"Error: the workspace is your home directory or contains it, so '{verb}' would empty\n"
+            "your own ~/.cache, ~/models, etc. Set LLMFLUX_WORKSPACE or run from your llmflux workspace.",
+            file=sys.stderr,
+        )
+        return 1
     paths = paths_for()
     # Checked last, right before deleting, so a job can't start in between.
     if _blocked_by_running_jobs(JobRegistry(), verb):

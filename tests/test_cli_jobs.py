@@ -116,8 +116,8 @@ class TestCliJobs(unittest.TestCase):
         mock_registry_cls.return_value = _FakeRegistry({"100": {}})
         # Keep the real path list away from real dirs.
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": tmp}), \
-                 patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp)):
+            with patch.dict(os.environ, {"LLMFLUX_WORKSPACE": str(Path(tmp) / "ws")}), \
+                 patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp) / "home"):
                 exit_code = cli.main(["remove"])
 
         self.assertEqual(exit_code, 0)
@@ -174,6 +174,18 @@ class TestCliJobs(unittest.TestCase):
     @patch("llmflux.cli.delete")
     def test_clean_when_slurm_query_fails(self, mock_delete):
         self.assertEqual(self._run(["clean"], active_error=SlurmCommandError("down")), 1)
+        mock_delete.assert_not_called()
+
+    @patch("llmflux.cli.load_dotenv")  # a local .env could set LLMFLUX_WORKSPACE
+    @patch("llmflux.cli.delete")
+    @patch("sys.stderr", new_callable=io.StringIO)
+    def test_remove_refuses_when_workspace_is_home(self, mock_stderr, mock_delete, _mock_load_dotenv):
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ), \
+             patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp)), \
+             patch("llmflux.core.cleanup.Path.cwd", return_value=Path(tmp)):
+            os.environ.pop("LLMFLUX_WORKSPACE", None)
+            self.assertEqual(cli.main(["remove"]), 1)
+        self.assertIn("LLMFLUX_WORKSPACE", mock_stderr.getvalue())
         mock_delete.assert_not_called()
 
     @patch("llmflux.cli.delete", return_value=([], [], ["logs/1.out: Permission denied"]))
