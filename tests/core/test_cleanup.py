@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from llmflux.core.cleanup import clean_paths, delete, remove_paths
+from llmflux.core.cleanup import clean_paths, delete, remove_paths, workspace_contains_home
 
 
 class TestPathLists(unittest.TestCase):
@@ -103,6 +103,19 @@ class TestDelete(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertTrue(any(str(site) in message for message in skipped))
         self.assertTrue((site / "llm_processor.sif").exists())
+
+    def test_workspace_containing_home_is_detected(self):
+        home = self.root / "home"
+        (home / "LLMFlux").mkdir(parents=True)
+        link = self.root / "home-link"
+        link.symlink_to(home, target_is_directory=True)
+        cases = {home: True, self.root: True, link: True, home / "LLMFlux": False}
+
+        with patch("llmflux.core.cleanup.Path.home", return_value=home):
+            for workspace, expected in cases.items():
+                with self.subTest(workspace=workspace), \
+                     patch.dict(os.environ, {"LLMFLUX_WORKSPACE": str(workspace)}):
+                    self.assertEqual(workspace_contains_home(), expected)
 
 
 if __name__ == "__main__":
