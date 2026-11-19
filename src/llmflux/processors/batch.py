@@ -324,88 +324,87 @@ class BatchProcessor:
         
         return results
     
+    def _request_fields(self, body: Dict[str, Any], consumed: tuple) -> Dict[str, Any]:
+        """Every body field to send to the engine, with sampling resolved.
+
+        Fields in `consumed` are ones the caller turns into arguments of its
+        own (model is validated, messages or prompt become the messages). The
+        client drops stream and stream_options. Everything else — response_format, seed, n, tools,
+        vLLM's structured_outputs — goes through as written (LLMFlux#154).
+        """
+        fields = {k: v for k, v in body.items() if k not in consumed}
+        fields.update(self._sampling_params(body))
+        return fields
+
+    def _chat(self, engine: str, model: str, messages: List[Dict[str, Any]], fields: Dict[str, Any]) -> Dict[str, Any]:
+        """Send one chat request; return the engine's response as received."""
+        response = self.client.chat_completion(model=model, engine=engine, messages=messages, params=fields)
+        if not isinstance(response, dict) or not response.get('choices'):
+            # A reply with no choices is not a completion. Raising sends it
+            # through the retry and error accounting instead of recording an
+            # empty answer as a success.
+            raise ValueError(f"Engine response has no choices: {response!r}")
+        return response
+
     def _process_chat_completion(self, engine: str, body: Dict[str, Any]) -> Dict[str, Any]:
         """Process chat completion request.
-        
+
         Args:
             engine: engine used for this run
             body: Request body
-            
+
         Returns:
-            Chat completion response
+            The engine's chat completion response, unmodified: every choice
+            with its own finish_reason ("length" when max_tokens cut it off).
         """
         messages = body.get('messages', [])
         model = self._get_validated_model(body)
+        return self._chat(engine, model, messages, self._request_fields(body, ('model', 'messages')))
 
-        # Generate response
-        response, usage = self.client.chat(
-            model=model,
-            engine=engine,
-            messages=messages,
-            return_usage=True,
-            **self._sampling_params(body)
-        )
-
-        # Format in OpenAI-compatible format
-        return {
-            "id": str(uuid.uuid4()),
-            "object": "chat.completion",
-            "created": int(time.time()),
-            "model": model,
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": response
-                    },
-                    "finish_reason": "stop"
-                }
-            ],
-            "usage": usage
-        }
-    
     def _process_completion(self, engine: str, body: Dict[str, Any]) -> Dict[str, Any]:
         """Process completion request.
+
+        The prompt is sent to the engine's chat endpoint as a single user
+        message, so the body's other fields are read as chat-completion fields.
 
         Args:
             engine: Engine used for this run
             body: Request body
 
         Returns:
-            Completion response
+            Completion response, with each choice's finish_reason as the engine
+            reported it
         """
+        if 'messages' in body:
+            raise ValueError(
+                "A /v1/completions body has 'messages'; it takes 'prompt'. "
+                "Send messages to /v1/chat/completions instead."
+            )
         prompt = body.get('prompt', '')
         model = self._get_validated_model(body)
 
         # Convert prompt to messages
         messages = [{"role": "user", "content": prompt}]
+        response = self._chat(engine, model, messages, self._request_fields(body, ('model', 'prompt')))
 
-        # Generate response
-        response, usage = self.client.chat(
-            model=model,
-            engine=engine,
-            messages=messages,
-            return_usage=True,
-            **self._sampling_params(body)
-        )
-
-        # Format in OpenAI-compatible format
+        # Reshape the chat response as a text completion
         return {
-            "id": str(uuid.uuid4()),
+            "id": response.get("id"),
             "object": "text_completion",
-            "created": int(time.time()),
-            "model": model,
+            "created": response.get("created"),
+            "model": response.get("model", model),
             "choices": [
                 {
-                    "text": response,
-                    "index": 0,
-                    "finish_reason": "stop"
+                    "text": (choice.get("message") or {}).get("content"),
+                    "index": choice.get("index", i),
+                    "logprobs": choice.get("logprobs"),
+                    "finish_reason": choice.get("finish_reason"),
                 }
+                for i, choice in enumerate(response["choices"])
             ],
-            "usage": usage
+            "usage": response.get("usage") or {},
         }
-    
+
     def run(self, input_path: str, output_path: str, engine: str, **kwargs) -> List[Dict[str, Any]]:
         """Run batch processing on JSONL input file.
         
