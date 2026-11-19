@@ -17,6 +17,11 @@ def _dir(env_var: str, default: Path) -> Path:
     return Path(os.getenv(env_var) or default).expanduser()
 
 
+def workspace_contains_home() -> bool:
+    """True if the workspace is the home directory or one of its parents."""
+    return Path.home().resolve().is_relative_to(_workspace().resolve())
+
+
 def clean_paths() -> list:
     """Logs, build scratch and leftover job files."""
     workspace = _workspace()
