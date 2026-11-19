@@ -179,13 +179,20 @@ class TestCliJobs(unittest.TestCase):
     @patch("llmflux.cli.load_dotenv")  # a local .env could set LLMFLUX_WORKSPACE
     @patch("llmflux.cli.delete")
     @patch("sys.stderr", new_callable=io.StringIO)
-    def test_remove_refuses_when_workspace_is_home(self, mock_stderr, mock_delete, _mock_load_dotenv):
+    def test_clean_and_remove_refuse_when_workspace_is_home(self, mock_stderr, mock_delete, _mock_load_dotenv):
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ), \
              patch("llmflux.core.cleanup.Path.home", return_value=Path(tmp)), \
              patch("llmflux.core.cleanup.Path.cwd", return_value=Path(tmp)):
             os.environ.pop("LLMFLUX_WORKSPACE", None)
+            self.assertEqual(cli.main(["clean"]), 1)
+            clean_message = mock_stderr.getvalue()
             self.assertEqual(cli.main(["remove"]), 1)
-        self.assertIn("LLMFLUX_WORKSPACE", mock_stderr.getvalue())
+        remove_message = mock_stderr.getvalue()[len(clean_message):]
+        # Each message lists only what that command would empty.
+        self.assertIn("~/tmp", clean_message)
+        self.assertNotIn("~/.cache", clean_message)
+        self.assertIn("~/.cache", remove_message)
+        self.assertIn("LLMFLUX_WORKSPACE", remove_message)
         mock_delete.assert_not_called()
 
     @patch("llmflux.cli.delete", return_value=([], [], ["logs/1.out: Permission denied"]))

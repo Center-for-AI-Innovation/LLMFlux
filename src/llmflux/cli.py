@@ -955,14 +955,17 @@ def _blocked_by_running_jobs(registry: JobRegistry, verb: str) -> bool:
 def _cleanup(paths_for, verb: str) -> int:
     """Shared body of `clean` and `remove`: refuse while jobs run, else delete."""
     load_dotenv(find_dotenv(usecwd=True))  # Config() used to do this
+    paths = paths_for()
     if workspace_contains_home():
+        home = Path.home()
+        targets = ", ".join(f"~/{p.relative_to(home)}" if p.is_relative_to(home) else str(p) for p in paths)
         print(
-            f"Error: the workspace is your home directory or contains it, so '{verb}' would empty\n"
-            "your own ~/.cache, ~/models, etc. Set LLMFLUX_WORKSPACE or run from your llmflux workspace.",
+            f"Refusing to {verb}: the workspace is your home directory or a parent of it, "
+            f"so this would empty {targets} in full. Set LLMFLUX_WORKSPACE to your LLMFlux "
+            "workspace, or run from inside it.",
             file=sys.stderr,
         )
         return 1
-    paths = paths_for()
     # Checked last, right before deleting, so a job can't start in between.
     if _blocked_by_running_jobs(JobRegistry(), verb):
         return 1
