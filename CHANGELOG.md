@@ -49,6 +49,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   settings, so a raised `max-model-len` surfaced as context-length errors after
   the queue wait. The help text now says "JSON object" and gives an example
   (see [#153](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/153)).
+- The converters (`csv_to_jsonl`, `json_to_jsonl`, `directory_to_jsonl`,
+  `vision_to_jsonl`, and `create_jsonl_entry` under them) no longer write
+  `temperature: 0.7` and `max_tokens: 500` into every request. A value in the
+  request body wins over `llmflux run --temperature` / `--max-tokens`, so for
+  converted files those flags never applied. **Behavior change:** a converted
+  file now gets the flag's value, or else the model config's (e.g.
+  `max_tokens` 2048 rather than 500). To keep values in the file, pass
+  `api_parameters={"temperature": ..., "max_tokens": ...}`, which
+  `vision_to_jsonl` now accepts too
+  (see [#164](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/164)).
+- `json_to_jsonl` no longer drops `prompt` and `messages` items that set their
+  own `temperature` or `max_tokens`, or that get them from `api_parameters`.
+  Those items raised a duplicate-argument error that was only logged, and the
+  conversion still reported success. An item's own value wins over
+  `api_parameters`, as it already did for items in batch format.
 
 ## [2.0.0] - 2026-08-31
 

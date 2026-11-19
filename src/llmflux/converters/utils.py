@@ -129,8 +129,8 @@ def create_jsonl_entry(
     messages: List[Dict[str, str]],
     model: Optional[str] = None,
     custom_id: Optional[str] = None,
-    temperature: float = 0.7,
-    max_tokens: int = 500,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
     **kwargs
 ) -> Dict[str, Any]:
     """Create a standardized JSONL entry following OpenAI batch API format.
@@ -139,24 +139,27 @@ def create_jsonl_entry(
         messages: List of message objects with role and content
         model: Model name to use for inference
         custom_id: Custom identifier (generated if not provided)
-        temperature: Temperature parameter for generation
-        max_tokens: Maximum tokens to generate
+        temperature: Temperature parameter for generation. Left out of the
+            body when None, so `llmflux run --temperature` or the model
+            config decides; a value in the body overrides both.
+        max_tokens: Maximum tokens to generate. Left out when None, like
+            temperature.
         **kwargs: Additional parameters for the request body
         
     Returns:
         Formatted JSONL entry as dictionary
     """
+    body = {"model": model, "messages": messages}
+    if temperature is not None:
+        body["temperature"] = temperature
+    if max_tokens is not None:
+        body["max_tokens"] = max_tokens
+    body.update(kwargs)
     return {
         "custom_id": custom_id or generate_custom_id(),
         "method": "POST",
         "url": "/v1/chat/completions",
-        "body": {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            **kwargs
-        }
+        "body": body,
     }
 
 def write_jsonl_entry(entry: Dict[str, Any], file_path: str, mode: str = 'a'):

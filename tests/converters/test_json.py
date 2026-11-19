@@ -397,6 +397,58 @@ class TestJSONToJSONL(unittest.TestCase):
         self.assertEqual(lines[0]["body"]["messages"][0]["content"], "first prompt")
         self.assertEqual(lines[1]["body"]["messages"][0]["content"], "second prompt")
 
+class TestJSONSamplingParams(unittest.TestCase):
+    """LLMFlux#164: sampling values come from the item or api_parameters, or
+    are left out so `llmflux run` flags and the model config apply."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.test_dir = Path(self.temp_dir.name)
+        self.output_path = self.test_dir / "out.jsonl"
+
+    def _bodies(self, items, **kwargs):
+        input_path = self.test_dir / "in.json"
+        input_path.write_text(json.dumps(items))
+        result = json_to_jsonl(input_path, self.output_path, **kwargs)
+        bodies = [json.loads(line)["body"] for line in self.output_path.read_text().splitlines()]
+        self.assertEqual(result["successful_conversions"], len(items))
+        self.assertEqual(len(bodies), len(items))
+        return bodies
+
+    def test_no_sampling_params_by_default(self):
+        prompt = {"prompt": "hi"}
+        chat = {"messages": [{"role": "user", "content": "hi"}]}
+        for body in self._bodies([prompt, chat, {"other": "field"}]):
+            with self.subTest(body=body):
+                self.assertNotIn("temperature", body)
+                self.assertNotIn("max_tokens", body)
+
+    def test_item_values_are_kept(self):
+        # These items used to be dropped: the converter passed temperature
+        # twice to create_jsonl_entry and logged the TypeError.
+        items = [
+            {"prompt": "hi", "temperature": 0.3, "max_tokens": 20},
+            {"messages": [{"role": "user", "content": "hi"}], "temperature": 0.0},
+        ]
+        first, second = self._bodies(items)
+        self.assertEqual((first["temperature"], first["max_tokens"]), (0.3, 20))
+        self.assertEqual(second["temperature"], 0.0)
+        self.assertNotIn("max_tokens", second)
+
+    def test_api_parameters_apply_to_prompt_and_chat_items(self):
+        items = [{"prompt": "hi"}, {"messages": [{"role": "user", "content": "hi"}]}]
+        for body in self._bodies(items, api_parameters={"temperature": 0.1, "max_tokens": 50}):
+            with self.subTest(body=body):
+                self.assertEqual((body["temperature"], body["max_tokens"]), (0.1, 50))
+
+    def test_item_values_beat_api_parameters(self):
+        [body] = self._bodies(
+            [{"prompt": "hi", "temperature": 0.3}],
+            api_parameters={"temperature": 0.1, "max_tokens": 50},
+        )
+        self.assertEqual((body["temperature"], body["max_tokens"]), (0.3, 50))
+
 
 if __name__ == "__main__":
     unittest.main()

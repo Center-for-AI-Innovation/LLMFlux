@@ -155,6 +155,18 @@ class TestJSONLUtils(unittest.TestCase):
         self.assertEqual(entry["body"]["temperature"], 0.5)
         self.assertEqual(entry["body"]["max_tokens"], 100)
     
+    def test_create_jsonl_entry_omits_unset_sampling_params(self):
+        """LLMFlux#164: a value written here beats `llmflux run --temperature`
+        and `--max-tokens`, so nothing is written unless the caller asks."""
+        entry = create_jsonl_entry(messages=[{"role": "user", "content": "hi"}])
+        self.assertNotIn("temperature", entry["body"])
+        self.assertNotIn("max_tokens", entry["body"])
+
+    def test_create_jsonl_entry_keeps_zero_temperature(self):
+        entry = create_jsonl_entry(messages=[], temperature=0.0, max_tokens=1)
+        self.assertEqual(entry["body"]["temperature"], 0.0)
+        self.assertEqual(entry["body"]["max_tokens"], 1)
+
     def test_write_jsonl_entry(self):
         """Test writing JSONL entry."""
         entry = {
