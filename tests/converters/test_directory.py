@@ -221,5 +221,30 @@ class TestDirectoryToJSONL(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["successful_conversions"], 0)
 
+class TestDirectorySamplingParams(unittest.TestCase):
+    """LLMFlux#164: files carry no sampling values unless asked for."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.input_dir = Path(self.temp_dir.name) / "in"
+        self.input_dir.mkdir()
+        (self.input_dir / "a.txt").write_text("hello")
+        self.output_path = Path(self.temp_dir.name) / "out.jsonl"
+
+    def _bodies(self, **kwargs):
+        directory_to_jsonl(self.input_dir, self.output_path, file_pattern="*.txt", **kwargs)
+        return [json.loads(line)["body"] for line in self.output_path.read_text().splitlines()]
+
+    def test_no_sampling_params_by_default(self):
+        [body] = self._bodies()
+        self.assertNotIn("temperature", body)
+        self.assertNotIn("max_tokens", body)
+
+    def test_api_parameters_still_set_them(self):
+        [body] = self._bodies(api_parameters={"temperature": 0.1, "max_tokens": 50})
+        self.assertEqual((body["temperature"], body["max_tokens"]), (0.1, 50))
+
+
 if __name__ == "__main__":
-    unittest.main() 
+    unittest.main()

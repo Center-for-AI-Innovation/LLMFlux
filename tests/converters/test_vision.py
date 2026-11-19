@@ -317,6 +317,26 @@ class TestVisionToJsonl(unittest.TestCase):
             entry = json.loads(f.readline())
         self.assertEqual(entry["body"]["model"], "gpt-4o")
 
+    def test_no_sampling_params_by_default(self):
+        """LLMFlux#164: values here would beat `llmflux run --temperature`."""
+        img = self._make_image()
+        out = vision_to_jsonl(str(img), str(self.test_dir / "out.jsonl"))
+        body = json.loads(Path(out).read_text())["body"]
+        self.assertNotIn("temperature", body)
+        self.assertNotIn("max_tokens", body)
+
+    def test_api_parameters_added_to_body(self):
+        img = self._make_image()
+        out = vision_to_jsonl(
+            str(img), str(self.test_dir / "out.jsonl"),
+            api_parameters={"temperature": 0.1, "max_tokens": 400, "top_p": 0.9},
+        )
+        body = json.loads(Path(out).read_text())["body"]
+        self.assertEqual(
+            {k: body[k] for k in ("temperature", "max_tokens", "top_p")},
+            {"temperature": 0.1, "max_tokens": 400, "top_p": 0.9},
+        )
+
     def test_auto_output_path_created(self):
         img = self._make_image()
         result_path = vision_to_jsonl(str(img))

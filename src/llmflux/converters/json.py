@@ -221,10 +221,9 @@ def _process_json_item(
             messages=messages,
             model=model or item.get('model'),
             custom_id=custom_id,
-            temperature=item.get('temperature', 0.7),
-            max_tokens=item.get('max_tokens', 500),
-            **{k: v for k, v in item.items() if k not in ('messages', 'model', 'id')},
-            **api_parameters
+            # The item's own fields win over api_parameters, as for items
+            # already in batch format.
+            **{**api_parameters, **{k: v for k, v in item.items() if k not in ('messages', 'model', 'id')}}
         )
         
         # Add metadata
@@ -273,10 +272,9 @@ def _process_json_item(
                 messages=messages,
                 model=model or item.get('model'),
                 custom_id=custom_id,
-                temperature=item.get('temperature', 0.7),
-                max_tokens=item.get('max_tokens', 500),
-                **{k: v for k, v in item.items() if k not in ('prompt', 'system', 'model', 'id')},
-                **api_parameters
+                # The item's own fields win over api_parameters, as for items
+                # already in batch format.
+                **{**api_parameters, **{k: v for k, v in item.items() if k not in ('prompt', 'system', 'model', 'id')}}
             )
             
             # Add metadata

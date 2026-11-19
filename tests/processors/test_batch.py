@@ -520,6 +520,18 @@ class TestRunSamplingDefaults(unittest.TestCase):
         self.assertEqual(sent["max_tokens"], 32)
         self.assertEqual(sent["top_k"], 5)
 
+    def test_converter_output_takes_run_values(self):
+        """LLMFlux#164: csv_to_jsonl wrote temperature 0.7 / max_tokens 500
+        into every body, so --temperature / --max-tokens never applied."""
+        from llmflux.converters import csv_to_jsonl
+        csv_path = Path(self.temp_dir.name) / "q.csv"
+        csv_path.write_text("q\nWhat is HPC?\n")
+        converted = Path(self.temp_dir.name) / "converted.jsonl"
+        csv_to_jsonl(csv_path, converted, prompt_template="{q}")
+        [body] = [json.loads(line)["body"] for line in converted.read_text().splitlines()]
+        [sent] = self._run([body], temperature=0.1, max_tokens=50)
+        self.assertEqual((sent["temperature"], sent["max_tokens"]), (0.1, 50))
+
     def test_unrelated_kwargs_still_ignored(self):
         [sent] = self._run([{"messages": []}], rebuild=True, debug=True)
         self.assertNotIn("rebuild", sent)

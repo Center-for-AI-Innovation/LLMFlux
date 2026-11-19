@@ -111,7 +111,8 @@ def vision_to_jsonl(
     model: Optional[str] = None,
     max_image_size: int = DEFAULT_MAX_IMAGE_SIZE,
     file_pattern: Optional[str] = None,
-    return_report: bool = False
+    return_report: bool = False,
+    api_parameters: Optional[Dict[str, Any]] = None
 ):
     """Convert images to JSONL format.
 
@@ -130,6 +131,9 @@ def vision_to_jsonl(
         return_report: If True, return a (path, report) tuple instead of a bare
             path. The report names the images that did not make it into the
             JSONL, which is otherwise only visible in the logs.
+        api_parameters: Extra request body fields for every image, e.g.
+            {"temperature": 0.1, "max_tokens": 400}. Fields left out are
+            filled in by `llmflux run` flags or the model config.
 
     Returns:
         Path to generated JSONL file, or (path, report) if return_report is True.
@@ -251,7 +255,8 @@ def vision_to_jsonl(
                     entry = create_jsonl_entry(
                         messages=messages,
                         model=model,
-                        custom_id=custom_id
+                        custom_id=custom_id,
+                        **(api_parameters or {})
                     )
                     
                     # Add image metadata
