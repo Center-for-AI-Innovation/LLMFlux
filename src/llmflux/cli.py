@@ -35,7 +35,7 @@ from .slurm.commands import (
 from .processors import BatchProcessor
 from .core.config import Config, ConfigDirectoryError, EngineConfig
 from .core.registry import JobRegistry
-from .core.cleanup import clean_paths, delete, remove_paths
+from .core.cleanup import clean_paths, delete, remove_paths, workspace_contains_home
 from .benchmark_utils import create_test_prompts_file, compute_benchmark_metrics, format_metrics_table
 
 
@@ -958,6 +958,16 @@ def _cleanup(paths_for, verb: str) -> int:
     """Shared body of `clean` and `remove`: refuse while jobs run, else delete."""
     load_dotenv(find_dotenv(usecwd=True))  # Config() used to do this
     paths = paths_for()
+    if workspace_contains_home():
+        home = Path.home()
+        targets = ", ".join(f"~/{p.relative_to(home)}" if p.is_relative_to(home) else str(p) for p in paths)
+        print(
+            f"Refusing to {verb}: the workspace is your home directory or a parent of it, "
+            f"so this would empty {targets} in full. Set LLMFLUX_WORKSPACE to your LLMFlux "
+            "workspace, or run from inside it.",
+            file=sys.stderr,
+        )
+        return 1
     # Checked last, right before deleting, so a job can't start in between.
     if _blocked_by_running_jobs(JobRegistry(), verb):
         return 1
@@ -982,6 +992,16 @@ def _clean_command(args: argparse.Namespace) -> int:
 def _remove_command(args: argparse.Namespace) -> int:
     """Handle the `remove` command: delete everything `clean` does, plus models."""
     return _cleanup(remove_paths, "remove")
+
+
+#: Help for --vllm-engine-args on run, serve and benchmark (LLMFlux#153).
+ENGINE_ARGS_HELP = (
+    "vLLM engine flags as a JSON object (not a flag string), e.g. "
+    "'{\"max-model-len\": 32768, \"enforce-eager\": true}'. Keys are vLLM flag "
+    "names (the leading -- is optional); true adds a bare flag. Merged over "
+    "VLLM_ENGINE_ARGS, which takes the same form. Invalid JSON stops the "
+    "submission."
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1050,7 +1070,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # VLLM specific options
-    run_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    run_parser.add_argument("--vllm-engine-args", type=str, metavar="JSON", help=ENGINE_ARGS_HELP)
     run_parser.add_argument(
         "--custom-config-path",
         type=str,
@@ -1106,7 +1126,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KEY=VALUE",
         help="Additional SBATCH directive. Can be used multiple times.",
     )
-    serve_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    serve_parser.add_argument("--vllm-engine-args", type=str, metavar="JSON", help=ENGINE_ARGS_HELP)
     serve_parser.add_argument("--rebuild", action="store_true", help="Force rebuild of the Apptainer/Singularity image")
     serve_parser.add_argument("--debug", action="store_true", help="Preserve generated SLURM job script for debugging")
     serve_parser.set_defaults(func=_serve_command)
@@ -1160,7 +1180,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # VLLM specific options
-    benchmark_parser.add_argument("--vllm-engine-args", type=str, help="Additional arguments to pass to the vLLM engine")
+    benchmark_parser.add_argument("--vllm-engine-args", type=str, metavar="JSON", help=ENGINE_ARGS_HELP)
     benchmark_parser.add_argument(
         "--custom-config-path",
         type=str,

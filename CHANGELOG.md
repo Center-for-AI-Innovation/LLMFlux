@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `data/output/` and — on a source checkout — the repo itself are never
   touched, and configured directories outside the workspace are
   skipped. Both refuse to run while any LLMFlux job is running; stop it with
-  `llmflux cancel` first.
+  `llmflux cancel` first. Both also refuse when the workspace is your home
+  directory or a parent of it, which is the case when you run from `~` without
+  `LLMFLUX_WORKSPACE` set.
 - `llmflux cancel --all`, cancelling every LLMFlux job Slurm currently reports
   as running or pending, in one command instead of one `cancel <job-id>` at a
   time.
@@ -62,6 +64,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for url: …: <the engine's reason>` instead of only "Bad Request".
 - A `/v1/completions` body that also has `messages` is recorded as an error
   that says to use `/v1/chat/completions`.
+- `--vllm-engine-args` (and `VLLM_ENGINE_ARGS`) that is not a JSON object now
+  stops `run`, `serve` and `benchmark` with an error before anything is
+  submitted or staged. It used to log a warning and submit the job without the
+  settings, so a raised `max-model-len` surfaced as context-length errors after
+  the queue wait. The help text now says "JSON object" and gives an example
+  (see [#153](https://github.com/Center-for-AI-Innovation/LLMFlux/issues/153)).
 
 ## [2.0.0] - 2026-08-31
 
