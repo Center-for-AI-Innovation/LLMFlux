@@ -117,6 +117,30 @@ runner.run(
 )
 ```
 
+### 5. Batch Image Analysis Notebook (`notebooks/vision_batch_analysis.ipynb`)
+
+A step-by-step Jupyter notebook that runs a vision-language model
+(`Qwen2.5-VL-7B-Instruct` by default) over a folder of images and returns one
+structured JSON record per image. You edit the prompt to choose the fields; the
+notebook builds the requests with `vision_to_jsonl`, submits them with
+`llmflux run`, checks on the job with `llmflux status` / `llmflux logs`, and
+parses the replies into a table, flagging replies that aren't valid JSON and
+requests that failed.
+
+```python
+_, report = vision_to_jsonl(
+    "sample_images/",
+    "vision_run/requests.jsonl",
+    prompt_template=USER_PROMPT,   # asks for {"summary", "objects", "scene", ...}
+    system_prompt=SYSTEM_PROMPT,
+    return_report=True,            # lists images skipped as too large or unreadable
+)
+```
+
+It runs as is against the four small synthetic images in
+`notebooks/sample_images/`; set `LLMFLUX_IMAGE_DIR` to use your own, and
+`SLURM_ACCOUNT` to your GPU account before the submit step.
+
 ## JSONL Format
 
 LLMFlux uses the OpenAI Batch API specification for its JSONL files:

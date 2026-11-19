@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `examples/notebooks/vision_batch_analysis.ipynb`, a walkthrough for batch
+  image analysis with a vision model: build requests from a folder of images
+  with `vision_to_jsonl`, submit with `llmflux run`, and parse each reply into
+  structured JSON. Four small synthetic sample images are included so it runs
+  as is. Based on an original notebook by Ajay Nagi Reddy Kumdam.
 - `llmflux clean` and `llmflux remove`, to reclaim disk space. `clean` empties
   `logs/`, `tmp/`, `staged-input/` and `~/.llmflux/serve/` (which holds a
   plaintext API key) and deletes `job.sh`; `remove` also empties `containers/`,
